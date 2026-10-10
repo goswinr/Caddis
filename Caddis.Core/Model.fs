@@ -315,7 +315,10 @@ type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: 
     let mutable outcome = RunOutcome.ofStatus Running
     let mutable duration = TimeSpan.Zero
     let mutable files: FileItem[] = [||]
-    let mutable cancelRequested = false
+    let cancellation = new CancellationTokenSource()
+    let mutable cancellationStarted = 0
+    let uiCallbackLock = obj ()
+    let mutable activeUiCallbacks = 0
     let mutable timeoutRequested = false
     let notes = ResizeArray<string>()
 
@@ -348,9 +351,20 @@ type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: 
     /// e.g. Revit only when no dialog or command is active.
     member val Started = false with get, set
 
-    member _.CancelRequested = cancelRequested
+    member _.CancelRequested = cancellation.IsCancellationRequested
     member _.TimeoutRequested = timeoutRequested
-    member _.MarkCancelRequested() = cancelRequested <- true
+    member _.MarkCancelRequested() = lock uiCallbackLock (fun () -> cancellation.Cancel())
+    /// Cancels waits for queued script callbacks, without aborting work already running in the host.
+    member internal _.CancellationToken = cancellation.Token
+    member internal _.TryStartCancellation() = Interlocked.CompareExchange(&cancellationStarted, 1, 0) = 0
+    member internal _.TryBeginUiCallback() =
+        lock uiCallbackLock (fun () ->
+            if cancellation.IsCancellationRequested || outcome.status <> Running then false
+            else
+                activeUiCallbacks <- activeUiCallbacks + 1
+                true)
+    member internal _.EndUiCallback() = lock uiCallbackLock (fun () -> activeUiCallbacks <- activeUiCallbacks - 1)
+    member internal _.HasActiveUiCallback = lock uiCallbackLock (fun () -> activeUiCallbacks > 0)
     member _.MarkTimeoutRequested() = timeoutRequested <- true
 
     /// Set by the host when the run is wrapped in an undo record. The latest one if the run made several.
@@ -656,7 +670,8 @@ type ICaddisHost =
 
     /// Called on the evaluation thread after a run, also after errors and cancellation, with the status the run will end with.
     /// Writes what was printed to the host's command line during the run to run.CommandLine.
-    abstract AfterRun: run: Run * status: RunStatus -> unit
+    /// Return an error if finalization did not keep the intended result, e.g. a transaction was rolled back.
+    abstract AfterRun: run: Run * status: RunStatus -> Result<unit, string>
 
     /// Called for all script output, from any thread.
     abstract Echo: kind: OutputKind * text: string -> unit

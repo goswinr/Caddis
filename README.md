@@ -89,6 +89,8 @@ A command that opens a dialog blocks Rhino until someone closes it, so use the s
 
 `caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
 `caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
+Cancellation skips queued `Script.OnUi` callbacks. A callback already executing in the host must finish first;
+the run stays busy until it returns, then cancellation stops the script before it continues.
 `caddis_check` type-checks against the current session, so definitions from earlier runs are known,
 but not the definitions in files loaded with `#load`.
 
@@ -164,6 +166,7 @@ See the [Revit panel previews](Caddis.Revit/README.md#dockable-panel) for both t
 
 Revit has its own settings file `settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
 so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time. The token is shared.
+`New token` in either app replaces it for every running instance immediately; update all clients with the new token.
 ```
 claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp --header "Authorization: Bearer <token>"
 ```
@@ -178,6 +181,7 @@ claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/
 - Each run on the `ui` thread is wrapped in a transaction group. Scripts open their own transactions,
   or use `Caddis.Revit.Script.Transact("name", fun doc -> ...)`. If the run succeeds, its transactions are one undo step `Caddis r12`, which `caddis_undo` reverts.
   If it fails, Caddis rolls back all its changes.
+  A failure to finalize the transaction group is also a failed run (`runtimeError`, MCP `isError: true`).
 - Revit's warnings about the changes of a run, e.g. overlapping walls, are removed and listed in the notes of the result.
   An error rolls back its transaction instead of showing Revit's dialog.
 - The result lists the ids of the elements a run created and deleted. Changed elements are counted per category,
@@ -188,7 +192,8 @@ claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/
 - `caddis_capture_viewport` uses `Document.ExportImage`: it shows the whole view or its crop region, not the zoom of the window.
   `displayMode` is a display style, e.g. `HiddenLine`, `Shading` or `Realistic`.
 - `caddis_export` writes dwg, dxf, dgn, pdf, dwf and dwfx from the active view, fbx, obj, stl, step and sat from a 3D view,
-  and ifc and nwc from the whole model. With `selected` or `objectIds`, element ids as numbers, Caddis isolates those elements in the view during the export.
+  and ifc and nwc from the whole model. With `selected` or `objectIds`, element ids as strings such as `["316577"]`, Caddis isolates those elements in the view during the export.
+  An explicit `objectIds` array must be nonempty and contain only valid id strings; malformed arrays are rejected in both apps.
   Exports of a large model take a while, e.g. 47 s for a 159 MB ifc of the Snowdon Towers sample. Like `caddis_eval` an export is a run:
   it returns `running` after `waitMs`, and `caddis_get_run` returns its files.
 

@@ -62,7 +62,7 @@ module RhinoInfo =
         status =
             "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of Rhino, F# and .NET, and the active document with its units, tolerance and layers."
         cancel =
-            "Cancels the current run. Only runs in background mode can be cancelled, and Rhino commands while they wait for input. If an F# run does not stop within a few seconds the session is reset."
+            "Cancels the current run. Only runs in background mode can be cancelled, and Rhino commands while they wait for input. Queued Script.OnUi calls are skipped; an already-started call must finish first. If the remaining background code does not stop within a few seconds the session is reset."
         setMode =
             "Sets on which thread code runs. 'ui': the Rhino UI thread, safest for RhinoCommon, but Rhino is blocked while code runs and runs can't be cancelled. 'background': a separate thread, runs can be cancelled and time out, Rhino stays responsive, UI calls must be wrapped in Caddis.Script.OnUi. Changing the mode resets the session."
         undo = "Undoes the changes a run made to the Rhino document. Only works if no other changes were made in Rhino after the run."
@@ -73,7 +73,7 @@ module RhinoInfo =
             "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension, except PDF: it opens Rhino's print dialog. Returns the paths of the written files."
         exportFormat = "File extension of the format, e.g. '3dm', 'stl', 'obj', 'step', 'iges', 'dwg', 'dxf', '3mf', 'fbx', 'gltf', 'svg'."
         exportObjects = "Which objects to export. Default: 'all'."
-        exportObjectIds = "Ids (GUIDs) of the objects to export. Overrides 'objects'."
+        exportObjectIds = "A nonempty array of object ids (GUID strings) to export. Overrides 'objects'. Invalid or empty arrays are rejected."
         dialog = None
     }
 

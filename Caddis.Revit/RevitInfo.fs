@@ -49,7 +49,7 @@ module RevitInfo =
             "A namespace ('Autodesk.Revit.DB': its types), a type ('Wall' or 'Autodesk.Revit.DB.Wall': its members) or a member ('Wall.Create': all overloads with docs)."
         status =
             "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of Revit, F# and .NET, and the active document with its length unit, active view, levels and selection."
-        cancel = "Cancels the current run. Only runs in background mode can be cancelled. If a run does not stop within a few seconds the session is reset."
+        cancel = "Cancels the current run. Only runs in background mode can be cancelled. Queued Script.OnUi calls are skipped; an already-started call must finish first. If the remaining background code does not stop within a few seconds the session is reset."
         setMode =
             "Sets on which thread code runs. 'ui': in Revit's API context on its UI thread, the Revit API can be used directly, each run is one undo step and is rolled back if it fails, but Revit is blocked while code runs and runs can't be cancelled. 'background': a separate thread, runs can be cancelled and time out, Revit stays responsive, every Revit API call must be wrapped in Caddis.Revit.Script.OnUi or Script.Transact. Changing the mode resets the session."
         undo =
@@ -70,7 +70,7 @@ module RevitInfo =
         exportFormat =
             "File extension of the format: 'dwg', 'dxf', 'dgn', 'sat', 'pdf', 'dwf', 'dwfx', 'ifc', 'fbx', 'obj', 'stl', 'step', or 'nwc' if the Navisworks exporter is installed."
         exportObjects = "Which elements to export: 'all' (the default) or the 'selected' ones in Revit."
-        exportObjectIds = "Element ids (numbers) of the elements to export. Overrides 'objects'."
+        exportObjectIds = "A nonempty array of element ids as strings, e.g. ['316577']. Overrides 'objects'. Invalid or empty arrays are rejected."
         dialog =
             Some(
                 String.concat " " [

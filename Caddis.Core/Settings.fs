@@ -3,6 +3,7 @@ namespace Caddis
 open System
 open System.IO
 open System.Security.Cryptography
+open System.Text
 open System.Text.Json.Nodes
 
 /// On which thread F# scripts are evaluated.
@@ -100,6 +101,25 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
         if not (OperatingSystem.IsWindows()) then
             try File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite) with _ -> ()
 
+    /// Publish a complete token atomically, so readers never see an empty or partial replacement.
+    let writeToken (overwrite: bool) =
+        Directory.CreateDirectory folder |> ignore
+        let token = Convert.ToHexString(RandomNumberGenerator.GetBytes 24).ToLowerInvariant()
+        let tempPath = Path.Combine(folder, $"token-{Guid.NewGuid():N}.tmp")
+        try
+            let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None)
+            if not (OperatingSystem.IsWindows()) then
+                options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+            do
+                use stream = new FileStream(tempPath, options)
+                use writer = new StreamWriter(stream, UTF8Encoding(false))
+                writer.Write token
+            restrictToUser tempPath
+            File.Move(tempPath, tokenPath, overwrite)
+            token
+        finally
+            if File.Exists tempPath then File.Delete tempPath
+
     /// %AppData%/Caddis on Windows, ~/.config/Caddis on Mac (.NET's ApplicationData folder).
     static member DefaultFolder =
         Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Caddis")
@@ -134,17 +154,23 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
         Directory.CreateDirectory folder |> ignore
         File.WriteAllText(settingsPath, CaddisSettings.toJson s |> Json.toText)
 
-    /// Creates a new random token and saves it.
-    member _.NewToken() : string =
-        Directory.CreateDirectory folder |> ignore
-        let token = Convert.ToHexString(RandomNumberGenerator.GetBytes 24).ToLowerInvariant()
-        File.WriteAllText(tokenPath, token)
-        restrictToUser tokenPath
+    /// Reads the shared token without creating or repairing it. Authentication fails closed on read errors.
+    member _.ReadToken() : string =
+        use stream = new FileStream(tokenPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
+        use reader = new StreamReader(stream)
+        let token = reader.ReadToEnd().Trim()
+        if token.Length < 16 then raise (InvalidDataException "The Caddis token file is invalid.")
         token
+
+    /// Creates a new random token and atomically replaces the shared token file.
+    member _.NewToken() : string = writeToken true
 
     /// Returns the saved token, or creates one if there is none.
     member this.GetOrCreateToken() : string =
-        let existing =
-            try if File.Exists tokenPath then File.ReadAllText(tokenPath).Trim() else ""
-            with _ -> ""
-        if existing.Length >= 16 then existing else this.NewToken()
+        if File.Exists tokenPath then
+            try this.ReadToken()
+            with :? InvalidDataException -> this.NewToken()
+        else
+            try writeToken false
+            // Another instance may have created the token while this one was starting.
+            with :? IOException when File.Exists tokenPath -> this.ReadToken()

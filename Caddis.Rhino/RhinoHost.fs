@@ -547,6 +547,7 @@ type RhinoHost() =
                     // a script might have disabled redraw, e.g. for speed
                     doc.Views.RedrawEnabled <- true
                     doc.Views.Redraw())
+            Ok ()
 
         member _.Echo(_, text) =
             lock echoBuffer (fun () -> echoBuffer.Append text |> ignore)

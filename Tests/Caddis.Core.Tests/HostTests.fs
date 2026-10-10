@@ -36,6 +36,7 @@ type OtherAppHost() =
 
     member _.Statuses = List.ofSeq statuses
     member _.Exported = exported
+    member val ExportCount = 0 with get, set
     member _.Pressed = List.ofSeq pressed
 
     /// The dialogs the host shows.
@@ -49,12 +50,15 @@ type OtherAppHost() =
         member _.InvokeOnUi<'T>(f: unit -> 'T) = inner.InvokeOnUi f
         member _.CannotRunReason() = None
         member _.BeforeRun _ = ()
-        member _.AfterRun(r, s) = statuses.Add(r.Id, s)
+        member _.AfterRun(r, s) =
+            statuses.Add(r.Id, s)
+            Ok ()
         member _.Echo(_, _) = ()
         member _.Log _ = ()
         member _.Status() = []
         member _.CaptureView(v, w, h, d, p) = inner.CaptureView(v, w, h, d, p)
-        member _.Export(selection, path) =
+        member this.Export(selection, path) =
+            this.ExportCount <- this.ExportCount + 1
             exported <- Some selection
             if path.Contains "slow" then Threading.Thread.Sleep 1500
             File.WriteAllText(path, "exported")
@@ -250,3 +254,57 @@ let ``MCP says when a running run has not started yet`` () =
     run.Started <- true
     let text, _ = Http.McpView.run "OtherApp" runs "http://127.0.0.1:7810" [] 0L run
     Assert.Contains("It runs on the UI thread, so it can't be cancelled and OtherApp is blocked until it finishes.", text)
+
+[<Theory>]
+[<InlineData("[]")>]
+[<InlineData("[316577]")>]
+[<InlineData("[\"316577\",42]")>]
+[<InlineData("[\"316577\",null]")>]
+[<InlineData("null")>]
+[<InlineData("\"316577\"")>]
+[<InlineData("{}")>]
+let ``invalid export selections are rejected before calling the host`` (ids: string) =
+    let before = host.ExportCount
+    let args = $"""{{"format":"dwg","objects":"all","objectIds":{ids}}}"""
+    let status, body = post "/export" args
+    Assert.Equal(HttpStatusCode.BadRequest, status)
+    Assert.Contains("objectIds", body)
+    let isError, message = callTool "caddis_export" args
+    Assert.True(isError, message)
+    Assert.Contains("objectIds", message)
+    Assert.Equal(before, host.ExportCount)
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``host finalization failures become REST and MCP run errors`` (throws: bool) =
+    use host = new QueuedHost(QueueUi = false)
+    let failure = "The transaction group was rolled back instead of keeping the model changes."
+    host.Finalize <- fun _ -> if throws then failwith failure else Error failure
+    let store = newStore ()
+    let service = CaddisService(host, store, RunRegistry(Path.Combine(store.Folder, "runs")))
+    let request path body : Http.Request = {
+        method = "POST"
+        path = path
+        query = Collections.Specialized.NameValueCollection()
+        headers = Collections.Specialized.NameValueCollection()
+        body = body
+        baseUrl = "http://127.0.0.1"
+    }
+    let rest = Http.Rest.handle service (fun () -> []) (request "/eval" """{"code":"1 + 1"}""") |> _.Result
+    match rest with
+    | Http.JsonResponse(200, body) ->
+        Assert.Equal("runtimeError", str [ "status" ] body)
+        Assert.Null(body["value"])
+        Assert.Contains(failure, str [ "message" ] body)
+    | _ -> failwith $"Unexpected response: {rest}"
+    let endpoint = Http.McpEndpoint(service)
+    let rpc = """{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"caddis_eval","arguments":{"code":"1 + 1"}}}"""
+    match endpoint.Handle(request "/mcp" rpc).Result with
+    | Http.JsonResponse(200, body) ->
+        Assert.True((at [ "result"; "isError" ] body).GetValue<bool>())
+        Assert.Contains(failure, str [ "text" ] ((at [ "result"; "content" ] body).AsArray()[0]))
+    | other -> failwith $"Unexpected response: {other}"
+    let compileError = eval service "let x: int = \"wrong\""
+    Assert.Equal(CompileError, compileError.Status)
+    Assert.Contains(compileError.Notes, fun note -> note.Contains failure)

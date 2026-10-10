@@ -69,6 +69,45 @@ let ``rejects requests without token`` () =
     Assert.Equal(HttpStatusCode.Unauthorized, status)
 
 [<Fact>]
+let ``rotating the shared token immediately changes authentication in every server`` () =
+    let firstStore = newStore ()
+    let secondStore = SettingsStore(firstStore.Folder, "settings-revit.json", { CaddisSettings.defaults with port = 27920 })
+    firstStore.Save { CaddisSettings.defaults with port = 27920 }
+    use firstHost = new HeadlessHost(ignore)
+    use secondHost = new HeadlessHost(ignore)
+    use first = new CaddisServer(firstHost, firstStore)
+    use second = new CaddisServer(secondHost, secondStore)
+    for s in [ first; second ] do
+        match s.Start() with Ok _ -> () | Error msg -> failwith msg
+    // Finish session initialization before another test starts redirecting Console.Out.
+    first.Service.Fsi.Initialize().Wait()
+    second.Service.Fsi.Initialize().Wait()
+    let request (s: CaddisServer) token =
+        use c = new HttpClient(BaseAddress = Uri s.Url)
+        use req = new HttpRequestMessage(HttpMethod.Post, "/mcp", Content = new StringContent("""{"jsonrpc":"2.0","id":1,"method":"ping"}"""))
+        req.Headers.Authorization <- Headers.AuthenticationHeaderValue("Bearer", token)
+        use response = c.Send req
+        response.StatusCode
+    let old = first.Token
+    Assert.Equal(old, second.Token)
+    let fresh = first.NewToken()
+    for s in [ first; second ] do
+        Assert.Equal(HttpStatusCode.Unauthorized, request s old)
+        Assert.Equal(HttpStatusCode.OK, request s fresh)
+        Assert.Equal(fresh, s.Token)
+        Assert.Contains(fresh, s.ClaudeMcpCommand)
+    // Rotation can originate from either host.
+    let newest = second.NewToken()
+    Assert.Equal(HttpStatusCode.Unauthorized, request first fresh)
+    Assert.Equal(HttpStatusCode.OK, request first newest)
+    IO.File.WriteAllText(first.TokenPath, "invalid")
+    Assert.Equal(HttpStatusCode.Unauthorized, request first newest)
+    Assert.Equal(HttpStatusCode.Unauthorized, request second newest)
+    IO.File.Delete first.TokenPath
+    Assert.Equal(HttpStatusCode.Unauthorized, request second newest)
+    Assert.False(IO.File.Exists first.TokenPath, "Authentication must not silently regenerate a missing token.")
+
+[<Fact>]
 let ``rejects requests from web pages`` () =
     use req = new HttpRequestMessage(HttpMethod.Get, "/status")
     req.Headers.Add("Origin", "http://evil.example")

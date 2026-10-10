@@ -505,15 +505,19 @@ type RevitHost(app: ControlledApplication) =
                             if g.Start() = TransactionStatus.Started then group <- Some(g, doc) else g.Dispose()
 
         member _.AfterRun(run: Run, status: RunStatus) =
+            let mutable finalizationError: string option = None
             match group with
             | Some(g, doc) ->
                 // in API context: the run was on the 'ui' thread
                 group <- None
                 let rollBack (note: string) =
-                    g.RollBack() |> ignore // also rolls back a transaction the script left open
+                    match g.RollBack() with
+                    | TransactionStatus.RolledBack -> ()
+                    | s -> failwith $"Revit did not roll back the transaction group: {s}."
                     lastUndo <- lastUndoBefore
                     clearChanges ()
-                    run.AddNote note
+                    if status = Succeeded then finalizationError <- Some note
+                    else run.AddNote note
                 try
                     try
                         if doc.IsModifiable then
@@ -533,9 +537,11 @@ type RevitHost(app: ControlledApplication) =
                             g.RollBack() |> ignore
                     with e ->
                         clearChanges ()
-                        run.AddNote $"Caddis could not end the transaction group of the run, Revit rolls back its changes: {e.Message}"
+                        run.UndoSerial <- None
+                        finalizationError <- Some $"Caddis could not end the transaction group of the run, Revit rolls back its changes: {e.Message}"
                 finally
-                    try g.Dispose() with _ -> ()
+                    try g.Dispose()
+                    with e -> finalizationError <- Some $"Caddis could not dispose the transaction group of the run: {e.Message}"
             | None ->
                 // background mode, or recordUndo false, or no document: each transaction is an undo step of its own
                 let leftOpen =
@@ -544,9 +550,9 @@ type RevitHost(app: ControlledApplication) =
                         | null -> false
                         | uiApp -> not (isNull uiApp.ActiveUIDocument) && uiApp.ActiveUIDocument.Document.IsModifiable)
                 if leftOpen then
-                    run.AddNote "The script left a transaction open, Revit rolls it back with its changes. Commit or roll back every transaction, e.g. use Caddis.Revit.Script.Transact."
+                    finalizationError <- Some "The script left a transaction open, Revit rolls it back with its changes. Commit or roll back every transaction, e.g. use Caddis.Revit.Script.Transact."
                 match lastUndo with
-                | Some(id, _) when id = run.Id && commits = 1 ->
+                | Some(id, _) when id = run.Id && commits = 1 && not leftOpen ->
                     undoCounter <- undoCounter + 1u
                     run.UndoSerial <- Some undoCounter
                 | _ when commits > 1 ->
@@ -556,6 +562,9 @@ type RevitHost(app: ControlledApplication) =
                 run.AddNote n
             run.Commands <- changeReport ()
             runActive <- false
+            match finalizationError with
+            | Some message -> Error message
+            | None -> Ok ()
 
         member _.Echo(_, _) = () // Revit has no command line
 

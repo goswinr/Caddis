@@ -24,7 +24,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
     let mutable listener: HttpListener option = None
     let mutable port = 0
     let mutable listenOnLan = false
-    let mutable token = store.GetOrCreateToken()
+    do store.GetOrCreateToken() |> ignore
 
     let maxBodyBytes = 20L * 1024L * 1024L
 
@@ -52,8 +52,10 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
         | null -> false
         | h when h.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ->
             let given = Encoding.UTF8.GetBytes(h.Substring(7).Trim())
-            let expected = Encoding.UTF8.GetBytes token
-            CryptographicOperations.FixedTimeEquals(ReadOnlySpan<byte>(given), ReadOnlySpan<byte>(expected))
+            try
+                let expected = Encoding.UTF8.GetBytes(store.ReadToken())
+                CryptographicOperations.FixedTimeEquals(ReadOnlySpan<byte>(given), ReadOnlySpan<byte>(expected))
+            with _ -> false
         | _ -> false
 
     let rec write (r: HttpListenerResponse) (resp: Response) : Task =
@@ -239,13 +241,13 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     member _.McpUrl = url () + "/mcp"
 
-    member _.Token = token
+    member _.Token = store.ReadToken()
 
     member _.TokenPath = store.TokenPath
 
     /// The command line to add this server to Claude Code for all projects of the current user.
     member this.ClaudeMcpCommand =
-        $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl} --header \"Authorization: Bearer {token}\""
+        $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl} --header \"Authorization: Bearer {this.Token}\""
 
     /// Starts listening and creating the F# session. Returns the URL, or an error message.
     member this.Start() : Result<string, string> =
@@ -284,9 +286,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
             | None -> ())
 
     /// Creates and saves a new token, the old one stops working.
-    member _.NewToken() =
-        token <- store.NewToken()
-        token
+    member _.NewToken() = store.NewToken()
 
     interface IDisposable with
         member this.Dispose() = this.Stop()

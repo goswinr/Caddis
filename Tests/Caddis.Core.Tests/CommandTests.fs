@@ -91,6 +91,13 @@ let ``no commands is an argument error`` () =
     let svc = newServiceWith (CommandHost(fun _ -> RunOutcome.ofStatus Succeeded))
     Assert.Throws<ArgumentException>(fun () -> svc.StartCommands(commandArgs [ " "; "!" ]) |> ignore) |> ignore
 
+[<Theory>]
+[<InlineData("{\"commands\":[\"_Delete\",42]}")>]
+[<InlineData("{\"commands\":[\"_Delete\"],\"select\":[42]}")>]
+let ``command inputs do not silently discard invalid array entries`` (json: string) =
+    use host = new HeadlessHost(ignore)
+    Assert.Throws<ArgumentException>(fun () -> Args.commands (host :> ICaddisHost).Info (Json.parse json) |> ignore) |> ignore
+
 [<Fact>]
 let ``a command run blocks other runs and can be cancelled`` () =
     use started = new ManualResetEventSlim()

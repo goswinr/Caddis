@@ -139,8 +139,6 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             stdErr.Target <- Some run.StdErr
             fsiOut.Target <- Some run.FsiOut
             fsiErr.Target <- Some run.FsiOut
-            ScriptState.runId <- run.Id
-            ScriptState.outDir <- run.OutDir
             Console.SetOut stdOut
             Console.SetError stdErr)
 
@@ -156,8 +154,6 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                 stdErr.Target <- None
                 fsiOut.Target <- None
                 fsiErr.Target <- None
-                ScriptState.runId <- ""
-                ScriptState.outDir <- ""
             | _ -> ())
 
     // --- the session ---
@@ -210,20 +206,18 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
         with e ->
             host.Log $"Caddis: background runs can't be cancelled, setting up cancellation via reflection failed: {e.Message}"
 
-    /// Cancels the CancellationTokenSource of the latest evaluation of the session.
-    let tryCancelEvaluation (s: FsiEvaluationSession) : bool =
+    /// Snapshot the exact source under the state lock, then cancel it asynchronously outside the lock.
+    let tryGetCancellation (s: FsiEvaluationSession) : CancellationTokenSource option =
         try
             let ce = controlledExecution s
             match ce.GetType().GetField("cts", flags).GetValue ce with
             | :? ValueOption<CancellationTokenSource> as cts ->
                 match cts with
-                | ValueSome c ->
-                    c.Cancel()
-                    true
-                | ValueNone -> false
-            | _ -> false
+                | ValueSome c -> Some c
+                | ValueNone -> None
+            | _ -> None
         with _ ->
-            false
+            None
 
     /// Creates a new session in the background, after stopping and disposing the old one.
     let startSession () : Task =
@@ -344,10 +338,43 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             | _ -> ())
         run.Complete outcome |> ignore
 
+    /// Cancelling a pending OnUi call wakes the script and leaves a no-op in the host's queue.
+    /// Once the callback has started, its completion still belongs to the original run.
+    let rec invokeForRun (run: Run) (f: Func<obj>) : obj =
+        let token = run.CancellationToken
+        token.ThrowIfCancellationRequested()
+        if run.IsFinished then invalidOp $"Run '{run.Id}' has already finished."
+        let completion = TaskCompletionSource<obj>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let mutable phase = 0 // 0 queued, 1 started, 2 cancelled before starting
+        use registration =
+            token.Register(fun () ->
+                if Interlocked.CompareExchange(&phase, 2, 0) = 0 then completion.TrySetCanceled token |> ignore)
+        let work () =
+            if Interlocked.CompareExchange(&phase, 1, 0) = 0 then
+                try
+                    if not (run.TryBeginUiCallback()) then
+                        token.ThrowIfCancellationRequested()
+                        invalidOp $"Run '{run.Id}' has already finished."
+                    let result =
+                        try
+                            let context: ScriptState.Context = { run = run; invokeOnUi = invokeForRun run }
+                            ScriptState.withContext context f.Invoke
+                        finally run.EndUiCallback()
+                    completion.TrySetResult result |> ignore
+                with e -> completion.TrySetException e |> ignore
+        (host.InvokeOnUi work).ContinueWith(
+            Action<Task<unit>>(fun t ->
+                if t.IsFaulted then completion.TrySetException(t.Exception.InnerExceptions) |> ignore
+                elif t.IsCanceled then completion.TrySetCanceled() |> ignore)
+        ) |> ignore
+        let result = completion.Task.GetAwaiter().GetResult()
+        token.ThrowIfCancellationRequested()
+        result
+
     /// Called on the evaluation thread: the UI thread or the background worker.
     let evaluateOnThisThread (s: FsiEvaluationSession) (run: Run) : unit =
         run.Started <- true
-        let outcome =
+        let evaluate () =
             match (try host.CannotRunReason() with e -> Some e.Message) with
             | Some reason -> RunOutcome.withMessage Rejected reason
             | None ->
@@ -363,18 +390,25 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                         let result, diagnostics = s.EvalInteractionNonThrowing(run.Code, run.ScriptPath)
                         outcome <- outcomeOf run result diagnostics
                     with e ->
-                        outcome <- { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn run.ScriptPath e) }
+                        outcome <-
+                            if run.CancelRequested then cancelledOutcome run
+                            else { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn run.ScriptPath e) }
                 finally
                     endCapture run
                     if beforeRunDone then
-                        try host.AfterRun(run, outcome.status)
-                        with e -> host.Log $"Caddis: cleaning up after run {run.Id} failed: {e.Message}"
+                        let finalized =
+                            try host.AfterRun(run, outcome.status)
+                            with e -> Error $"Cleaning up after run '{run.Id}' failed: {e.Message}"
+                        match finalized with
+                        | Ok () -> ()
+                        | Error message ->
+                            run.AddNote message
+                            if outcome.status = Succeeded then
+                                outcome <- { outcome with status = RuntimeError; value = None; message = Some message }
                 outcome
+        let context: ScriptState.Context = { run = run; invokeOnUi = invokeForRun run }
+        let outcome = ScriptState.withContext context evaluate
         finishRun run outcome
-
-    do
-        // so that Caddis.Script.OnUi works
-        ScriptState.invokeOnUi <- fun f -> host.InvokeOnUi(fun () -> f.Invoke()).GetAwaiter().GetResult()
 
     // --- public members ---
 
@@ -546,22 +580,31 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             false
         else
             run.MarkCancelRequested()
-            // Try repeatedly: the CancellationTokenSource only exists once FCS has started to evaluate.
-            // The check under the lock ensures that only this run's token is cancelled.
-            let tryCancel () =
-                lock sync (fun () ->
-                    match current, session with
-                    | Some r, Some s when obj.ReferenceEquals(r, run) -> tryCancelEvaluation s |> ignore
-                    | _ -> ())
-            task {
-                let deadline = DateTime.UtcNow + abandonAfter
-                while not run.IsFinished && DateTime.UtcNow < deadline do
-                    tryCancel ()
-                    let! _ = Task.WhenAny(run.Completion, Task.Delay 250)
-                    ()
-                if not run.IsFinished then this.Abandon run
-            }
-            |> ignore
+            if run.TryStartCancellation() then
+                backgroundTask {
+                    let mutable deadline = DateTime.UtcNow + abandonAfter
+                    while not run.IsFinished && (DateTime.UtcNow < deadline || run.HasActiveUiCallback) do
+                        // Give cleanup its full grace period once an already-started host call returns.
+                        if run.HasActiveUiCallback then deadline <- DateTime.UtcNow + abandonAfter
+                        // FCS creates this source only after evaluation starts. Never cancel a later run's source.
+                        let source =
+                            lock sync (fun () ->
+                                match current, session with
+                                | Some r, Some s when obj.ReferenceEquals(r, run) && not run.HasActiveUiCallback -> tryGetCancellation s
+                                | _ -> None)
+                        match source with
+                        | Some c ->
+                            try
+                                // ControlledExecution's abort callback may wait for the evaluation thread.
+                                // It must not block the caller, the state lock, or the abandonment deadline.
+                                c.CancelAsync().ContinueWith(Action<Task>(fun t -> if t.IsFaulted then t.Exception |> ignore)) |> ignore
+                            with :? ObjectDisposedException -> ()
+                        | None -> ()
+                        let! _ = Task.WhenAny(run.Completion, Task.Delay 250)
+                        ()
+                    if not run.IsFinished then this.Abandon run
+                }
+                |> ignore
             true
 
     /// Gives up on a run that ignored cancellation and starts a new session.

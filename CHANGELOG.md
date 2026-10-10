@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PDF export is refused: it opened Rhino's print dialog and blocked until someone clicked.
 
 ### Fixed
+- Cancelling a background run no longer blocks on a queued `Script.OnUi` call. Cancelled callbacks are skipped and retain their original run context; already-started callbacks finish before the run completes.
+- Empty or malformed export `objectIds` arrays are rejected instead of silently exporting all objects. Command and selection arrays no longer discard invalid entries.
+- Rotating the shared token updates authentication and copied connection commands in every running instance; token files are replaced atomically.
+- Revit transaction finalization failures now produce failed runs and MCP error results instead of success with a rollback note.
 - Panel Output and Code views fill their tabs without extra padding; removed the panel's outer margin.
 - Viewport capture, export and undo waited for a running UI-thread run to finish; now they report the run as busy.
 - `notifications/cancelled` from one MCP client could cancel another client's run with the same request id.
