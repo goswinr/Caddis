@@ -3,9 +3,14 @@
 An F# interactive host for Revit 2026.5, controlled through HTTP and MCP.
 See the [main README](../README.md#revit) for installation and usage.
 
-## Ribbon settings
+## Ribbon
 
-The Caddis ribbon includes native checkboxes for **Start with Revit** and
+The Caddis tab groups its buttons in the panels **Server**, **F# Session** and **Status**.
+Each button has its own icon, a glyph of Windows' icon font (Segoe Fluent Icons, or Segoe MDL2 Assets
+on Windows 10) drawn for the screen's scale and in the colors of Revit's light or dark theme.
+`Start` and `Stop` show the server's state in their text and icon, `Mode` the thread mode.
+
+The **Settings** panel has native checkboxes for **Start with Revit** and
 **Listen on the network (LAN)**. They share the panel's settings and stay in sync
 even while the panel is hidden. Changing the LAN setting takes effect after
 stopping and starting the server.

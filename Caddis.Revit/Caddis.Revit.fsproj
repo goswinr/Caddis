@@ -42,6 +42,7 @@
     <Compile Include="AvaloniaHost.fs" />
     <Compile Include="PanelTheme.fs" />
     <Compile Include="Panel.fs" />
+    <Compile Include="RibbonIcons.fs" />
     <Compile Include="RibbonSettings.fs" />
     <Compile Include="Addin.fs" />
   </ItemGroup>

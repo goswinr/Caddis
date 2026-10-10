@@ -7,64 +7,74 @@ open Autodesk.Revit.DB
 open Autodesk.Revit.UI
 open Caddis
 
-/// The Caddis tab on Revit's ribbon. Its buttons show the state in their text, e.g. 'Start' or 'Stop'.
+/// The Caddis tab on Revit's ribbon. Its buttons show the state in their text and icon, e.g. 'Start' or 'Stop'.
 module internal Ribbon =
 
     let mutable private startStop: PushButton = null
     let mutable private mode: PushButton = null
+    /// Every button with its current icon, to draw them again when Revit's theme changes.
+    let private icons = Collections.Generic.Dictionary<string, PushButton * RibbonIcons.Icon>()
+
+    let private setIcon (b: PushButton) icon =
+        icons[b.Name] <- (b, icon)
+        b.LargeImage <- RibbonIcons.draw icon 32
+        b.Image <- RibbonIcons.draw icon 16
+
+    /// Draws the icons in the colors of Revit's current theme. Called by Revit's ThemeChanged event.
+    let refreshIcons () =
+        for b, icon in Seq.toList icons.Values do
+            setIcon b icon
 
     /// Synchronizes button labels and checkboxes. Called on the UI thread from the panel and Revit's Idling event.
     let update () =
-        let set (b: PushButton) (text: string) = if not (isNull b) && b.ItemText <> text then b.ItemText <- text
+        let set (b: PushButton) (text: string) icon =
+            if not (isNull b) && b.ItemText <> text then
+                b.ItemText <- text
+                setIcon b icon
         match App.server with
         | Some s ->
-            set startStop (if s.IsRunning then "Stop" else "Start")
-            set mode (if s.Service.Fsi.Mode = UiThread then "Mode: UI" else "Mode: Background")
+            if s.IsRunning then set startStop "Stop" RibbonIcons.stop else set startStop "Start" RibbonIcons.start
+            set mode (if s.Service.Fsi.Mode = UiThread then "Mode: UI" else "Mode: Background") RibbonIcons.mode
             RibbonSettings.update ()
         | None -> ()
 
     let create (uiApp: UIControlledApplication) =
         let tab = "Caddis"
         try uiApp.CreateRibbonTab tab with _ -> () // e.g. after a reload, the tab exists
-        let panel = uiApp.CreateRibbonPanel(tab, "Caddis")
         let assembly = Assembly.GetExecutingAssembly().Location
-        let button (name: string) (text: string) (command: string) (toolTip: string) =
-            new PushButtonData("Caddis" + name, text, assembly, "Caddis.Revit." + command, ToolTip = toolTip)
-        let large (d: PushButtonData) =
-            d.LargeImage <- Images.logo 32
-            d.Image <- Images.logo 16
-            d
+        let add (panel: RibbonPanel) (name: string) (text: string) (command: string) (toolTip: string) icon =
+            let data = new PushButtonData("Caddis" + name, text, assembly, "Caddis.Revit." + command, ToolTip = toolTip)
+            let b = panel.AddItem data :?> PushButton
+            setIcon b icon
+            b
+        // Revit shows every panel's title below its buttons, so the panels group the buttons by what they act on.
+        let server = uiApp.CreateRibbonPanel(tab, "Server")
         startStop <-
-            panel.AddItem(
-                button "StartStop" "Start" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents."
-                |> large
-            )
-            :?> PushButton
-        panel.AddItem(
-            button "CopyMcp" "Copy MCP" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code, including the token, to the clipboard."
-            |> large
-        )
+            add server "StartStop" "Start" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents." RibbonIcons.start
+        add server "CopyMcp" "Copy MCP" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code, including the token, to the clipboard." RibbonIcons.copy
         |> ignore
-        panel.AddItem(
-            button "Panel" "Panel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code."
-            |> large
-        )
+        add server "NewToken" "New token" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working." RibbonIcons.newToken
         |> ignore
-        panel.AddSeparator()
-        let stacked1 =
-            panel.AddStackedItems(
-                button "Mode" "Mode: UI" "ModeCommand" "Switches between running scripts on Revit's UI thread in its API context, and on a background thread. Resets the F# session.",
-                button "Reset" "Reset F#" "ResetCommand" "Starts a new F# session, all values defined so far are lost.",
-                button "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode."
-            )
-        mode <- stacked1[0] :?> PushButton
-        panel.AddStackedItems(
-            button "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis.",
-            button "NewToken" "New token" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working."
-        )
+        let session = uiApp.CreateRibbonPanel(tab, "F# Session")
+        mode <-
+            add
+                session
+                "Mode"
+                "Mode: UI"
+                "ModeCommand"
+                "Switches between running scripts on Revit's UI thread in its API context, and on a background thread. Resets the F# session."
+                RibbonIcons.mode
+        add session "Reset" "Reset F#" "ResetCommand" "Starts a new F# session, all values defined so far are lost." RibbonIcons.reset
         |> ignore
-        panel.AddSeparator()
-        RibbonSettings.create tab "Caddis"
+        add session "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode." RibbonIcons.cancel
+        |> ignore
+        let status = uiApp.CreateRibbonPanel(tab, "Status")
+        add status "Panel" "Panel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code." RibbonIcons.panel
+        |> ignore
+        add status "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis." RibbonIcons.info
+        |> ignore
+        uiApp.CreateRibbonPanel(tab, "Settings") |> ignore
+        RibbonSettings.create tab "Settings"
 
 
 /// The commands of the ribbon buttons. Revit runs them in API context.
@@ -149,7 +159,10 @@ type PanelCommand() =
 /// The entry point, registered in Caddis.addin. Don't rename it.
 type CaddisApplication() =
 
-    let themeChanged = EventHandler<Autodesk.Revit.UI.Events.ThemeChangedEventArgs>(fun _ _ -> PanelTheme.refresh ())
+    let themeChanged =
+        EventHandler<Autodesk.Revit.UI.Events.ThemeChangedEventArgs>(fun _ _ ->
+            PanelTheme.refresh ()
+            Ribbon.refreshIcons ())
     // Panel timers stop when hidden; idling also catches settings and mode changes made over HTTP.
     let idling = EventHandler<Autodesk.Revit.UI.Events.IdlingEventArgs>(fun _ _ -> Ribbon.update ())
 

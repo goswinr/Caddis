@@ -2,29 +2,10 @@ namespace Caddis.Revit
 
 open System
 open System.Diagnostics
-open System.Reflection
 open System.Windows
 open System.Windows.Controls
-open System.Windows.Media
-open System.Windows.Media.Imaging
 open System.Windows.Threading
 open Caddis.UI
-
-/// The images embedded in Caddis.Revit.dll.
-module internal Images =
-
-    /// The Caddis logo, decoded at the given width.
-    let logo (size: int) : ImageSource =
-        use stream = Assembly.GetExecutingAssembly().GetManifestResourceStream "Caddis.Revit.Resources.Caddis.png"
-        let img = BitmapImage()
-        img.BeginInit()
-        img.StreamSource <- stream
-        img.DecodePixelWidth <- size
-        img.CacheOption <- BitmapCacheOption.OnLoad
-        img.EndInit()
-        img.Freeze()
-        img
-
 
 /// Revit actions and presentation settings for the shared panel.
 module private PanelServices =
