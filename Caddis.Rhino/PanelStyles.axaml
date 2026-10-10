@@ -16,6 +16,8 @@
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
+    <!-- The tooltips of disabled buttons say why they are disabled, e.g. of 'Cancel run'. -->
+    <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
     <Setter Property="Template">
       <ControlTemplate>
         <ContentPresenter x:Name="PART_ContentPresenter"
@@ -46,6 +48,13 @@
       <Setter Property="Background" Value="{DynamicResource Caddis.Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Caddis.DisabledBorder}" />
       <Setter Property="Foreground" Value="{DynamicResource Caddis.Disabled}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- Like a button, pressed while checked, e.g. the Settings button while the settings are shown. -->
+  <ControlTheme x:Key="{x:Type ToggleButton}" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type Button}}">
+    <Style Selector="^:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Caddis.Pressed}" />
     </Style>
   </ControlTheme>
 

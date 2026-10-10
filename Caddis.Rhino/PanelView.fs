@@ -59,7 +59,8 @@ type PanelView() as this =
     let scope: ThemeVariantScope = find "Scope"
     let logo: Border = find "Logo"
     let logoImage: Image = find "LogoImage"
-    let status: TextBlock = find "Status"
+    let serverStatus: TextBlock = find "ServerStatus"
+    let fsiStatus: TextBlock = find "FsiStatus"
     let startStop: Button = find "StartStop"
     let copyMcp: Button = find "CopyMcp"
     let copyToken: Button = find "CopyToken"
@@ -67,6 +68,7 @@ type PanelView() as this =
     let mode: ComboBox = find "Mode"
     let cancel: Button = find "Cancel"
     let reset: Button = find "Reset"
+    let settingsToggle: Primitives.ToggleButton = find "SettingsToggle"
     let autoStart: CheckBox = find "AutoStart"
     let echo: CheckBox = find "Echo"
     let lan: CheckBox = find "Lan"
@@ -165,7 +167,7 @@ type PanelView() as this =
 
     let refresh () =
         match App.server with
-        | None -> status.Text <- "Caddis is not loaded."
+        | None -> serverStatus.Text <- "Caddis is not loaded."
         | Some s ->
             let svc = s.Service
             updating <- true
@@ -174,9 +176,13 @@ type PanelView() as this =
                     match svc.Fsi.Current with
                     | Some r -> $", running {r.Id}"
                     | None -> ""
-                status.Text <-
-                    (if s.IsRunning then $"Listening on {s.Url}" else "Stopped")
-                    + $"{Environment.NewLine}F# session: {FsiState.toString svc.Fsi.State}{running}"
+                let thread =
+                    match svc.Fsi.Mode with
+                    | UiThread -> "UI thread"
+                    | Background -> "background thread"
+                serverStatus.Text <- if s.IsRunning then $"Listening on {s.Url}" else "Server stopped"
+                // The thread mode is shown here too, its dropdown is in the folded settings.
+                fsiStatus.Text <- $"F# session ({thread}): {FsiState.toString svc.Fsi.State}{running}"
                 startStop.Content <- if s.IsRunning then "Stop" else "Start"
                 ToolTip.SetTip(startStop, (if s.IsRunning then stopTip else startTip))
                 copyMcp.IsEnabled <- s.IsRunning
@@ -222,7 +228,8 @@ type PanelView() as this =
         ToolTip.SetTip(
             cancel,
             tip [
-                "Cancel the current run. Only runs in background mode can be cancelled."
+                "Cancel the current run. Only runs on a background thread can be cancelled,"
+                "set 'Run scripts on' under Settings."
                 "If a run doesn't stop within 5 s, its thread is abandoned and the F# session is reset."
             ]
         )
@@ -230,6 +237,8 @@ type PanelView() as this =
             reset,
             tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ]
         )
+        ToolTip.SetTip(settingsToggle, "Show or hide the settings.")
+        ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, "Start the server when Rhino starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])
         ToolTip.SetTip(

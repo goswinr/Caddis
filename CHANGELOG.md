@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs return what was printed to the Rhino command line, e.g. by `RhinoApp.WriteLine` or commands run via `RhinoApp.RunScript`, also in background mode: `commandLine` in REST, a 'Rhino command line' section in MCP. Caddis' own echo of the output is left out.
 - `CancelWaitingCommands` setting, a checkbox in the panel and an option of the `Caddis` command, off by default: cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`, when they wait 3 s for input. The run gets a note with the prompt. In background mode only commands started via `Caddis.Script.OnUi`.
 - Runs have `notes` from the host, shown in MCP results and the panel.
-- Tooltips for all buttons, checkboxes and the thread mode in the panel.
+- Tooltips for all buttons, checkboxes and the thread mode in the panel, also on disabled buttons, e.g. why `Cancel run` is disabled.
 - The logo in the panel opens the GitHub repository.
 - `Caddis.Revit`, an add-in for Revit 2026.5 on .NET 10, tested in Revit 2026.5: the same F# session, REST and MCP tools without `caddis_command`. Runs on the UI thread run in Revit's API context via an external event, each in a transaction group: one undo step if it succeeds, rolled back if it fails.
 - Revit: warnings are removed and listed as notes, errors roll back their transaction. Results list the created, changed and deleted element ids. `Caddis.Revit.Script` has `Doc`, `UiDoc`, `UiApp`, `Transact` and `OnUi`.
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs have `started`: a run still waiting for the host app says in MCP that it has not started yet.
 
 ### Changed
-- Rhino: the panel is drawn with Avalonia 12 inside Rhino's dockable Eto panel, instead of Eto controls. It takes its colors from Rhino's theme, light, dark or custom, and follows a change immediately, including dropdowns, tooltips, menus, scrollbars and the run selection. On a narrow panel the checkboxes wrap below the buttons.
+- Rhino: the panel is drawn with Avalonia 12 inside Rhino's dockable Eto panel, instead of Eto controls. It takes its colors from Rhino's theme, light, dark or custom, and follows a change immediately, including dropdowns, tooltips, menus, scrollbars and the run selection.
 - Rhino: the panel shows the code of a run read-only in an AvaloniaEdit editor, with F# syntax highlighting in light and dark colors, line numbers, and search with Ctrl+F.
 - Rhino: the Yak package includes Avalonia, AvaloniaEdit, SkiaSharp and HarfBuzz with their native libraries for 64 bit Windows (x64, Arm64) and Mac, about 20 MB more. The panel renders in software, so ANGLE isn't included.
 - Revit: the dockable pane follows Revit's light and dark themes, with native-style compact controls, readable run details, themed dropdowns and scrollbars, and visible selection and keyboard focus.
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `caddis_export` and `POST /export` start a run of kind `export`, like `caddis_eval`: it returns `running` after `waitMs` (MCP default 50 s) and `caddis_get_run` returns its files. It takes the one run slot, so other runs get 409 meanwhile, and it can't be cancelled.
 - Copied Claude Code MCP setup command uses user scope so Caddis is available across projects.
 - Panel run details show executed code in its own read-only tab, separate from output and diagnostics.
-- Panel checkboxes align in one column beside the button and thread-mode rows, leaving more vertical space for runs and details.
+- Rhino: the panel header is compact: the logo beside a one-line status and one row of buttons, with the thread mode and the checkboxes folded under a `Settings` button. The status shows the thread mode. On a narrow panel the button groups wrap.
 - MCP results are compact text for the model instead of JSON, without `structuredContent`: empty fields left out, long output shortened at line ends and saved to a file, compiler messages on one line, stack traces trimmed to the frames leading into the script.
 - `timeoutMs` only cancels background runs, it no longer means "return early" on the UI thread, that is `waitMs` now.
 - `caddis_check` and `POST /check` type-check against the current F# session, so definitions from earlier runs are known. The separate `FSharpChecker` is gone, which saves memory.

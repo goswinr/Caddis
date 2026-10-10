@@ -15,14 +15,26 @@
   </UserControl.Resources>
 
   <UserControl.Styles>
-    <!-- Button rows and check boxes have the same height, so that the check boxes line up with the button rows beside them. -->
+    <!-- Groups of controls that wrap as a whole when the panel is narrow. -->
     <Style Selector="StackPanel.row">
       <Setter Property="Orientation" Value="Horizontal" />
       <Setter Property="Spacing" Value="4" />
       <Setter Property="Height" Value="28" />
+      <Setter Property="Margin" Value="0,0,4,0" />
     </Style>
-    <Style Selector="CheckBox">
-      <Setter Property="Height" Value="28" />
+    <Style Selector="WrapPanel.settings > :is(Control)">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Margin" Value="0,0,16,0" />
+    </Style>
+    <!-- The chevron of the Settings button points up while the settings are shown, its color follows the button's text. -->
+    <Style Selector="Path.chevron">
+      <Setter Property="Stroke" Value="{DynamicResource Caddis.ButtonText}" />
+    </Style>
+    <Style Selector="ToggleButton:pointerover Path.chevron">
+      <Setter Property="Stroke" Value="{DynamicResource Caddis.Text}" />
+    </Style>
+    <Style Selector="ToggleButton:checked Path.chevron">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
     </Style>
     <Style Selector="Grid.runColumns > TextBlock">
       <Setter Property="Margin" Value="6,0" />
@@ -52,40 +64,51 @@
         <RowDefinition Height="*" MinHeight="60" />
       </Grid.RowDefinitions>
 
-      <DockPanel Margin="0,0,0,4">
-        <Border x:Name="Logo" DockPanel.Dock="Left" Background="Transparent" Cursor="Hand" Margin="0,0,8,0">
+      <!-- The logo beside the status line and the buttons. Their groups wrap below each other when the panel is narrow. -->
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
+        <Border x:Name="Logo" Grid.RowSpan="2" VerticalAlignment="Top" Background="Transparent" Cursor="Hand" Margin="0,2,8,0">
           <Image x:Name="LogoImage" Width="40" Height="40" />
         </Border>
-        <TextBlock x:Name="Status" TextWrapping="Wrap" VerticalAlignment="Center" />
-      </DockPanel>
-
-      <!-- The check boxes are beside the buttons, or below them when the panel is narrow. -->
-      <WrapPanel Grid.Row="1" Margin="0,0,0,4">
-        <StackPanel Margin="0,0,12,0">
+        <WrapPanel Grid.Column="1" Margin="0,2,0,2">
+          <TextBlock x:Name="ServerStatus" TextWrapping="Wrap" Margin="0,0,16,0" />
+          <TextBlock x:Name="FsiStatus" TextWrapping="Wrap" />
+        </WrapPanel>
+        <WrapPanel Grid.Row="1" Grid.Column="1">
           <StackPanel Classes="row">
             <Button x:Name="StartStop" Content="Start" MinWidth="56" />
             <Button x:Name="CopyMcp" Content="Copy MCP command" />
             <Button x:Name="CopyToken" Content="Copy token" />
           </StackPanel>
           <StackPanel Classes="row">
+            <Button x:Name="Cancel" Content="Cancel run" />
+            <Button x:Name="Reset" Content="Reset session" />
+            <ToggleButton x:Name="SettingsToggle">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Settings" />
+                <Path Classes="chevron" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 8,0" StrokeThickness="1.2" />
+              </StackPanel>
+            </ToggleButton>
+          </StackPanel>
+        </WrapPanel>
+      </Grid>
+
+      <!-- Folded until the Settings button is checked. -->
+      <Border x:Name="Settings" Grid.Row="1" IsVisible="{Binding #SettingsToggle.IsChecked}" Margin="0,0,0,4" Padding="8,2,0,2"
+              BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="1" CornerRadius="2">
+        <WrapPanel Classes="settings">
+          <StackPanel Orientation="Horizontal" Spacing="4">
             <TextBlock x:Name="ModeLabel" Text="Run scripts on:" VerticalAlignment="Center" />
             <ComboBox x:Name="Mode" MinWidth="130">
               <ComboBoxItem Content="UI thread" />
               <ComboBoxItem Content="Background thread" />
             </ComboBox>
           </StackPanel>
-          <StackPanel Classes="row">
-            <Button x:Name="Cancel" Content="Cancel run" />
-            <Button x:Name="Reset" Content="Reset session" />
-          </StackPanel>
-        </StackPanel>
-        <StackPanel>
           <CheckBox x:Name="AutoStart" Content="Start with Rhino" />
           <CheckBox x:Name="Echo" Content="Echo output to the command line" />
           <CheckBox x:Name="Lan" Content="Listen on the network (LAN)" />
           <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
-        </StackPanel>
-      </WrapPanel>
+        </WrapPanel>
+      </Border>
 
       <!-- The recent runs, newest first. The columns share their widths with the header. -->
       <Border Grid.Row="2" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
