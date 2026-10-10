@@ -127,11 +127,12 @@ module internal RibbonIcons =
             rect p.Top 14.0 18.0 10.0 2.0
             if not compact then rect p.Top 14.0 22.0 6.0 2.0
         | NewToken ->
-            // A key with a transparent bow and a small blue glint for a newly issued token.
-            path p.GoldShade "F0 M2,10 L8,4 H14 L20,10 V16 L16,20 L28,20 V26 H24 V30 H20 V26 L12,18 H8 L2,12 Z M8,8 V12 H12 V8 Z"
-            path p.Gold "F0 M2,8 L8,2 H14 L20,8 V14 L16,18 L28,18 V24 H24 V28 H20 V24 L12,16 H8 L2,10 Z M8,8 V12 H12 V8 Z"
-            path p.Top "M2,8 L8,2 H14 L16,4 H8 L4,8 Z"
-            path p.Blue "M26,2 L27,6 L31,8 L27,10 L26,14 L24,10 L20,8 L24,6 Z"
+            // A straight diagonal key with two teeth, an open bow and a separate new-token glint.
+            // Both gold layers share the cutout so the bow stays transparent.
+            path p.GoldShade "F0 M6,4 H12 L16,8 V14 L28,26 L24,30 L22,28 L20,30 L18,28 L20,26 L18,24 L16,26 L14,24 L16,22 L12,18 H6 L2,14 V8 Z M6,6 H12 V12 H6 Z"
+            path p.Gold "F0 M6,2 H12 L16,6 V12 L28,24 L24,28 L22,26 L20,28 L18,26 L20,24 L18,22 L16,24 L14,22 L16,20 L12,16 H6 L2,12 V6 Z M6,6 H12 V12 H6 Z"
+            path p.Top "M2,6 L6,2 H12 L14,4 H6 L4,6 Z"
+            path p.Blue "M26,2 L28,6 L30,8 L28,10 L26,14 L24,10 L22,8 L24,6 Z"
         | ThreadMode ->
             rect p.Edge 2.0 4.0 16.0 14.0
             rect p.Face 2.0 4.0 14.0 12.0
@@ -149,8 +150,9 @@ module internal RibbonIcons =
             sheet 4.0 2.0
             code ()
             // A broad open arc survives downsampling better than a thin refresh-font glyph.
-            path p.GreenShade "F1 M30,23 A8,8 0 1 1 22,15 V19 A4,4 0 1 0 26,23 Z M30,11 V21 H20 Z"
-            path p.Green "F1 M30,22 A8,8 0 1 1 22,14 V18 A4,4 0 1 0 26,22 Z M30,10 V20 H20 Z"
+            // Extend both arcs into the arrowhead so they meet its long diagonal edge.
+            path p.GreenShade "F1 M30,23 A8,8 0 1 1 26.8,16.6 L24.4,19.8 A4,4 0 1 0 26,23 Z M30,11 V21 H20 Z"
+            path p.Green "F1 M30,22 A8,8 0 1 1 26.8,15.6 L24.4,18.8 A4,4 0 1 0 26,22 Z M30,10 V20 H20 Z"
         | CancelRun ->
             sheet 4.0 2.0
             code ()

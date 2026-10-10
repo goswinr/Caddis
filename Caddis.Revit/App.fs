@@ -104,7 +104,7 @@ module App =
                 // not with show: the token stays out of the log
                 log "Caddis: the clipboard could not be opened, the MCP command is shown in a dialog."
                 TaskDialog.Show(
-                    "Copy MCP",
+                    "Copy MCP Command",
                     $"The clipboard is in use by another program. Press Ctrl+C in this dialog to copy its text, the command is the last line:{Environment.NewLine}{Environment.NewLine}{s.ClaudeMcpCommand}"
                 )
                 |> ignore
