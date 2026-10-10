@@ -1,0 +1,11 @@
+<Project>
+  <!-- On .NET Framework, SkiaSharp and HarfBuzzSharp add their native libraries for every OS and architecture as Content or None items,
+  in folders like x64. Rhino on .NET Framework runs on 64 bit Windows only, so the panel needs just the DLLs in x64 and arm64.
+  This keeps the other native libraries out of the build and the Yak package. -->
+  <Target Name="RemoveUnusedNetFrameworkNativeLibraries" BeforeTargets="AssignTargetPaths" Condition="'$(TargetFramework)' == 'net48'">
+    <ItemGroup>
+      <Content Remove="@(Content)" Condition="$([System.String]::Copy('%(Content.FullPath)').Contains('.nativeassets.')) and !('%(Content.Extension)' == '.dll' and ($([System.String]::Copy('%(Content.Link)').StartsWith('x64\')) or $([System.String]::Copy('%(Content.Link)').StartsWith('arm64\'))))" />
+      <None Remove="@(None)" Condition="$([System.String]::Copy('%(None.FullPath)').Contains('.nativeassets.')) and !('%(None.Extension)' == '.dll' and ($([System.String]::Copy('%(None.Link)').StartsWith('x64\')) or $([System.String]::Copy('%(None.Link)').StartsWith('arm64\'))))" />
+    </ItemGroup>
+  </Target>
+</Project>

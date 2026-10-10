@@ -16,6 +16,11 @@ module Compat =
     type Environment with
         static member ProcessId = Process.GetCurrentProcess().Id
 
+    /// .NET Framework runs on Windows only.
+    type OperatingSystem with
+        static member IsWindows() = true
+        static member IsMacOS() = false
+
     type Convert with
         static member ToHexString(bytes: byte[]) = BitConverter.ToString(bytes).Replace("-", "")
 

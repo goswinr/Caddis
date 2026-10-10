@@ -34,7 +34,7 @@ runs:
         --output bin/Release/rh8/net8.0
 
     - name: Publish net48
-      # Rhino 8 on .NET Framework, without the Avalonia panel.
+      # Rhino 8 on .NET Framework, the panel with Avalonia 11.
       shell: pwsh
       run: >-
         dotnet publish Caddis.Rhino/Caddis.Rhino.fsproj

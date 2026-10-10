@@ -49,10 +49,24 @@ module FsiAssemblyResolver =
 
     let private keyToken (n: AssemblyName) = match n.GetPublicKeyToken() with null -> [||] | t -> t
 
+    /// The folder of the host app, e.g. Rhino 8's System folder. The loader takes an assembly from there if it has exactly the requested version.
+    let private hostFolder = AppDomain.CurrentDomain.BaseDirectory
+
+    /// The name of the assembly at the path if it has the requested version or a higher one.
+    let private satisfying (requested: AssemblyName) (path: string) =
+        try
+            let found = AssemblyName.GetAssemblyName path
+            if keyToken found = keyToken requested && (isNull requested.Version || found.Version >= requested.Version) then Some found else None
+        with _ ->
+            None // missing, or a native library
+
     /// A .NET Framework plugin has no binding redirects. Then a request for e.g. System.Reflection.Metadata 10.0.0.2 fails
     /// if the host app's folder has an older version, and the host's handler returns that, e.g. Rhino 8 its 7.0.0.0.
     /// FCS then fails with a MissingMethodException when it writes the debug symbols of --multiemit+.
     /// This returns the assembly in the folder of Caddis.Core if it has the requested version or a higher one, like a binding redirect.
+    /// But the host's copy first if it has the requested version or a higher one: the loader binds a request for exactly its version to it,
+    /// e.g. Avalonia's for System.Memory 4.0.1.2 to Rhino 8's. A request for an older one, e.g. AvaloniaEdit's for 4.0.1.1, must get the same copy,
+    /// or calls between them that pass its types, e.g. ReadOnlyMemory<char>, fail with a MissingMethodException.
     let private resolveOwn (args: ResolveEventArgs) : Assembly =
         let fromOtherFolder =
             match args.RequestingAssembly with
@@ -63,13 +77,15 @@ module FsiAssemblyResolver =
         if fromOtherFolder || not (File.Exists path) then
             null
         else
-            let found = AssemblyName.GetAssemblyName path
-            if keyToken found = keyToken requested && (isNull requested.Version || found.Version >= requested.Version) then
-                match AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.FullName = found.FullName) with
-                | Some a -> a
-                | None -> Assembly.LoadFrom path
-            else
-                null
+            match satisfying requested (Path.Combine(hostFolder, requested.Name + ".dll")) with
+            | Some host -> Assembly.Load host // by its exact version, the copy the loader binds to
+            | None ->
+                match satisfying requested path with
+                | Some found ->
+                    match AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.FullName = found.FullName) with
+                    | Some a -> a
+                    | None -> Assembly.LoadFrom path
+                | None -> null
 #endif
 
     let private resolve (args: ResolveEventArgs) : Assembly =

@@ -13,7 +13,7 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 | Fesh coexistence | Independent, pinned to FCS 43.8.403 and FSharp.Core 8.0.403 (the same versions as Fesh 0.33.5-net8), so both plugins load together. Each has its own FSI session. The `net10.0` build of Caddis.Core, for Revit, uses FCS 43.12.401 and FSharp.Core 10.1.401, like Fesh 0.34.0-net10. |
 | Lifecycle | `Caddis` command to start and stop, an opt-in autostart setting, and one discovery file per Rhino instance |
 | v1 extras | Cancel + timeout, viewport capture, type-check only, undo last eval, returning exported/saved files |
-| Platform / UI | One Avalonia panel in `Caddis.UI` (`net8.0;net10.0`), shared by Rhino and Revit (2026-10-10). Rhino docks it through Eto on Windows and Mac; Revit docks it through a WPF `HwndHost`. Each host supplies actions, capabilities and theme colors. |
+| Platform / UI | One Avalonia panel in `Caddis.UI` (`net8.0;net10.0` with Avalonia 12, and since 2026-10-10 `net48` with Avalonia 11 for Rhino on .NET Framework), shared by Rhino and Revit (2026-10-10). Rhino docks it through Eto on Windows and Mac; Revit docks it through a WPF `HwndHost`. Each host supplies actions, capabilities and theme colors. |
 
 ## Constraints
 
@@ -37,14 +37,14 @@ Caddis.Core/   net8.0;net10.0;net48, no Rhino or Revit dependency
   Http/Server.fs   HttpListener loop, auth, Origin check, routing, discovery file
   Http/Rest.fs     REST handlers
   Http/Mcp.fs      initialize, tools/list, tools/call, ping
-Caddis.UI/     net8.0;net10.0, shared Avalonia content, no Rhino or Revit dependency
+Caddis.UI/     net8.0;net10.0 with Avalonia 12, net48 with Avalonia 11, shared Avalonia content, no Rhino or Revit dependency
   PanelHost.fs     host actions, optional settings, messages and theme palette
   AvaloniaSetup.fs starts Avalonia without taking over the host's main loop; resolves native libraries
   EmbeddedView.fs  lifetime and DPI handling for the embedded native view
   PanelView.fs     shared view (PanelView.axaml, PanelStyles.axaml): state, settings, runs, output and code
   RunDetails.fs    output formatting, including Rhino commands and Revit grouped element changes
   FSharpHighlighting.fs  light/dark F# highlighting (FSharp.xshd); code formatting uses Fantomas 7
-Caddis.Rhino/  net8.0 (Rhino 8), net10.0 (Rhino 9), net48 (Rhino 8 on .NET Framework, no panel), TargetExt .rhp
+Caddis.Rhino/  net8.0 (Rhino 8), net10.0 (Rhino 9), net48 (Rhino 8 on .NET Framework, Windows only), TargetExt .rhp
   AssemblyInfo.fs  new plugin GUID (not Fesh's)
   PlugIn.fs        load, UI SynchronizationContext, autostart, Rhino.Scripting hookup
   RhinoOps.fs      undo record wrapping, redraw, InCommand guard, viewport capture, export, undo
@@ -57,7 +57,7 @@ Caddis.Revit/  net10.0-windows
   AvaloniaHost.fs  WPF HwndHost, native parenting, keyboard input and DPI changes
   PanelTheme.fs    Revit light/dark colors and ThemeChanged subscription
   Panel.fs         pane registration (unchanged ID), WPF shell and Revit services for PanelView
-Tests/         xUnit tests for Core and the shared UI, both on net8.0 and net10.0
+Tests/         xUnit tests for Core and the shared UI, both on net8.0 and net10.0, Core also on net48
 ```
 
 `Caddis.Core` declares interfaces for the Rhino hooks (`beforeEval`, `afterEval`, `capture`, `export`), and `Caddis.Rhino` implements them.
@@ -247,6 +247,15 @@ Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.Get
 '. `RhinoLog` switches the capture off around Caddis' own writes, so the echo of a run's output isn't captured. But a write on the UI thread first prints what other threads queued, e.g. `RhinoApp.WriteLine` of a background run, so `RhinoLog` writes an empty string before switching the capture off; without it that text was lost after a `printfn`. Tested in UI and background mode.
   - An F# run that calls `RhinoApp.RunScript` with a macro that lacks an input waits for the user, e.g. `-_Length` with nothing selected; Esc in Rhino ends it.
 - **`CancelWaitingCommands` setting (2026-10-10), tested in Rhino 8.35:** opt-in watchdog for F# runs, the same `checkWaiting` loop as for command runs, started in `BeforeRun` when `run.InputTimeout` is set. Only commands the script started are watched: `invokeOnUi` counts its calls in progress on the UI thread (`uiCallDepth`), and `Command.BeginCommand` during an F# run records whether one was in progress. In UI-thread mode the whole run is such a call; in background mode `Caddis.Script.OnUi` is, so commands typed in Rhino during a background run are left alone. Commands that Rhino.Scripting starts in background mode via its own SynchronizationContext are not watched. A cancelled command adds a note to the run and `RunScript` returns false, the script goes on. Tested: UI mode (`-_Length` cancelled after 3.8 s, note), background mode via `OnUi` (cancelled) and via a raw `InvokeOnUiThread` like a typed command (not cancelled), the `Caddis` command option and the panel checkbox.
+- **Panel on .NET Framework (2026-10-10), tested in Rhino 8.34 started with `/netfx`:** `Caddis.UI` also targets `net48`, with Avalonia 11.3.22 and AvaloniaEdit 11.4.1, since Avalonia 12 needs .NET 8. net8.0 and net10.0 keep Avalonia 12.
+  - Confirmed: the panel shows the server state, the run list and the formatted, highlighted code of a selected run. SkiaSharp and HarfBuzz load from the plugin's `x64` folder, Fantomas formats, F# runs work as before.
+  - Found and fixed (the build, the unit tests and a net48 console test had passed before):
+    - **Two copies of System.Memory:** a .NET Framework plugin has no binding redirects. The loader binds Avalonia's request for System.Memory 4.0.1.2 to Rhino 8's copy in its `System` folder without asking any resolver. AvaloniaEdit asks for 4.0.1.1, and `FsiAssemblyResolver` returned Caddis' 4.0.5.0. So `ReadOnlyMemory<char>` was two types, and the panel failed with a MissingMethodException for `TextCharacters..ctor`. The resolver now prefers the host's copy if it has the requested version or a higher one; FCS (4.0.2.0) and Caddis.Core (4.0.5.0) still get Caddis' copy. The console test missed it because an exe gets binding redirects.
+    - **Empty Output and Code tabs:** Avalonia 12's `TabControl` sets the content of `PART_SelectedContentHost` itself, Avalonia 11's needs `Content="{TemplateBinding SelectedContent}"`. `PanelStyles.axaml` has the binding, which works on both.
+    - **Native libraries:** on .NET Framework SkiaSharp's and HarfBuzzSharp's own build targets copy the natives for every OS and architecture into folders like `x64`, not into `runtimes/<rid>/native`: 142 MB. `Directory.Build.targets` keeps only the `x64` and `arm64` DLLs: 61 MB. `AvaloniaSetup` loads them with `LoadLibrary`, .NET Framework has no `NativeLibrary`.
+  - Keep the panel's code and XAML within what both Avalonia 11 and 12 support. `Caddis.UI.Tests` run only on Avalonia 12, so check changes for net48 in a net48 console that shows `PanelView` in a window with a running dispatcher loop, or in Rhino with `/netfx`.
+  - Notes for testing: McNeel's `DataExchangeRhinoConnector.rhp` targets .NET 8 only, so Rhino with `/netfx` shows a 'Rhino Plug-in Error' for it at startup, unrelated to Caddis; press OK and leave 'Never load this plug-in again' unticked. A newly opened panel floats. Until a document is open, `Panels.GetPanel(id, RhinoDoc.ActiveDoc)` fails. The panel was checked from Caddis scripts (reflection into `AvaloniaHost`, `RenderTargetBitmap`) and with `PrintWindow` screenshots of its floating window.
+  - Not tested on .NET Framework: theme and DPI changes, Windows on ARM64.
 - **Open:**
   - Revit: the untested parts in [Revit live test](#revit-live-test-2026-10-10), packaging, and Rhino with the export run and `caddis_dialog` (not offered in Rhino yet).
   - Test on Mac.
@@ -283,6 +292,7 @@ Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.Get
 
 - **FCS internals:** the cancel hack and the script folder of `caddis_check` reach into private FCS fields by reflection. This is safe only because the version is pinned; any FCS upgrade needs a re-test.
 - **Assembly resolution:** Caddis puts its resolver for `FSI-ASSEMBLY` first by setting the private `AssemblyLoadContext.AssemblyResolve` field. If a .NET update renames it, Caddis logs that and values of earlier runs fail again in Rhino. A plugin that inserts its own handler at the front later would break it too.
+- **Assembly versions on .NET Framework:** which copy of System.Memory and the other helper assemblies FCS and the panel get depends on the versions in Rhino's `System` folder, see [Panel on .NET Framework](#progress-2026-10-10). A Rhino service release that changes them needs a re-test with `/netfx`.
 - **Modal dialogs:** a script, or an export format, that opens a modal dialog blocks Rhino until someone clicks. PDF export is refused for this reason; the other formats are only known to be fine from the test above.
 - **Mac is unverified:** ControlledExecution, `System.Drawing` for viewport capture (the fallback is `-_ViewCaptureToFile`), and whether a UI `SynchronizationContext` exists (the fallback is `RhinoApp.InvokeOnUiThread`). The panel too: Avalonia.Native as an NSView in Eto's `NativeControlHost`, with Avalonia's app delegate, menus and process name disabled. If Avalonia fails to start, the panel shows the error and the `Caddis` command still works.
 - **Background thread:** raw RhinoCommon UI calls from that thread can crash Rhino. That is why the default is the UI thread.

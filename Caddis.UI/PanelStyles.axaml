@@ -300,8 +300,9 @@
       <ControlTemplate>
         <DockPanel>
           <ItemsPresenter x:Name="PART_ItemsPresenter" DockPanel.Dock="Top" ItemsPanel="{TemplateBinding ItemsPanel}" />
-          <!-- TabControl sets the content of the selected tab itself. -->
+          <!-- The content of the selected tab. Avalonia 12's TabControl sets it itself, Avalonia 11's (net48) needs the bindings. -->
           <ContentPresenter x:Name="PART_SelectedContentHost"
+                            Content="{TemplateBinding SelectedContent}" ContentTemplate="{TemplateBinding SelectedContentTemplate}"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
         </DockPanel>
       </ControlTemplate>

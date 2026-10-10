@@ -34,9 +34,6 @@ type CaddisPlugIn() =
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
                 RhinoApp.Closing.Add(fun _ -> App.shutdown ())
-#if NETFRAMEWORK
-                ignore this // the panel needs .NET 8
-#else
                 try
                     Rhino.UI.Panels.RegisterPanel(
                         this, typeof<CaddisPanel>, "Caddis", typeof<CaddisPanel>.Assembly,
@@ -44,7 +41,6 @@ type CaddisPlugIn() =
                     )
                 with e ->
                     RhinoLog.writeLine $"Caddis: registering the panel failed: {e.Message}"
-#endif
                 if server.Service.Settings.autoStart then App.start ()
                 LoadReturnCode.Success
             with e ->

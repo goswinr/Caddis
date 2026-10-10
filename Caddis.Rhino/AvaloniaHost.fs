@@ -9,6 +9,9 @@ open Caddis.UI
 module RhinoAvaloniaSetup =
     let ensure () =
         AvaloniaSetup.ensure (fun builder ->
+#if NETFRAMEWORK // Windows only
+            builder.UseWin32().With(Win32PlatformOptions(RenderingMode = [| Win32RenderingMode.Software |])))
+#else
             if OperatingSystem.IsMacOS() then
                 builder
                     .UseAvaloniaNative()
@@ -28,6 +31,7 @@ module RhinoAvaloniaSetup =
                     )
             else
                 builder.UseWin32().With(Win32PlatformOptions(RenderingMode = [| Win32RenderingMode.Software |])))
+#endif
 
 /// The Eto shell Rhino docks on Windows and Mac; all visible controls belong to Caddis.UI.
 type AvaloniaHost(content: Avalonia.Controls.Control) =

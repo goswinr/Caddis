@@ -5,6 +5,7 @@ open System.Runtime.InteropServices
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Embedding
+open Caddis
 
 /// Windows functions to tell the embedded Avalonia window about DPI changes.
 module private Win32 =

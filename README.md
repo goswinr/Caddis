@@ -33,7 +33,7 @@ There is also an add-in for Revit 2026, see [Revit](#revit).
 
 After the first Yak release, install via Rhino's `PackageManager` command and search for `Caddis`.
 The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
-On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`), without the panel: it is drawn with Avalonia 12, which needs .NET 8.
+On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`). There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
 
 ### Manual installation
 
@@ -247,7 +247,7 @@ dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
 `Caddis.Core` has no Rhino or Revit dependency and is tested with a headless host. `Caddis.Rhino` is the Rhino plugin, `Caddis.Revit` the Revit add-in.
-`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0`. Core also targets `net48`, for Rhino on .NET Framework.
+`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` with Avalonia 12. It and Core also target `net48`, for Rhino on .NET Framework, the panel with Avalonia 11.
 Each plugin supplies actions, theme colors and its docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
 `Tests/Caddis.UI.Tests` checks the shared view with Avalonia's headless platform on both runtimes.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
