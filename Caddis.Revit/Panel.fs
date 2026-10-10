@@ -83,7 +83,7 @@ type CaddisPanel() as this =
     let status = TextBlock(TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center)
 
     /// The latest message of Caddis, e.g. that the token was copied.
-    let message = TextBlock(TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = Thickness(0.0, 0.0, 0.0, 4.0))
+    let message = TextBlock(TextWrapping = TextWrapping.Wrap, Margin = Thickness(0.0, 2.0, 0.0, 6.0))
 
     let startStop = button "Start" startTip
 
@@ -248,6 +248,8 @@ type CaddisPanel() as this =
                 updating <- false
 
     do
+        PanelTheme.initialize this
+        message.SetResourceReference(TextBlock.ForegroundProperty, "Caddis.Muted")
         mode.Items.Add "UI thread" |> ignore
         mode.Items.Add "Background thread" |> ignore
 
@@ -288,7 +290,7 @@ type CaddisPanel() as this =
             root.Children.Add e |> ignore
         place top 0
         place runs 1
-        place (GridSplitter(Height = 6.0, HorizontalAlignment = HorizontalAlignment.Stretch, ResizeDirection = GridResizeDirection.Rows, Background = Brushes.Transparent)) 2
+        place (GridSplitter(Height = 6.0, HorizontalAlignment = HorizontalAlignment.Stretch, ResizeDirection = GridResizeDirection.Rows)) 2
         place tabs 3
         this.Content <- root
 

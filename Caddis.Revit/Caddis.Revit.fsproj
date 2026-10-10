@@ -26,6 +26,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.Revit.Resources.Caddis.png" />
+    <EmbeddedResource Include="Resources/PanelStyles.xaml" LogicalName="Caddis.Revit.Resources.PanelStyles.xaml" />
+    <Page Remove="Resources/PanelStyles.xaml" /> <!-- loaded as a scoped dictionary by PanelTheme -->
   </ItemGroup>
 
   <ItemGroup>
@@ -36,6 +38,7 @@
     <Compile Include="RevitDialogs.fs" />
     <Compile Include="RevitHost.fs" />
     <Compile Include="App.fs" />
+    <Compile Include="PanelTheme.fs" />
     <Compile Include="Panel.fs" />
     <Compile Include="Addin.fs" />
   </ItemGroup>

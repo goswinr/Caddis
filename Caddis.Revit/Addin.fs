@@ -150,6 +150,8 @@ type PanelCommand() =
 /// The entry point, registered in Caddis.addin. Don't rename it.
 type CaddisApplication() =
 
+    let themeChanged = EventHandler<Autodesk.Revit.UI.Events.ThemeChangedEventArgs>(fun _ _ -> PanelTheme.refresh ())
+
     interface IExternalApplication with
 
         member _.OnStartup(uiApp: UIControlledApplication) : Result =
@@ -163,6 +165,7 @@ type CaddisApplication() =
                 App.server <- Some server
                 Ribbon.create uiApp
                 App.stateChanged <- Ribbon.update
+                uiApp.ThemeChanged.AddHandler themeChanged
                 try uiApp.RegisterDockablePane(CaddisPanel.PaneId, "Caddis", CaddisPaneProvider())
                 with e -> RevitLog.write $"Caddis: registering the panel failed: {e.Message}"
                 if server.Service.Settings.autoStart then App.start true
@@ -173,7 +176,8 @@ type CaddisApplication() =
                 TaskDialog.Show("Load error", $"Caddis failed to load:{Environment.NewLine}{e.Message}") |> ignore
                 Result.Failed
 
-        member _.OnShutdown(_uiApp: UIControlledApplication) : Result =
+        member _.OnShutdown(uiApp: UIControlledApplication) : Result =
+            uiApp.ThemeChanged.RemoveHandler themeChanged
             App.shutdown ()
             ApiContext.shutdown ()
             Result.Succeeded

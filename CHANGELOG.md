@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs have `started`: a run still waiting for the host app says in MCP that it has not started yet.
 
 ### Changed
+- Revit: the dockable pane follows Revit's light and dark themes, with native-style compact controls, readable run details, themed dropdowns and scrollbars, and visible selection and keyboard focus.
 - Caddis.Core is independent of the host app: `ICaddisHost.Info` gives the app name, the MCP server name, the texts of the MCP tools and the format of object ids. Object ids are strings, `AfterRun` gets the status of the run, `SettingsStore` takes a settings file name and defaults per host.
 - Caddis.Core targets net8.0 for Rhino 8 (FSharp.Compiler.Service 43.8.403, FSharp.Core 8.0.403) and net10.0 for Revit (FSharp.Compiler.Service 43.12.401, FSharp.Core 10.1.401). The resolver for values of earlier runs also matches the `FSI-ASSEMBLY-MULTI` assemblies of FCS 43.12.
 - `caddis_export` and `POST /export` start a run of kind `export`, like `caddis_eval`: it returns `running` after `waitMs` (MCP default 50 s) and `caddis_get_run` returns its files. It takes the one run slot, so other runs get 409 meanwhile, and it can't be cancelled.

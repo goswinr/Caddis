@@ -157,6 +157,9 @@ Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest
 the recent runs, and the output and code of the selected run. It docks next to the Project Browser,
 can be moved like any Revit pane, and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.
+The pane follows Revit's light or dark UI theme immediately, including dropdowns, run selection,
+output, scrollbars and keyboard focus. Its WPF styles are scoped to Caddis, leaving Revit and other add-ins' resources untouched.
+See the [Revit panel previews](Caddis.Revit/README.md#dockable-panel) for both themes.
 
 Revit has its own settings file `settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
 so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time. The token is shared.
