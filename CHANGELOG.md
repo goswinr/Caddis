@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `caddis_status` shows the document's units, tolerances, current layer, layers and selection count.
 - MCP: `Mcp-Session-Id` on initialize, `idempotentHint` annotations.
 - `caddis_describe` tool and `GET /describe`: signatures in F# syntax and XML doc summaries of namespaces, types and members of the loaded assemblies, e.g. RhinoCommon, a search of their names, and suggestions for misspelled names.
+- `caddis_command` tool and `POST /command`: run Rhino command macros like typed at the command line, e.g. `-_Line 0,0,0 10,0,0`. Returns each command's result, the ids of the created, changed and deleted objects, the selection if it changed, and what the commands printed to the command line. `select` selects objects by id first. A command that waits for input its macro doesn't give is cancelled after `inputTimeoutMs`, or via `caddis_cancel`. `caddis_undo` undoes all undo steps of a call.
+- Runs return what was printed to the Rhino command line, e.g. by `RhinoApp.WriteLine` or commands run via `RhinoApp.RunScript`, also in background mode: `commandLine` in REST, a 'Rhino command line' section in MCP. Caddis' own echo of the output is left out.
+- `CancelWaitingCommands` setting, a checkbox in the panel and an option of the `Caddis` command, off by default: cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`, when they wait 3 s for input. The run gets a note with the prompt. In background mode only commands started via `Caddis.Script.OnUi`.
+- Runs have `notes` from the host, shown in MCP results and the panel.
+- Tooltips for all buttons, checkboxes and the thread mode in the panel.
+- The logo in the panel opens the GitHub repository.
 
 ### Changed
 - Copied Claude Code MCP setup command uses user scope so Caddis is available across projects.

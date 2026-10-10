@@ -410,7 +410,10 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                         let scriptPath =
                             if String.IsNullOrWhiteSpace req.scriptPath then Path.Combine(outDir, "script.fsx")
                             else req.scriptPath
-                        let run = Run(id, mode, req.code, scriptPath, outDir, (getSettings ()).maxOutputChars, req.recordUndo)
+                        let settings = getSettings ()
+                        let run = Run(id, FSharpCode, mode, req.code, scriptPath, outDir, settings.maxOutputChars, req.recordUndo)
+                        if settings.cancelWaitingCommands then
+                            run.InputTimeout <- Some(TimeSpan.FromMilliseconds(float CaddisSettings.inputTimeoutMs))
                         runs.Add run
                         current <- Some run
                         state <- Evaluating
@@ -446,6 +449,38 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
 
             return run
         }
+
+    /// Starts a run of host commands, e.g. Rhino command macros, on the UI thread, in any mode and also while the session is not ready.
+    /// It is the current run like an F# run, so the two never overlap. Raises a BusyException if another run is in progress.
+    member _.StartCommands(req: CommandRequest) : Run =
+        let run =
+            lock sync (fun () ->
+                match current with
+                | Some r -> raise (BusyException r.Id)
+                | None -> ()
+                let id = runs.NextId "c"
+                let code = String.concat "\n" req.macros
+                let run = Run(id, HostCommands, UiThread, code, "", runs.CreateFolder id, (getSettings ()).maxOutputChars, true)
+                runs.Add run
+                current <- Some run
+                run)
+        let work () =
+            let outcome =
+                match (try host.CannotRunReason() with e -> Some e.Message) with
+                | Some reason -> RunOutcome.withMessage Rejected reason
+                | None ->
+                    // e.g. objects to select not found, the stack trace would only show Caddis code
+                    try host.RunCommands(run, req)
+                    with e -> RunOutcome.withMessage RuntimeError e.Message
+            finishRun run outcome
+        (host.InvokeOnUi work)
+            .ContinueWith(
+                Action<Task<unit>>(fun t ->
+                    if t.IsFaulted then
+                        finishRun run { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn "" (stripInvocation t.Exception)) })
+            )
+        |> ignore
+        run
 
     /// Parses and type-checks code against the current session, so definitions of earlier runs are known, without running it.
     /// Runs on the evaluation thread, so it never overlaps with a run. Raises a BusyException if a run is in progress.
@@ -525,6 +560,10 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
         match lock sync (fun () -> current) with
         | None -> Error "No run is in progress."
         | Some r when runId.IsSome && runId.Value <> r.Id -> Error $"Run '{runId.Value}' is not in progress, the current run is '{r.Id}'."
+        | Some r when r.Kind = HostCommands ->
+            // the host cancels the command when it waits for input
+            r.MarkCancelRequested()
+            Ok $"Cancellation of run '{r.Id}' was requested. A command that waits in a dialog can only be stopped in Rhino."
         | Some r when r.Mode = UiThread -> Error "Runs on the UI thread can't be cancelled, only runs in background mode."
         | Some r ->
             this.CancelRun r |> ignore

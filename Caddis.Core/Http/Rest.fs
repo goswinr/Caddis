@@ -21,6 +21,9 @@ let private help () : JsonNode =
         "POST /eval",
         Json.ofString
             "Evaluate F#. Body: {code?, path?, waitMs?, timeoutMs?, recordUndo?}. Returns the run, with status 202 if it is still running after waitMs (default: wait until it finished). timeoutMs cancels background runs."
+        "POST /command",
+        Json.ofString
+            "Run Rhino commands like typed at the command line. Body: {commands: ['-_Line 0,0,0 10,0,0'], select?: [guid], inputTimeoutMs?, waitMs?}. Returns the run like /eval."
         "GET /runs", Json.ofString "The recent runs."
         "GET /runs/{id}", Json.ofString "One run. Query: waitMs, to wait for a run that is still running (default 0)."
         "POST /cancel", Json.ofString "Cancel the current run (background mode only). Body: {runId?}"
@@ -48,6 +51,12 @@ let handle (svc: CaddisService) (serverInfo: unit -> (string * JsonNode) list) (
 
         | "POST", [ "eval" ] ->
             let! run = svc.Eval(Args.eval (body ()))
+            return JsonResponse((if run.IsFinished then 200 else 202), run.ToJson req.baseUrl)
+
+        | "POST", [ "command" ] ->
+            let a = Args.commands (body ())
+            let run = svc.StartCommands a
+            do! svc.WaitFor(run, a.waitMs)
             return JsonResponse((if run.IsFinished then 200 else 202), run.ToJson req.baseUrl)
 
         | "GET", [ "runs" ] ->

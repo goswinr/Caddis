@@ -25,6 +25,7 @@ type CaddisCommand() =
             go.AcceptNothing true
             let mutable autoStart = new OptionToggle(settings.autoStart, "Off", "On")
             let mutable echo = new OptionToggle(settings.echoOutput, "Off", "On")
+            let mutable cancelWaiting = new OptionToggle(settings.cancelWaitingCommands, "Off", "On")
             let mutable lan = new OptionToggle(settings.listenOnLan, "Off", "On")
             let iStartStop = go.AddOption(if server.IsRunning then "Stop" else "Start")
             let iPanel = go.AddOption "Panel"
@@ -34,6 +35,7 @@ type CaddisCommand() =
             let iReset = go.AddOption "Reset"
             let iAutoStart = go.AddOptionToggle("AutoStart", &autoStart)
             let iEcho = go.AddOptionToggle("EchoOutput", &echo)
+            let iCancelWaiting = go.AddOptionToggle("CancelWaitingCommands", &cancelWaiting)
             let iLan = go.AddOptionToggle("ListenOnLan", &lan)
             let iNewToken = go.AddOption "NewToken"
 
@@ -45,6 +47,7 @@ type CaddisCommand() =
                     let i = go.OptionIndex()
                     if i = iAutoStart then App.setAutoStart autoStart.CurrentValue
                     elif i = iEcho then App.setEcho echo.CurrentValue
+                    elif i = iCancelWaiting then App.setCancelWaitingCommands cancelWaiting.CurrentValue
                     elif i = iLan then App.setListenOnLan lan.CurrentValue
                     else
                         if i = iStartStop then (if server.IsRunning then App.stop () else App.start ())

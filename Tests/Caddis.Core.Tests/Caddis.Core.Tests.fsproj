@@ -21,6 +21,7 @@
     <Compile Include="EvalTests.fs" />
     <Compile Include="BackgroundTests.fs" />
     <Compile Include="HttpTests.fs" />
+    <Compile Include="CommandTests.fs" />
     <Compile Include="OutputTests.fs" />
     <Compile Include="ApiDocsTests.fs" />
   </ItemGroup>

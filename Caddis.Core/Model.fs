@@ -223,22 +223,99 @@ module RunOutcome =
     let withMessage (status: RunStatus) (message: string) = { ofStatus status with message = Some message }
 
 
-/// One evaluation of F# code in the FSI session.
-type Run(id: string, mode: ThreadMode, code: string, scriptPath: string, outDir: string, maxChars: int, recordUndo: bool) =
+type RunKind =
+    /// F# code evaluated in the FSI session.
+    | FSharpCode
+    /// Commands of the host app, e.g. Rhino command macros like "-_Line 0,0,0 10,0,0", see ICaddisHost.RunCommands.
+    | HostCommands
+
+module RunKind =
+
+    let toString (k: RunKind) =
+        match k with
+        | FSharpCode -> "fsharp"
+        | HostCommands -> "commands"
+
+
+/// What one macro of a command run did, e.g. "-_Line 0,0,0 10,0,0".
+type CommandStep = {
+    macro: string
+    /// The English names and results of the commands that ran, e.g. ("Line", "Success"). Usually one, none for an unknown command name.
+    commands: (string * string) list
+    /// The prompt the command waited at when Caddis cancelled it, because the macro lacked an input or via caddis_cancel.
+    waitedAt: string option
+    }
+
+/// What a command run did.
+type CommandReport = {
+    /// The macros that ran, in order.
+    steps: CommandStep list
+    /// The macros after the one that failed.
+    notRun: string list
+    created: Guid[]
+    changed: Guid[]
+    deleted: Guid[]
+    /// The selected objects after the commands, if the selection changed.
+    selected: Guid[] option
+    }
+
+module CommandReport =
+
+    /// e.g. "Line: Success", "no command ran"
+    let stepResult (s: CommandStep) =
+        match s.commands with
+        | [] -> "no command ran"
+        | cs -> cs |> List.map (fun (name, result) -> $"{name}: {result}") |> String.concat ", "
+
+    /// One line per macro, e.g. "-_Line 0,0,0 10,0,0 -> Line: Success".
+    let stepLines (r: CommandReport) : string list = [
+        for s in r.steps do
+            let waited = s.waitedAt |> Option.map (fun p -> $" (cancelled while waiting at the prompt '{p}')") |> Option.defaultValue ""
+            $"{s.macro} -> {stepResult s}{waited}"
+        for m in r.notRun do
+            $"{m} -> not run"
+    ]
+
+    let toJson (r: CommandReport) : JsonNode =
+        let ids (a: Guid[]) = a |> Seq.map string |> Json.ofStrings :> JsonNode
+        Json.obj [
+            "steps",
+            Json.arr [
+                for s in r.steps ->
+                    Json.obj [
+                        "macro", Json.ofString s.macro
+                        "commands", Json.arr [ for name, result in s.commands -> Json.obj [ "name", Json.ofString name; "result", Json.ofString result ] ]
+                        "waitedAt", Json.ofOption Json.ofString s.waitedAt
+                    ]
+            ]
+            "notRun", Json.ofStrings r.notRun
+            "created", ids r.created
+            "changed", ids r.changed
+            "deleted", ids r.deleted
+            "selected", Json.ofOption ids r.selected
+        ]
+
+
+/// One evaluation of F# code in the FSI session, or one run of host commands.
+type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: string, outDir: string, maxChars: int, recordUndo: bool) =
     let startedAt = DateTime.UtcNow
     let watch = Stopwatch.StartNew()
     let stdOut = CaptureBuffer maxChars
     let stdErr = CaptureBuffer maxChars
     let fsiOut = CaptureBuffer maxChars
+    let commandLine = CaptureBuffer maxChars
     let completion = TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
     let mutable outcome = RunOutcome.ofStatus Running
     let mutable duration = TimeSpan.Zero
     let mutable files: FileItem[] = [||]
     let mutable cancelRequested = false
     let mutable timeoutRequested = false
+    let notes = ResizeArray<string>()
 
     member _.Id = id
+    member _.Kind = kind
     member _.Mode = mode
+    /// The F# code, or the command macros one per line.
     member _.Code = code
     /// Used as file name for FSI, so __SOURCE_DIRECTORY__, #load and line numbers in stack traces work.
     member _.ScriptPath = scriptPath
@@ -249,6 +326,8 @@ type Run(id: string, mode: ThreadMode, code: string, scriptPath: string, outDir:
     member _.StdOut = stdOut
     member _.StdErr = stdErr
     member _.FsiOut = fsiOut
+    /// What was printed to the command line of the host app during the run, e.g. by Rhino commands, set by the host.
+    member _.CommandLine = commandLine
     member _.Outcome = outcome
     member _.Status = outcome.status
     member _.IsFinished = outcome.status <> Running
@@ -263,11 +342,25 @@ type Run(id: string, mode: ThreadMode, code: string, scriptPath: string, outDir:
     member _.MarkCancelRequested() = cancelRequested <- true
     member _.MarkTimeoutRequested() = timeoutRequested <- true
 
-    /// Set by the host when the run is wrapped in an undo record.
+    /// Set by the host when the run is wrapped in an undo record. The latest one if the run made several.
     member val UndoSerial: uint32 option = None with get, set
+
+    /// How many undo records the run made, e.g. one per Rhino command. Only used if UndoSerial is set.
+    member val UndoSteps = 1 with get, set
 
     /// The runtime serial number of the document of the undo record.
     member val DocSerial = 0u with get, set
+
+    /// Set by the host after a command run.
+    member val Commands: CommandReport option = None with get, set
+
+    /// F# runs: cancel host commands that the script starts, e.g. via RhinoApp.RunScript, when they wait this long for input.
+    member val InputTimeout: TimeSpan option = None with get, set
+
+    /// Remarks of the host about the run, e.g. that it cancelled a command that waited for input.
+    member _.Notes: string list = lock notes (fun () -> List.ofSeq notes)
+
+    member _.AddNote(note: string) = lock notes (fun () -> notes.Add note)
 
     /// Sets the final outcome. Only the first call has an effect, later ones return false.
     /// e.g. a thread that was abandoned after it ignored a cancellation might finish much later.
@@ -292,19 +385,23 @@ type Run(id: string, mode: ThreadMode, code: string, scriptPath: string, outDir:
             | None -> null
         Json.obj [
             "id", Json.ofString id
+            "kind", Json.ofString (RunKind.toString kind)
             "status", Json.ofString (RunStatus.toString o.status)
             "mode", Json.ofString (ThreadMode.toString mode)
             "scriptPath", Json.ofString scriptPath
             "startedAt", Json.ofString (startedAt.ToString "o")
             "durationMs", Json.ofInt64 (int64 this.Duration.TotalMilliseconds)
             "message", Json.ofOption Json.ofString o.message
+            "notes", Json.ofStrings this.Notes
             "value", value
             "stdout", Json.ofString stdOut.Text
             "stderr", Json.ofString stdErr.Text
             "fsiOutput", Json.ofString fsiOut.Text
-            "outputTruncated", Json.ofBool (stdOut.Truncated || stdErr.Truncated || fsiOut.Truncated)
+            "commandLine", Json.ofString commandLine.Text
+            "outputTruncated", Json.ofBool (stdOut.Truncated || stdErr.Truncated || fsiOut.Truncated || commandLine.Truncated)
             "diagnostics", Json.arr (o.diagnostics |> Seq.map Diagnostic.toJson)
             "exception", Json.ofOption ExceptionInfo.toJson o.exn
+            "commands", Json.ofOption CommandReport.toJson this.Commands
             "undoable", Json.ofBool this.UndoSerial.IsSome
             "outDir", Json.ofString outDir
             "files", Json.arr (files |> Seq.map (FileItem.toJson baseUrl id))
@@ -423,6 +520,17 @@ type ExportSelection =
     | ObjectIds of Guid[]
 
 
+/// Commands to run in the host app, see ICaddisHost.RunCommands.
+type CommandRequest = {
+    /// Run one after the other until one doesn't succeed.
+    macros: string[]
+    /// Objects to select before the first command, replacing the selection.
+    select: Guid[] option
+    /// Cancel a command that waits this long for input. None waits until someone gives the input in the host app.
+    inputTimeout: TimeSpan option
+    }
+
+
 /// The services an app that hosts Caddis provides, e.g. Rhino.
 type ICaddisHost =
     /// e.g. "Rhino 8.19 on Windows"
@@ -444,6 +552,7 @@ type ICaddisHost =
     abstract BeforeRun: Run -> unit
 
     /// Called on the evaluation thread after a run, also after errors and cancellation.
+    /// Writes what was printed to the host's command line during the run to run.CommandLine.
     abstract AfterRun: Run -> unit
 
     /// Called for all script output, from any thread.
@@ -464,3 +573,8 @@ type ICaddisHost =
 
     /// Undoes the changes of the given run, if they are the last ones. Called on the UI thread.
     abstract Undo: Run -> Result<string, string>
+
+    /// Runs commands of the host app, e.g. Rhino command macros, writes what they print to run.CommandLine,
+    /// sets run.Commands and the undo records, and returns the outcome. Called on the UI thread.
+    /// A command that waits for input is cancelled after request.inputTimeout, or when run.CancelRequested is set.
+    abstract RunCommands: run: Run * request: CommandRequest -> RunOutcome

@@ -37,13 +37,14 @@ type McpEndpoint(svc: CaddisService) =
             "Caddis runs F# code inside a running Rhino 8 in a persistent F# Interactive session. A person is usually working in the same Rhino window."
             "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
             "RhinoCommon is referenced, e.g. use Rhino.RhinoDoc.ActiveDoc for the current document. caddis_status shows its units and tolerance, check them before creating geometry."
-            "The result shows F# Interactive's output, with the types of new definitions and the value of the last expression, and printfn output as stdout. Long output is shortened and saved to a file."
+            "The result shows F# Interactive's output, with the types of new definitions and the value of the last expression, printfn output as stdout, and what was printed to the Rhino command line, e.g. by RhinoApp.WriteLine or commands run via RhinoApp.RunScript. Long output is shortened and saved to a file."
             "Each run is one undo step in Rhino, the views are redrawn after it. Files saved to the folder Caddis.Script.OutDir are returned with the result, images inline."
             "On the 'ui' thread (the default) Rhino is blocked while code runs and a run can't be cancelled: an endless loop freezes Rhino until it is killed."
             "For long or risky code switch to 'background' mode with caddis_set_mode, there timeoutMs and caddis_cancel stop a run."
             "caddis_eval returns after waitMs (default 50 s) with status 'running' if the run has not finished. It keeps running, wait for the result with caddis_get_run."
             "Don't show modal dialogs or wait for user input in scripts."
             "Look up RhinoCommon types and members you are not sure about with caddis_describe instead of guessing their names, overloads or parameter types."
+            "caddis_command runs Rhino commands like typed at the command line, for what commands do well, e.g. _Zoom, _SetDisplayMode, _Make2D, or to read what _What, _Length or _Area print. Use caddis_eval for logic, loops and geometry math. A command run in caddis_eval via RhinoApp.RunScript must get all its inputs in the macro, otherwise it waits until someone gives them in Rhino, or Caddis cancels it if the person turned that on."
             "Use caddis_check to type-check code against the session without running it, and caddis_capture_viewport to see the result."
         ]
 
@@ -73,7 +74,7 @@ type McpEndpoint(svc: CaddisService) =
                     "Evaluates F# code in the persistent F# Interactive session inside Rhino and returns the result:"
                     "status ('ok', 'compileError', 'runtimeError', 'cancelled', 'timeout', 'rejected' or 'running'),"
                     "F# Interactive's output with the types of new definitions and the value of the last expression,"
-                    "stdout, stderr, compiler errors and warnings, the exception with the script line, and files saved to Caddis.Script.OutDir, images inline."
+                    "stdout, what was printed to the Rhino command line, stderr, compiler errors and warnings, the exception with the script line, and files saved to Caddis.Script.OutDir, images inline."
                     "Definitions stay available for later calls. RhinoCommon is referenced. NuGet packages can be used via #r \"nuget: Name\"."
                     "Each run is one undo step in Rhino. In background mode code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
                 ]
@@ -92,9 +93,50 @@ type McpEndpoint(svc: CaddisService) =
             idempotent = false
         }
         {
+            name = "caddis_command"
+            title = "Run Rhino commands"
+            description =
+                String.concat " " [
+                    "Runs Rhino commands as if typed at the Rhino command line, like a button macro."
+                    "Each item of 'commands' is one command with its inputs, they run one after the other until one does not succeed."
+                    "Use the scripted version of a command, with '-', where there is one: without it many commands open a dialog, which blocks Rhino until someone clicks."
+                    "Prefix command and option names with '_' for their English names. Commands work on the selected objects, see 'select'."
+                    "Returns the result of each command, the ids of the objects they created, changed and deleted, the selection if it changed,"
+                    "and what they printed to the command line, e.g. the results of _What, _Length or _Area."
+                    "A command that waits for input which the macro does not give is cancelled, the result shows the prompt with its options."
+                    "Each command that changes the document is one undo step in Rhino, caddis_undo undoes all of a call. Not possible while a run is in progress."
+                ]
+            properties = [
+                "commands",
+                Json.obj [
+                    "type", Json.ofString "array"
+                    "items", Json.obj [ "type", Json.ofString "string" ]
+                    "description",
+                    Json.ofString
+                        "The command macros, e.g. [\"-_Line 0,0,0 10,0,0\", \"_Zoom _All _Extents\"]. Inputs are separated by spaces: points as x,y,z, numbers, options with their value like '_Cap=_Yes', and '_Enter' to end a prompt."
+                ]
+                "select",
+                Json.obj [
+                    "type", Json.ofString "array"
+                    "items", Json.obj [ "type", Json.ofString "string" ]
+                    "description", Json.ofString "Ids (GUIDs) of objects to select before the first command, replacing the selection."
+                ]
+                "inputTimeoutMs",
+                intProp
+                    $"Cancel a command that waits this long for input. 0 waits until the person in Rhino gives it, e.g. picks points for '_Pause'. Default: {CaddisService.DefaultInputTimeoutMs}."
+                "waitMs",
+                intProp
+                    $"Return after this time with status 'running' if the commands have not finished. They keep running, get the result with caddis_get_run. Default: {defaultWaitMs}."
+            ]
+            required = [ "commands" ]
+            readOnly = false
+            destructive = true
+            idempotent = false
+        }
+        {
             name = "caddis_get_run"
             title = "Get a run"
-            description = "Returns a run, waiting up to waitMs for it to finish. Use it for a run that was still running when caddis_eval returned."
+            description = "Returns a run, waiting up to waitMs for it to finish. Use it for a run that was still running when caddis_eval or caddis_command returned."
             properties = [
                 "runId", strProp "The id of the run, e.g. 'r12'."
                 "waitMs", intProp $"Wait at most this long for the run to finish. 0 returns at once. Default: {defaultWaitMs}."
@@ -151,7 +193,7 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_cancel"
             title = "Cancel run"
-            description = "Cancels the current run. Only runs in background mode can be cancelled. If the run does not stop within a few seconds the session is reset."
+            description = "Cancels the current run. Only runs in background mode can be cancelled, and Rhino commands while they wait for input. If an F# run does not stop within a few seconds the session is reset."
             properties = [ "runId", strProp "Only cancel if this run is the current one." ]
             required = []
             readOnly = false
@@ -321,6 +363,17 @@ type McpEndpoint(svc: CaddisService) =
                             "timeoutMs was ignored: runs on the UI thread can't be cancelled. Switch to background mode with caddis_set_mode for runs that can time out."
                     ]
                     return runResult req notes 0L run
+
+                | "caddis_command" ->
+                    let a = Args.commands args
+                    let run = svc.StartCommands a
+                    let key = requestKey req requestId
+                    runsByRequest[key] <- run.Id
+                    try
+                        do! svc.WaitFor(run, Some(a.waitMs |> Option.defaultValue defaultWaitMs))
+                    finally
+                        runsByRequest.TryRemove key |> ignore
+                    return runResult req [] 0L run
 
                 | "caddis_get_run" ->
                     let runId = Json.tryString "runId" args |> Option.defaultValue ""

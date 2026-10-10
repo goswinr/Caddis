@@ -69,6 +69,9 @@ module App =
     let setEcho (on: bool) =
         withServer (fun s -> s.Service.UpdateSettings(fun x -> { x with echoOutput = on }))
 
+    let setCancelWaitingCommands (on: bool) =
+        withServer (fun s -> s.Service.UpdateSettings(fun x -> { x with cancelWaitingCommands = on }))
+
     let setListenOnLan (on: bool) =
         withServer (fun s ->
             if s.Service.Settings.listenOnLan <> on then

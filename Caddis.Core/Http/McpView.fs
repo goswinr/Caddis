@@ -15,9 +15,13 @@ open Caddis
 let maxStdOut = 12_000
 let maxStdErr = 4_000
 let maxFsiOut = 6_000
+let maxCommandLine = 8_000
 let maxValue = 4_000
 let maxException = 4_000
 let maxDiagnostics = 20
+
+/// The most object ids listed per group of a command run, all of them are saved to a file.
+let maxIds = 50
 
 /// Images saved by a run are returned inline, up to this many and this size each.
 let maxImages = 4
@@ -121,6 +125,31 @@ let image (f: FileItem) : JsonNode =
     | [ _, img ] -> img
     | _ -> failwith $"The image '{f.path}' could not be read or is larger than {formatSize maxImageBytes}."
 
+/// The objects that a command run created, changed, deleted and selected, one line per group.
+/// Long groups list only the first ids, all of them are saved to a file.
+let private objectLines (runs: RunRegistry) (runId: string) (c: CommandReport) : string list =
+    let group (name: string) (ids: Guid[]) = [
+        if ids.Length > 0 then
+            let shown = ids |> Seq.truncate maxIds |> Seq.map string |> String.concat ", "
+            if ids.Length <= maxIds then
+                $"{name} ({ids.Length}): {shown}"
+            else
+                let saved =
+                    try
+                        let file = runs.SaveLog(runId, name, ids |> Seq.map string |> String.concat "\n")
+                        $", all in {file.path}"
+                    with _ ->
+                        ""
+                $"{name} ({ids.Length}, the first {maxIds}{saved}): {shown}"
+    ]
+    group "created" c.created
+    @ group "changed" c.changed
+    @ group "deleted" c.deleted
+    @ (match c.selected with
+       | Some [||] -> [ "selected: nothing" ]
+       | Some ids -> group "selected" ids
+       | None -> [])
+
 /// A run as text for the model, and the images it saved as image content items.
 /// stdoutFrom: only show stdout from this character offset on, e.g. to poll a running run for new output.
 let run (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: int64) (r: Run) : string * JsonNode list =
@@ -148,24 +177,35 @@ let run (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: 
         |> normalize
     let stdout = stream "stdout" r.StdOut stdoutFrom maxStdOut
     let stderr = stream "stderr" r.StdErr 0L maxStdErr
+    let commandLine = stream "commandline" r.CommandLine 0L maxCommandLine
     let images = inlineImages r.Files
 
     if r.IsFinished then
-        let undo = if r.UndoSerial.IsSome then ", its changes can be undone with caddis_undo" else ""
+        let steps = if r.UndoSteps > 1 then $" ({r.UndoSteps} undo steps)" else ""
+        let undo = if r.UndoSerial.IsSome then $", its changes can be undone with caddis_undo{steps}" else ""
         line $"Run {r.Id}: {RunStatus.toString r.Status} after {int64 r.Duration.TotalMilliseconds} ms{undo}."
     else
         line $"Run {r.Id}: still running after %.1f{r.Duration.TotalSeconds} s."
-        if r.Mode = Background then
+        if r.Kind = HostCommands then
+            line
+                $"A command waits in Rhino for input or in a dialog. Wait for the result with caddis_get_run (runId '{r.Id}'). caddis_cancel cancels a command that waits for input, a dialog must be closed in Rhino."
+        elif r.Mode = Background then
             line $"Wait for the result with caddis_get_run (runId '{r.Id}'), or stop the run with caddis_cancel."
         else
             line $"Wait for the result with caddis_get_run (runId '{r.Id}'). It runs on the UI thread, so it can't be cancelled and Rhino is blocked until it finishes."
     o.message |> Option.iter line
+    for n in r.Notes do line n
     for n in notes do line n
     match o.value with // FSI's output shows the value too, as 'val it: ...'
     | Some(t, v) when not (fsiOut.Contains "val it") -> section $"value: {t}" (clip maxValue v)
     | _ -> ()
+    r.Commands
+    |> Option.iter (fun c ->
+        section "commands" (CommandReport.stepLines c |> String.concat "\n")
+        section "objects" (objectLines runs r.Id c |> String.concat "\n"))
     section "F# Interactive" fsiOut
     section (if stdoutFrom > 0L then $"stdout from character {stdoutFrom}" else "stdout") stdout
+    section "Rhino command line" commandLine
     section "stderr" stderr
     section "diagnostics" (diagnosticLines r.ScriptPath (relevant o.diagnostics) |> String.concat "\n")
     o.exn |> Option.iter (fun x -> section "exception" (exceptionText r.ScriptPath x))

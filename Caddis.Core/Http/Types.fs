@@ -51,16 +51,28 @@ module Args =
             | Some m -> m
             | None -> invalidArg "mode" $"Unknown mode '{s}', use 'ui' or 'background'."
 
+    let private guids (name: string) (ids: string[]) : Guid[] =
+        ids
+        |> Array.map (fun s ->
+            match Guid.TryParse s with
+            | true, g -> g
+            | _ -> invalidArg name $"'{s}' in '{name}' is not an object id (a GUID).")
+
+    /// 'commands' is an array of macros, or a single macro as string.
+    let commands (n: JsonNode) : CommandArgs = {
+        commands =
+            match Json.tryStringArray "commands" n with
+            | Some a -> a
+            | None -> Json.tryString "commands" n |> Option.toArray
+        select = Json.tryStringArray "select" n |> Option.map (guids "select")
+        inputTimeoutMs = Json.tryInt "inputTimeoutMs" n
+        waitMs = Json.tryInt "waitMs" n
+        }
+
     /// 'objectIds' (array of GUIDs) wins over 'objects' ("all" or "selected", the default is "all").
     let exportSelection (n: JsonNode) : ExportSelection =
         match Json.tryStringArray "objectIds" n with
-        | Some ids when ids.Length > 0 ->
-            ids
-            |> Array.map (fun s ->
-                match Guid.TryParse s with
-                | true, g -> g
-                | _ -> invalidArg "objectIds" $"'{s}' in 'objectIds' is not an object id (a GUID).")
-            |> ObjectIds
+        | Some ids when ids.Length > 0 -> ObjectIds(guids "objectIds" ids)
         | _ ->
             match Json.tryString "objects" n |> Option.map _.Trim().ToLowerInvariant() with
             | None

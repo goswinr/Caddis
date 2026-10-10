@@ -129,7 +129,31 @@ let ``MCP lists the tools`` () =
     let _, body = mcp """{"jsonrpc":"2.0","id":"b","method":"tools/list"}"""
     let names = (at [ "result"; "tools" ] (JsonNode.Parse body)).AsArray() |> Seq.map (str [ "name" ])
     Assert.Contains("caddis_eval", names)
+    Assert.Contains("caddis_command", names)
     Assert.Contains("caddis_capture_viewport", names)
+
+[<Fact>]
+let ``MCP commands without Rhino are a tool error`` () =
+    let result = callTool "caddis_command" """{"commands":["-_Line 0,0,0 10,0,0"]}"""
+    Assert.True(flag [ "isError" ] result)
+    let text = resultText result
+    Assert.Matches(@"^Run c\d+: runtimeError", text)
+    Assert.Contains("Running commands needs Rhino.", text)
+
+[<Fact>]
+let ``REST runs a single command given as string`` () =
+    let status, body = post "/command" """{"commands": "_Zoom _All _Extents"}"""
+    Assert.Equal(HttpStatusCode.OK, status)
+    let run = JsonNode.Parse body
+    Assert.Equal("commands", str [ "kind" ] run)
+    Assert.Equal("Running commands needs Rhino.", str [ "message" ] run)
+    Assert.Equal("_Zoom _All _Extents", server.Value.Service.Runs.TryGet(str [ "id" ] run).Value.Code)
+
+[<Fact>]
+let ``REST commands with an invalid id to select is a bad request`` () =
+    let status, body = post "/command" """{"commands": ["-_Loft"], "select": ["nope"]}"""
+    Assert.Equal(HttpStatusCode.BadRequest, status)
+    Assert.Contains("'nope' in 'select'", body)
 
 [<Fact>]
 let ``MCP evaluates code`` () =

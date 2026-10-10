@@ -1,6 +1,7 @@
 namespace Caddis.Rhino
 
 open System
+open System.Collections.Generic
 open System.IO
 open System.Reflection
 open System.Text
@@ -14,14 +15,25 @@ open Rhino.FileIO
 open Caddis
 
 /// Writes to the Rhino command line from any thread.
+/// Not captured into the command line output of a run: switching the capture off keeps what was captured so far.
 module RhinoLog =
 
     let private onUi (f: unit -> unit) =
         if RhinoApp.InvokeRequired then RhinoApp.InvokeOnUiThread(Action f) else f ()
 
-    let write (s: string) = onUi (fun () -> RhinoApp.Write s)
+    let private uncaptured (f: unit -> unit) =
+        if RhinoApp.CommandWindowCaptureEnabled then
+            // A write on the UI thread first prints what other threads wrote, e.g. a script in background mode,
+            // which must be captured: let that happen before the capture is off.
+            RhinoApp.Write ""
+            RhinoApp.CommandWindowCaptureEnabled <- false
+            try f () finally RhinoApp.CommandWindowCaptureEnabled <- true
+        else
+            f ()
 
-    let writeLine (s: string) = onUi (fun () -> RhinoApp.WriteLine s)
+    let write (s: string) = onUi (fun () -> uncaptured (fun () -> RhinoApp.Write s))
+
+    let writeLine (s: string) = onUi (fun () -> uncaptured (fun () -> RhinoApp.WriteLine s))
 
 
 /// Rhino.Scripting finds the UI SynchronizationContext via reflection in the Fesh.Rhino plugin.
@@ -103,12 +115,35 @@ type RhinoHost() =
     let mutable docChanged = false
     let changed () = if runActive then docChanged <- true
 
+    // --- what the commands of a command run do, collected by the events below ---
+
+    /// True while a command run is in progress.
+    let mutable commandRunActive = false
+
+    /// True while one macro of a command run is in progress.
+    let mutable macroActive = false
+
+    /// The commands that ended during the current macro, with their English name and result.
+    let endedCommands = ResizeArray<string * string>()
+
+    /// The undo records of the command run that were not purged.
+    let commandUndoRecords = ResizeArray<uint32>()
+
+    /// The objects the command run added, changed or deleted, in order, and whether the first event of each was an add.
+    let touchedObjects = ResizeArray<Guid>()
+    let addedFirst = Dictionary<Guid, bool>()
+
+    let touched (id: Guid) (added: bool) =
+        if commandRunActive && addedFirst.TryAdd(id, added) then touchedObjects.Add id
+
     do
         Command.UndoRedo.Add(fun e ->
             if e.IsBeginRecording then
                 previousUndoRecord <- lastUndoRecord
                 lastUndoRecord <- e.UndoSerialNumber
+                if commandRunActive then commandUndoRecords.Add e.UndoSerialNumber
             elif e.IsPurgeRecord then
+                commandUndoRecords.Remove e.UndoSerialNumber |> ignore
                 // Rhino purges a record without changes right after it ended, e.g. of a run that only printed,
                 // then the record below it is on top again.
                 if e.UndoSerialNumber = lastUndoRecord then
@@ -119,24 +154,63 @@ type RhinoHost() =
             elif e.IsBeginUndo || e.IsBeginRedo then
                 lastUndoRecord <- 0u
                 previousUndoRecord <- 0u)
-        RhinoDoc.AddRhinoObject.Add(fun _ -> changed ())
-        RhinoDoc.DeleteRhinoObject.Add(fun _ -> changed ())
+        Command.EndCommand.Add(fun e -> if macroActive then endedCommands.Add(e.CommandEnglishName, string e.CommandResult))
+        RhinoDoc.AddRhinoObject.Add(fun e ->
+            changed ()
+            touched e.ObjectId true)
+        RhinoDoc.DeleteRhinoObject.Add(fun e ->
+            changed ()
+            touched e.ObjectId false)
+        // followed by a delete and an add event with the same id, except during undo and redo
         RhinoDoc.ReplaceRhinoObject.Add(fun _ -> changed ())
         RhinoDoc.UndeleteRhinoObject.Add(fun _ -> changed ())
-        RhinoDoc.ModifyObjectAttributes.Add(fun _ -> changed ())
+        RhinoDoc.ModifyObjectAttributes.Add(fun e ->
+            changed ()
+            touched e.RhinoObject.Id false)
         RhinoDoc.LayerTableEvent.Add(fun _ -> changed ())
+
+    // --- what is printed to the command line during a run, on the UI thread ---
+
+    let mutable wasCapturing = false
+    let mutable capturedCount = 0
+
+    let beginCapture () =
+        wasCapturing <- RhinoApp.CommandWindowCaptureEnabled
+        RhinoApp.CommandWindowCaptureEnabled <- true
+        capturedCount <- RhinoApp.CapturedCommandWindowStrings(false).Length
+
+    /// The text printed since beginCapture or the previous call.
+    let takeCaptured () =
+        let captured = RhinoApp.CapturedCommandWindowStrings(false)
+        // another plugin might have cleared the captured strings
+        let text = String.concat "" (if captured.Length >= capturedCount then captured[capturedCount..] else captured)
+        capturedCount <- captured.Length
+        text
+
+    let endCapture () =
+        if not wasCapturing then
+            RhinoApp.CapturedCommandWindowStrings(true) |> ignore
+            RhinoApp.CommandWindowCaptureEnabled <- false
 
     // --- UI thread ---
 
+    /// How many calls of invokeOnUi are in progress on the UI thread, they can be nested. A command that begins in one
+    /// during an F# run was started by the script: in UI-thread mode the whole run is one, in background mode Caddis.Script.OnUi.
+    /// Commands that someone types in Rhino begin outside of them.
+    let mutable uiCallDepth = 0
+
     let invokeOnUi (f: unit -> 'T) : Task<'T> =
+        let counted () =
+            uiCallDepth <- uiCallDepth + 1
+            try f () finally uiCallDepth <- uiCallDepth - 1
         if not RhinoApp.InvokeRequired then
-            try Task.FromResult(f ())
+            try Task.FromResult(counted ())
             with e -> Task.FromException<'T> e
         else
             let tcs = TaskCompletionSource<'T>(TaskCreationOptions.RunContinuationsAsynchronously)
             RhinoApp.InvokeOnUiThread(
                 Action(fun () ->
-                    try tcs.SetResult(f ())
+                    try tcs.SetResult(counted ())
                     with e -> tcs.SetException e)
             )
             tcs.Task
@@ -236,11 +310,182 @@ type RhinoHost() =
             | _ ->
                 // The Undo command, not RhinoDoc.Undo(): called outside of a command, that leaves an undo record open,
                 // and then later runs get no undo record anymore.
-                if RhinoApp.RunScript("_Undo", false) then
-                    run.UndoSerial <- None
-                    Ok $"Undid run '{run.Id}'."
-                else
-                    Error "Rhino could not undo the run."
+                // A command run has one undo record per command that changed something.
+                let mutable undone = 0
+                while undone < run.UndoSteps && RhinoApp.RunScript("_Undo", false) do
+                    undone <- undone + 1
+                if undone > 0 then run.UndoSerial <- None
+                if undone = run.UndoSteps then Ok $"Undid run '{run.Id}'."
+                elif undone = 0 then Error "Rhino could not undo the run."
+                else Error $"Rhino undid only {undone} of the {run.UndoSteps} undo steps of run '{run.Id}'."
+
+    // --- cancelling commands that wait for input: of command runs, and of F# runs with the setting cancelWaitingCommands ---
+
+    /// During an F# run, one entry per running command: true if the script started it, see uiCallDepth.
+    let scriptCommands = Stack<bool>()
+
+    /// Notes for the F# run about the commands of its script that Caddis cancelled.
+    let scriptNotes = ResizeArray<string>()
+
+    /// When checkWaiting first found the watched command waiting.
+    let mutable waitingSince: DateTime option = None
+
+    /// When and at which prompt Caddis cancelled the watched command.
+    let mutable cancelPosted: (DateTime * string) option = None
+
+    /// True if the command still ran a while after the cancel: a dialog or another window holds it until someone closes it.
+    let mutable cancelIgnored = false
+
+    let resetWaiting () =
+        waitingSince <- None
+        cancelPosted <- None
+        cancelIgnored <- false
+
+    /// A command of the current macro of a command run runs, or one that the script of an F# run started.
+    let watchedCommandRuns () =
+        (commandRunActive && macroActive && Command.InCommand())
+        || (runActive && scriptCommands.Count > 0 && scriptCommands.Peek())
+
+    /// Runs on the UI thread. While a command runs the UI thread only gets to it when the command waits in a message loop:
+    /// for input that its macro does not give, or in a dialog. Then the command is cancelled after the input timeout, or at once for caddis_cancel.
+    let checkWaiting (run: Run) (inputTimeout: TimeSpan option) (docSerial: uint32) =
+        if watchedCommandRuns () then
+            let now = DateTime.UtcNow
+            match cancelPosted with
+            | Some(posted, _) -> if now - posted > TimeSpan.FromSeconds 2.0 then cancelIgnored <- true
+            | None ->
+                let since = waitingSince |> Option.defaultValue now
+                waitingSince <- Some since
+                if run.CancelRequested || inputTimeout |> Option.exists (fun t -> now - since >= t) then
+                    cancelPosted <- Some(now, RhinoApp.CommandPrompt)
+                    RhinoApp.PostCancelEvent docSerial
+
+    /// Calls checkWaiting on the UI thread every 200 ms until the returned function is called.
+    let startWatching (run: Run) (inputTimeout: TimeSpan option) (docSerial: uint32) : unit -> unit =
+        let watching = ref true
+        backgroundTask {
+            while watching.Value do
+                do! Task.Delay 200
+                // awaits the UI thread, so that no checks pile up while it is busy
+                if watching.Value then
+                    do! invokeOnUi (fun () -> try checkWaiting run inputTimeout docSerial with _ -> ())
+        }
+        |> ignore
+        fun () -> watching.Value <- false
+
+    /// Stops watching the commands of the current F# run.
+    let mutable stopWatchingScript: unit -> unit = ignore
+
+    do
+        Command.BeginCommand.Add(fun _ ->
+            if runActive then
+                let byScript = uiCallDepth > 0
+                scriptCommands.Push byScript
+                if byScript then resetWaiting ())
+        Command.EndCommand.Add(fun e ->
+            if runActive && scriptCommands.Count > 0 && scriptCommands.Pop() then
+                match cancelPosted with
+                | Some(_, prompt) ->
+                    let name = e.CommandEnglishName
+                    if cancelIgnored then
+                        scriptNotes.Add
+                            $"The command {name} that the script started showed a dialog or another window, which Caddis can't close, and waited until someone closed it in Rhino."
+                    else
+                        scriptNotes.Add
+                            $"Caddis cancelled the command {name} that the script started, because it waited for input at the prompt '{prompt}'. The script went on after it. Give all inputs in the macro, or use caddis_command."
+                | None -> ()
+                resetWaiting ())
+
+    /// For a macro whose command waited in a dialog or another window.
+    let dialogNote (step: CommandStep) =
+        let name = step.commands |> List.tryHead |> Option.map fst |> Option.defaultValue step.macro
+        $"{name} showed a dialog or another window, which Caddis can't close, and waited until someone closed it in Rhino. Use the scripted version of the command with '-' if there is one, e.g. '-_{name}'."
+
+    /// The outcome of a macro that did not succeed, None if it did.
+    let macroFailure (run: Run) (ran: bool) (inDialog: bool) (step: CommandStep) : RunOutcome option =
+        let fail status (message: string) = Some(RunOutcome.withMessage status message)
+        match step.commands |> List.tryFind (fun (_, result) -> result <> "Success" && result <> "Nothing") with
+        | Some(_, "Cancel") when inDialog -> fail Cancelled (dialogNote step)
+        | Some(name, "Cancel") ->
+            match step.waitedAt with
+            | Some prompt when run.CancelRequested -> fail Cancelled $"{name} was cancelled via caddis_cancel at the prompt '{prompt}'."
+            | Some prompt ->
+                fail
+                    Cancelled
+                    $"Caddis cancelled {name} because it waited for input at the prompt '{prompt}', which the macro '{step.macro}' does not give. Add the missing inputs or options to the macro, end option prompts with _Enter, or pass a larger inputTimeoutMs if {name} was still busy."
+            | None -> fail Cancelled $"{name} was cancelled, e.g. with Esc in Rhino."
+        | Some(name, result) -> fail RuntimeError $"{name} ended with the result '{result}', see the Rhino command line."
+        | None when step.commands.IsEmpty ->
+            fail RuntimeError $"'{step.macro}' ran no command, e.g. because the command name is unknown, see the Rhino command line."
+        | None when not ran -> fail RuntimeError $"Rhino could not run '{step.macro}'."
+        | None -> None
+
+    /// Runs the macros with RhinoApp.RunScript like typed at the command line, one after the other until one does not succeed.
+    let runCommands (run: Run) (req: CommandRequest) : RunOutcome =
+        let doc = activeDoc ()
+        let docSerial = doc.RuntimeSerialNumber
+        run.DocSerial <- docSerial
+        let selection () = doc.Objects.GetSelectedObjects(false, false) |> Seq.map _.Id |> Array.ofSeq
+        let idList (ids: Guid seq) = ids |> Seq.map string |> String.concat ", "
+        match req.select with
+        | None -> ()
+        | Some ids ->
+            let missing = ids |> Array.filter (fun id -> isNull (doc.Objects.FindId id))
+            if missing.Length > 0 then failwith $"Objects not found: {idList missing}"
+            doc.Objects.UnselectAll() |> ignore
+            let notSelected = ids |> Array.filter (fun id -> not (doc.Objects.Select(id, true, true)))
+            if notSelected.Length > 0 then failwith $"Objects that can't be selected, e.g. because they are hidden or locked: {idList notSelected}"
+        let selectedBefore = selection ()
+
+        beginCapture ()
+        commandUndoRecords.Clear()
+        touchedObjects.Clear()
+        addedFirst.Clear()
+        commandRunActive <- true
+        let stopWatching = startWatching run req.inputTimeout docSerial
+
+        let steps = ResizeArray<CommandStep>()
+        let mutable failure: RunOutcome option = None
+        let mutable note: string option = None
+        try
+            for macro in req.macros do
+                if failure.IsNone then
+                    endedCommands.Clear()
+                    resetWaiting ()
+                    macroActive <- true
+                    let ran =
+                        try RhinoApp.RunScript(docSerial, macro, true)
+                        finally macroActive <- false
+                    run.CommandLine.Append(takeCaptured ())
+                    let inDialog = cancelIgnored
+                    let waitedAt = if inDialog then None else cancelPosted |> Option.map snd
+                    let step = { macro = macro; commands = List.ofSeq endedCommands; waitedAt = waitedAt }
+                    steps.Add step
+                    failure <- macroFailure run ran inDialog step
+                    if inDialog && failure.IsNone then note <- Some(dialogNote step)
+        finally
+            stopWatching ()
+            commandRunActive <- false
+            endCapture ()
+
+        let exists (id: Guid) = not (isNull (doc.Objects.FindId id))
+        let pick (wasAdded: bool) (stillExists: bool) =
+            touchedObjects |> Seq.filter (fun id -> addedFirst[id] = wasAdded && exists id = stillExists) |> Array.ofSeq
+        let selectedAfter = selection ()
+        run.Commands <-
+            Some {
+                steps = List.ofSeq steps
+                notRun = req.macros |> Array.skip steps.Count |> List.ofArray
+                created = pick true true
+                changed = pick false true
+                deleted = pick false false
+                selected = if set selectedBefore = set selectedAfter then None else Some selectedAfter
+            }
+        if commandUndoRecords.Count > 0 then
+            run.UndoSerial <- Some(Seq.last commandUndoRecords)
+            run.UndoSteps <- commandUndoRecords.Count
+        doc.Views.Redraw()
+        failure |> Option.defaultValue { RunOutcome.ofStatus Succeeded with message = note }
 
     interface ICaddisHost with
 
@@ -266,12 +511,26 @@ type RhinoHost() =
                     if serial <> 0u then
                         run.UndoSerial <- Some serial
                         run.DocSerial <- doc.RuntimeSerialNumber
+                | _ -> ()
+                // e.g. RhinoApp.WriteLine or commands run via RhinoApp.RunScript
+                beginCapture ()
+                scriptCommands.Clear()
+                scriptNotes.Clear()
+                resetWaiting ()
+                match run.InputTimeout, RhinoDoc.ActiveDoc with
+                | Some _, doc when not (isNull doc) -> stopWatchingScript <- startWatching run run.InputTimeout doc.RuntimeSerialNumber
                 | _ -> ())
 
         member _.AfterRun(run: Run) =
             flushEcho true
             onUi (fun () ->
+                stopWatchingScript ()
+                stopWatchingScript <- ignore
+                for n in scriptNotes do
+                    run.AddNote n
                 runActive <- false
+                run.CommandLine.Append(takeCaptured ())
+                endCapture ()
                 match run.UndoSerial with
                 | Some serial ->
                     match RhinoDoc.FromRuntimeSerialNumber run.DocSerial with
@@ -327,3 +586,5 @@ type RhinoHost() =
         member _.Export(selection, path) = export (selection, path)
 
         member _.Undo(run) = undo run
+
+        member _.RunCommands(run, request) = runCommands run request

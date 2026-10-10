@@ -37,6 +37,8 @@ type CaddisSettings = {
     threadMode: ThreadMode
     /// Echo script output to the host, e.g. the Rhino command line.
     echoOutput: bool
+    /// Cancel host commands that a script starts, e.g. via RhinoApp.RunScript, when they wait for input, see inputTimeoutMs.
+    cancelWaitingCommands: bool
     /// Maximum number of characters captured per output stream of a run.
     maxOutputChars: int
     /// Additional arguments for F# Interactive, e.g. "--define:DEBUG".
@@ -45,12 +47,16 @@ type CaddisSettings = {
 
 module CaddisSettings =
 
+    /// A command that waits this long for input is cancelled: always in command runs, in F# runs with cancelWaitingCommands.
+    let inputTimeoutMs = 3000
+
     let defaults = {
         port = 7810
         listenOnLan = false
         autoStart = false
         threadMode = UiThread
         echoOutput = true
+        cancelWaitingCommands = false
         maxOutputChars = 200_000
         extraFsiArgs = [||]
         }
@@ -62,6 +68,7 @@ module CaddisSettings =
             "autoStart", Json.ofBool s.autoStart
             "threadMode", Json.ofString (ThreadMode.toString s.threadMode)
             "echoOutput", Json.ofBool s.echoOutput
+            "cancelWaitingCommands", Json.ofBool s.cancelWaitingCommands
             "maxOutputChars", Json.ofInt s.maxOutputChars
             "extraFsiArgs", Json.ofStrings s.extraFsiArgs
         ]
@@ -75,6 +82,7 @@ module CaddisSettings =
             autoStart = Json.tryBool "autoStart" n |> Option.defaultValue d.autoStart
             threadMode = Json.tryString "threadMode" n |> Option.bind ThreadMode.tryParse |> Option.defaultValue d.threadMode
             echoOutput = Json.tryBool "echoOutput" n |> Option.defaultValue d.echoOutput
+            cancelWaitingCommands = Json.tryBool "cancelWaitingCommands" n |> Option.defaultValue d.cancelWaitingCommands
             maxOutputChars = Json.tryInt "maxOutputChars" n |> Option.filter (fun c -> c > 0) |> Option.defaultValue d.maxOutputChars
             extraFsiArgs = Json.tryStringArray "extraFsiArgs" n |> Option.defaultValue d.extraFsiArgs
         }

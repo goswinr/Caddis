@@ -19,6 +19,17 @@ type EvalArgs = {
     recordUndo: bool
     }
 
+type CommandArgs = {
+    /// Command macros, e.g. "-_Line 0,0,0 10,0,0".
+    commands: string[]
+    /// Objects to select before the first command, replacing the selection.
+    select: Guid[] option
+    /// Cancel a command that waits this long for input, 0 waits until someone gives it. None uses the default.
+    inputTimeoutMs: int option
+    /// Return after this time even if the run has not finished, it keeps running. None waits until it finished, 0 returns at once.
+    waitMs: int option
+    }
+
 
 /// The operations behind the REST and MCP endpoints.
 type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
@@ -58,6 +69,9 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
     let safeFileName (s: string) =
         let invalid = Path.GetInvalidFileNameChars()
         String(s.Trim().ToCharArray() |> Array.map (fun c -> if Array.contains c invalid then '_' else c))
+
+    /// A command that waits this long for input that its macro does not give is cancelled, by default.
+    static member DefaultInputTimeoutMs = CaddisSettings.inputTimeoutMs
 
     member _.Host = host
     member _.Fsi = fsi
@@ -99,6 +113,23 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             let! run = this.StartEval args
             do! this.WaitFor(run, args.waitMs)
             return run
+        }
+
+    /// Starts a run of host commands, e.g. Rhino command macros. Raises a BusyException if a run is in progress.
+    member _.StartCommands(args: CommandArgs) : Run =
+        // '!' cancels a running command in button macros, RunScript doesn't support it, and commands never run while another one does
+        let macros =
+            args.commands
+            |> Array.map (fun m -> m.TrimStart().TrimStart('!').TrimStart())
+            |> Array.filter (String.IsNullOrWhiteSpace >> not)
+        if macros.Length = 0 then invalidArg "commands" "Provide 'commands', e.g. [\"-_Line 0,0,0 10,0,0\"]."
+        fsi.StartCommands {
+            macros = macros
+            select = args.select
+            inputTimeout =
+                match args.inputTimeoutMs |> Option.defaultValue CaddisService.DefaultInputTimeoutMs with
+                | ms when ms <= 0 -> None
+                | ms -> Some(TimeSpan.FromMilliseconds(float ms))
         }
 
     /// Switches the thread mode, saves it as default and resets the session.

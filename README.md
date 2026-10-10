@@ -22,9 +22,10 @@ Controlled via http, for AI agents and remote script execution and automation wi
   Values, functions and types defined in one run stay available in the next.
 - Serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`, so AI agents like Claude Code can run F# in Rhino,
   and plain REST endpoints for curl and scripts.
-- Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, and files.
+- Returns results: status, the value of the last expression, stdout, what was printed to the Rhino command line (e.g. by `RhinoApp.WriteLine` or commands run via `RhinoApp.RunScript`), stderr, compiler diagnostics, exceptions with the script line, and files.
   Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
 - Runs scripts either on the Rhino UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
+- Runs Rhino commands like typed at the command line, e.g. `-_Line 0,0,0 10,0,0`, and returns what they printed and the objects they created.
 - Wraps every run in one Rhino undo record, captures viewports as PNG, and exports to any file format Rhino can write, except PDF.
 
 ## Installation
@@ -50,6 +51,10 @@ Run the command `Caddis`. Its options:
 - `Cancel` the current run, `Reset` the F# session.
 - `AutoStart` starts the server when Rhino starts.
 - `EchoOutput` also writes the output of runs to the Rhino command line.
+- `CancelWaitingCommands` (off by default, also a checkbox in the panel) cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`,
+  when they wait 3 s for input that the macro doesn't give. The script goes on, the result has a note with the prompt.
+  Without it such a command waits until someone gives the input in Rhino. In background mode only commands started via `Caddis.Script.OnUi` are watched,
+  so commands you type in Rhino while a script runs are never cancelled.
 - `ListenOnLan` makes the server reachable from other machines.
 - `NewToken` replaces the token.
 
@@ -63,7 +68,7 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:7810/mcp --
 
 `--scope user` makes Caddis available across your Claude Code projects.
 
-The MCP tools are `caddis_eval`, `caddis_get_run`, `caddis_check`, `caddis_describe`, `caddis_status`, `caddis_cancel`, `caddis_reset`,
+The MCP tools are `caddis_eval`, `caddis_command`, `caddis_get_run`, `caddis_check`, `caddis_describe`, `caddis_status`, `caddis_cancel`, `caddis_reset`,
 `caddis_set_mode`, `caddis_undo`, `caddis_capture_viewport` and `caddis_export`.
 
 `caddis_describe` looks up types and members of the loaded assemblies, e.g. RhinoCommon, and returns their signatures in F# syntax
@@ -71,6 +76,15 @@ with the summaries from their XML doc files, so agents don't have to guess API n
 a namespace (`Rhino.Geometry`) lists its types, a type (`Brep`) its members, a member (`Brep.CreateFromBox`) all overloads with docs.
 `search` finds names, e.g. `fillet`. Misspelled names get suggestions.
 F# modules are found only by their compiled names, e.g. `Microsoft.FSharp.Collections.ListModule.Map` for `List.map`.
+
+`caddis_command` runs Rhino command macros, as typed at the command line or in a button macro, e.g. `["-_Line 0,0,0 10,0,0", "_Zoom _All _Extents"]`,
+one after the other until one does not succeed. It always runs on the UI thread.
+It returns the result of each command, the ids of the objects they created, changed and deleted, the selection if it changed,
+and the text they printed to the command line, e.g. of `_What`, `_Length` or `_Area`.
+`select` selects objects by id before the first command. A command that waits for input that its macro doesn't give is cancelled
+after `inputTimeoutMs` (default 3 s), the result shows its prompt; 0 waits for the person in Rhino, e.g. for `_Pause`.
+A leading `!` is left out. Each command that changes the document is one undo step, `caddis_undo` undoes all of a call.
+A command that opens a dialog blocks Rhino until someone closes it, so use the scripted `-` version of a command.
 
 `caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
 `caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
@@ -91,6 +105,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\"
 |---|---|
 | `GET /status` | State of the server and the F# session |
 | `POST /eval` | `{code?, path?, waitMs?, timeoutMs?, recordUndo?}`, returns the run, status 202 if still running after `waitMs`. Without `waitMs` it waits until the run finished |
+| `POST /command` | `{commands, select?, inputTimeoutMs?, waitMs?}`, runs Rhino commands, returns the run like `/eval` |
 | `GET /runs`, `GET /runs/{id}?waitMs=` | Recent runs, one run, optionally waiting for it |
 | `POST /cancel` | `{runId?}`, background mode only |
 | `POST /reset` | New F# session |

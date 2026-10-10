@@ -25,6 +25,7 @@ type HeadlessHost(log: string -> unit) =
         member _.CaptureView(_, _, _, _, _) = failwith "Capturing a viewport needs Rhino."
         member _.Export(_, _) = failwith "Exporting needs Rhino."
         member _.Undo _ = Error "Undo needs Rhino."
+        member _.RunCommands(_, _) = failwith "Running commands needs Rhino."
 
     interface IDisposable with
         member _.Dispose() = ui.Stop()
