@@ -32,6 +32,55 @@ module FsiState =
 exception BusyException of runId: string
 
 
+/// With --multiemit+ FSI loads one assembly per evaluation, all named 'FSI-ASSEMBLY', with versions that start again in each session.
+/// Later evaluations reference the earlier ones by that name. FSI resolves them in its own AssemblyResolve handler,
+/// but a handler of the host app that comes first and matches only the simple name returns the wrong assembly:
+/// Rhino's returns the first FSI-ASSEMBLY of the process. Then a value of an earlier run fails with a TypeLoadException,
+/// or after a reset silently is the value of an old session.
+/// This handler goes first and resolves by full name among the assemblies of the session that asks.
+module FsiAssemblyResolver =
+
+    let private sessions = ResizeArray<FsiEvaluationSession>()
+
+    let private resolve (args: ResolveEventArgs) : Assembly =
+        if not (args.Name.StartsWith("FSI-ASSEMBLY,", StringComparison.Ordinal)) then
+            null
+        else
+            let live = lock sessions (fun () -> sessions.ToArray())
+            let find (s: FsiEvaluationSession) = s.DynamicAssemblies |> Array.tryFind (fun a -> a.FullName = args.Name)
+            match args.RequestingAssembly with
+            | null -> live |> Array.rev |> Array.tryPick find |> Option.toObj
+            | requester ->
+                // not for FSI sessions of other plugins, e.g. Fesh
+                live
+                |> Array.tryFind (fun s -> s.DynamicAssemblies |> Array.exists (fun a -> obj.ReferenceEquals(a, requester)))
+                |> Option.bind find
+                |> Option.toObj
+
+    let private handler = ResolveEventHandler(fun _ args -> resolve args)
+
+    /// Puts the handler first in AppDomain.AssemblyResolve, before the handlers of the host app.
+    /// The event has no public way to insert at the front, so this sets its backing field in AssemblyLoadContext.
+    let private ensureFirst () =
+        match typeof<Runtime.Loader.AssemblyLoadContext>.GetField("AssemblyResolve", BindingFlags.NonPublic ||| BindingFlags.Static) with
+        | null ->
+            AppDomain.CurrentDomain.remove_AssemblyResolve handler
+            AppDomain.CurrentDomain.add_AssemblyResolve handler
+            failwith "the field AssemblyLoadContext.AssemblyResolve was not found"
+        | field ->
+            lock sessions (fun () ->
+                let others = Delegate.Remove(field.GetValue null :?> Delegate, handler)
+                field.SetValue(null, Delegate.Combine(handler, others)))
+
+    /// Call when a session was created. Raises an exception if the handler could not be put first.
+    let register (s: FsiEvaluationSession) =
+        lock sessions (fun () -> sessions.Add s)
+        ensureFirst ()
+
+    /// Call before a session is disposed.
+    let unregister (s: FsiEvaluationSession) = lock sessions (fun () -> sessions.Remove s |> ignore)
+
+
 type EvalRequest = {
     code: string
     /// Full path of the script file, or null to use 'script.fsx' in the output folder of the run.
@@ -195,9 +244,14 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                         Action(fun () ->
                             oldWorker |> Option.iter (fun w -> w.Stop())
                             if canDispose then
-                                oldSession |> Option.iter (fun s -> try (s :> IDisposable).Dispose() with _ -> ())
+                                oldSession
+                                |> Option.iter (fun s ->
+                                    FsiAssemblyResolver.unregister s
+                                    try (s :> IDisposable).Dispose() with _ -> ())
                             try
                                 let s = createSession ()
+                                try FsiAssemblyResolver.register s
+                                with e -> host.Log $"Caddis: values of earlier runs might not be found, setting up the resolver for FSI assemblies failed: {e.Message}"
                                 if m = Background then enableCancellation s
                                 lock sync (fun () ->
                                     session <- Some s
@@ -208,6 +262,24 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                                 host.Log $"Caddis: creating the F# Interactive session failed:\n{e}")
                     )
                 initTask)
+
+    /// FCS type-checks code as the file 'stdin.fsx' in the folder the session was created in,
+    /// so relative #load paths of a script would not be found. This sets that folder via reflection during f.
+    let withCheckFolder (s: FsiEvaluationSession) (scriptPath: string) (f: unit -> 'T) : 'T =
+        let folder =
+            if String.IsNullOrEmpty scriptPath then None
+            else
+                try
+                    let builder = s.GetType().GetField("tcConfigB", flags).GetValue s
+                    Some(builder, builder.GetType().GetProperty("implicitIncludeDir", flags ||| BindingFlags.Public))
+                with _ ->
+                    None
+        match folder with
+        | Some(builder, prop) when not (isNull prop) ->
+            let prev = prop.GetValue builder
+            prop.SetValue(builder, Path.GetDirectoryName scriptPath)
+            try f () finally prop.SetValue(builder, prev)
+        | _ -> f ()
 
     // --- evaluation ---
 
@@ -391,7 +463,7 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                     | st, _ -> failwith $"F# Interactive is not ready, its state is '{FsiState.toString st}'.")
             let work () =
                 if not (String.IsNullOrEmpty scriptPath) && File.Exists scriptPath then includeScriptFolder s scriptPath
-                let parseResults, checkResults, _ = s.ParseAndCheckInteraction code
+                let parseResults, checkResults, _ = withCheckFolder s scriptPath (fun () -> s.ParseAndCheckInteraction code)
                 Array.append parseResults.Diagnostics checkResults.Diagnostics
                 |> Array.map (fun d ->
                     let diag = Diagnostic.ofFcs d

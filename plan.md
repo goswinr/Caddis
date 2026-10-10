@@ -42,7 +42,7 @@ Caddis.Rhino/  net8.0, TargetExt .rhp
   PlugIn.fs        load, UI SynchronizationContext, autostart, Rhino.Scripting hookup
   RhinoOps.fs      undo record wrapping, redraw, InCommand guard, viewport capture, export, undo
   Panel.fs         Eto panel: server toggle, URL/token copy, mode, run log, cancel button
-  Commands.fs      Caddis command: Start / Stop / Status / Token / Mode
+  Commands.fs      Caddis command: Start / Stop, Panel, CopyMcpCommand, Mode, Cancel, Reset, AutoStart, EchoOutput, ListenOnLan, NewToken
   yak.yml
 Tests/         Expecto or xUnit tests for Caddis.Core (MCP routing, auth, eval, cancel)
 ```
@@ -105,9 +105,9 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
 ## Settings, token and discovery
 
 - Settings and the token live in `Environment.SpecialFolder.ApplicationData/Caddis/`, which works on Windows and Mac.
-- The token is a random value, created on first start and shown by `Caddis Token` and in the panel.
+- The token is a random value, created on first start. `Caddis CopyMcpCommand` and the panel copy it, `Caddis NewToken` replaces it.
 - **Port:** default 7810, configurable, with fallback to the next free port.
-- **Discovery file:** `AppData/Caddis/instances/<pid>.json` holds `{port, pid, rhinoVersion, docPath, startedAt}`. It contains no token. It is deleted on stop and on Rhino close.
+- **Discovery file:** `AppData/Caddis/instances/<pid>.json` holds `{pid, port, url, mcpUrl, listenOnLan, host, startedAt, tokenFile}`. It contains the path of the token file, not the token. It is deleted on stop and on Rhino close.
 - **LAN:** the prefix becomes `http://+:<port>/`. On Windows this needs a one-time admin `netsh http add urlacl url=http://+:<port>/ user=Everyone`; the command prints that line when access is denied.
 
 ## Rhino integration (same as Fesh.Rhino)
@@ -126,16 +126,22 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
   - Background mode: `Script.OnUi`, timeout and cancel of a busy loop with Rhino staying responsive, 409 for a second run.
   - `#r "nuget: Rhino.Scripting"` in background mode.
   - Fesh.Rhino and Caddis share one FSharp.Core and FCS. Caddis.Core is loaded once into the default load context, so scripts and the plugin share `Caddis.Script`.
-  - A runtime error in a top-level expression is reported at line 1 (FSI's debug info for top-level code, also with `--optimize-`). Inside functions the line is right.
-- **Fixed after the Rhino test, not yet re-tested in Rhino** (needs a Rhino restart to load the new build):
-  - **Export:** `RhinoDoc.Export` and `RhinoDoc.WriteFile` (even with `SuppressDialogBoxes`) show the options dialog of e.g. STL and block until someone clicks. Now `-_Export "<path>" _EnterEnd` on the selected objects, restoring the user's selection. Tested from a script for stl, obj, step, 3mf, dwg, igs: no dialogs.
-  - **Undo:** `RhinoDoc.Undo()` outside a command leaves an undo record open, so later runs get no undo record. Now the `_Undo` command via `RhinoApp.RunScript`, tested from a script.
-  - **Status:** `objectCount` counted deleted objects kept for undo.
-  - **Errors:** messages from `failwith` (e.g. unknown view) are now 400 instead of 500.
-  - **Rhino.Scripting:** the hookup looked for `Rhino.RhinoSync`, but since Rhino.Scripting 0.12 it is `Rhino.Scripting.RhinoSync`. (Fesh.Rhino's `PlugIn.fs` uses the same stale name.)
+  - A runtime error in a top-level statement, e.g. an array index, is reported at line 1 (FSI's debug info for top-level code, also with `--optimize-`). Inside functions, and for exceptions thrown by a called function, the line is right.
+- **Fixed after the first Rhino test:** export via `-_Export "<path>" _EnterEnd` (`RhinoDoc.Export` and `RhinoDoc.WriteFile` show the options dialog of e.g. STL, even with `SuppressDialogBoxes`), undo via the `_Undo` command (`RhinoDoc.Undo()` outside a command leaves an undo record open), `objectCount` without deleted objects, 400 for `failwith` messages, and the Rhino.Scripting hookup via `Rhino.Scripting.RhinoSync` (the name since Rhino.Scripting 0.7; Fesh.Rhino looked for the stale `Rhino.RhinoSync` too, fixed there on 2026-10-10). All re-tested in the second Rhino test.
+- **Second Rhino test (2026-10-10), Rhino 8.35 on Windows without Fesh.Rhino, via MCP and REST:**
+  - Confirmed: export without dialogs to stl, obj, step, iges, dwg, dxf, 3mf, fbx, gltf, svg and 3dm, with `selected` and `objectIds`, restoring the user's selection. Undo of the latest run. Status with units, tolerance, layers and an `objectCount` without deleted objects. Capture with display mode and the 1280 px cap. The Rhino.Scripting hookup without Fesh.Rhino, `#r "nuget: Rhino.Scripting"` 0.14 calling RhinoCommon from the background thread. Auth, `Origin` check, path traversal in `/files` blocked, MCP version negotiation and errors. Background mode: `Script.OnUi`, timeout, cancel, 409 for eval, check and export, status and capture during a run. Runs rejected during a Rhino command. Eval by `path` with relative `#load` and `__SOURCE_DIRECTORY__`. `caddis_describe` with RhinoCommon and NuGet types. `-Caddis Panel` and `-Caddis CopyMcpCommand`.
+  - Found and fixed, with headless regression tests where possible (65 tests), re-tested in Rhino 8.35 on 2026-10-10 unless noted:
+    - **Values of earlier runs:** with `--multiemit+` each run is an assembly named `FSI-ASSEMBLY`, versions restart in each session. Rhino's `AssemblyResolver.CurrentDomain_AssemblyResolve` comes before FSI's handler and returns the first `FSI-ASSEMBLY` of the process. So a value defined in any run but the very first failed later with a `TypeLoadException`, and after a reset a value silently came from an old session. `FsiAssemblyResolver` in `FsiHost.fs` now goes first in `AssemblyLoadContext.AssemblyResolve` (set via reflection) and resolves by full name in the session's `DynamicAssemblies`. The test puts a resolver like Rhino's first. Re-tested in background and UI mode and after a reset. Fesh.Rhino on net8 probably has the same bug.
+    - **Requests during a UI-thread run:** the HTTP accept loop was a `task` started on the UI thread, so it continued there and no request was accepted until the run ended: no 409, no refused capture, `get_run` ignored `waitMs`. Now a `backgroundTask`. Re-tested: status, 409 for capture, eval, check, export and undo, and `get_run` with `waitMs` all answer at once during a UI-thread run.
+    - **Undo:** `caddis_undo` refused after a later run without changes. Rhino raises `BeginRecording`, `EndRecording` and then `Purge` for the empty record of such a run, and the handler set `lastUndoRecord` to 0 on any purge. Now a purge of the record on top makes the record below it the top again. Rhino-only, no test. Re-tested: undo after runs without changes works, a Rhino command after the run still blocks it (the first attempt, restoring in `AfterRun`, had failed).
+    - **`caddis_check` by `path`:** relative `#load` was resolved against the folder the session was created in, so it reported a missing file. `implicitIncludeDir` of the session's `tcConfigB` is now set to the script's folder during the check, via reflection. Only partly fixed: FCS's `ParseAndCheckInteraction` doesn't type-check the content of loaded files, so their definitions are still reported as not defined.
+    - **Export:** PDF opened Rhino's print dialog and blocked until someone clicked, now it is refused. An extension without exporter silently wrote a 3dm file, now it is an error. Rhino-only, no test.
+    - `caddis_describe` cut summaries at "e.g.". System.Drawing.Common is now referenced in every session, `#r "System.Drawing.Common"` was not found because the WindowsDesktop framework folder is not searched.
+  - Known limitations: `caddis_check` doesn't know the definitions of files loaded with `#load`. `caddis_describe` finds F# modules only by compiled name (`ListModule.Map`, not `List.map`), and its `search` doesn't cover FSharp.Core. Printing 30,000 lines on the UI thread took 20 s, probably the echo to the command line. A width-only capture of a narrow view can exceed 1280 px in height. Memory grew from 792 to 1253 MB in about 90 runs including a NuGet restore.
 - **Open:**
-  - Re-test the fixes above in Rhino. Test the Rhino.Scripting hookup without Fesh.Rhino loaded. Test on Mac.
+  - Test on Mac.
   - Verify the new embedded panel icon in Rhino. `Docs/img/makeAllSizes.ps1` generates the logo variants and `favicon.ico` from `logo.png`; the favicon is embedded in the plugin. Build verified.
+  - Not yet tested in Rhino: the port-change warning, `ListenOnLan`.
   - Run the first Yak release after configuring the repository's `YAK_TOKEN` secret.
 - **MCP review (2026-10-10), tested outside Rhino** (49 tests):
   - MCP results are plain text written for the model, plus inline images; no `structuredContent`, because Claude Code then shows the model only that JSON ([claude-code#55677](https://github.com/anthropics/claude-code/issues/55677)). REST keeps the full `RunResult` JSON.
@@ -146,7 +152,6 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
   - Capture is refused while a UI-thread run is in progress, export and undo while any run is.
   - `Mcp-Session-Id` is handed out on initialize and only used to keep request ids of different clients apart for `notifications/cancelled`. Unsupported `MCP-Protocol-Version` gets 400, unknown tools `-32602`.
   - `caddis_describe` (`ApiDocs.fs`): reflection over the loaded assemblies plus their XML doc files (RhinoCommon.xml is next to RhinoCommon.dll in `System/netcore`), signatures in F# syntax (curried F# functions, `[<Out>]` arguments, `option`/`list`/function types). Large types are shown in less detail until they fit 16k characters. Misspelled names get suggestions by contained words and edit distance. Checked against RhinoCommon 8.35 loaded by reflection outside Rhino, e.g. `Brep` fits with one overload per member including inherited ones.
-  - Not yet tested in Rhino: capture size cap (1280 px long edge by default), document units, tolerance and layers in `caddis_status`, the port-change warning.
 - **Packaging implemented and verified locally** (phase 6): shared build/release packaging action, a `rh8_19-any` Yak package with a `net8.0` folder, tag/changelog consistency checks, versioning via Ionide.KeepAChangelog, and README logo and badges matching Fesh.Rhino. Release build, all 28 tests, workflow linting and the actual Yak package build pass. Publishing to Yak is pending the first release.
 
 ## Phases
@@ -166,7 +171,9 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
 
 ## Risks
 
-- **FCS internals:** the cancel hack reaches into private FCS fields by reflection. This is safe only because the version is pinned; any FCS upgrade needs a re-test.
+- **FCS internals:** the cancel hack and the script folder of `caddis_check` reach into private FCS fields by reflection. This is safe only because the version is pinned; any FCS upgrade needs a re-test.
+- **Assembly resolution:** Caddis puts its resolver for `FSI-ASSEMBLY` first by setting the private `AssemblyLoadContext.AssemblyResolve` field. If a .NET update renames it, Caddis logs that and values of earlier runs fail again in Rhino. A plugin that inserts its own handler at the front later would break it too.
+- **Modal dialogs:** a script, or an export format, that opens a modal dialog blocks Rhino until someone clicks. PDF export is refused for this reason; the other formats are only known to be fine from the test above.
 - **Mac is unverified:** ControlledExecution, `System.Drawing` for viewport capture (the fallback is `-_ViewCaptureToFile`), and whether a UI `SynchronizationContext` exists (the fallback is `RhinoApp.InvokeOnUiThread`).
 - **Background thread:** raw RhinoCommon UI calls from that thread can crash Rhino. That is why the default is the UI thread.
 - **Memory:** FSI's emitted assemblies are never unloaded, so memory grows over a long Rhino session and a reset does not free it. `/status` reports it.

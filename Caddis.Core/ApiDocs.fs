@@ -305,11 +305,14 @@ type ApiDocs(host: ICaddisHost) =
         for c in e.Nodes() do walk c
         Regex.Replace(collapse (sb.ToString()), @"^(///\s*)+", "") // some summaries in RhinoCommon.xml start with '///'
 
+    /// The end of a sentence, but not of an abbreviation like 'e.g.'
+    static let sentenceEnd = Regex(@"(?<!\b(e\.g|i\.e|etc|vs))\.\s", RegexOptions.IgnoreCase)
+
     static let firstSentence (s: string) =
         let s =
-            match s.IndexOf ". " with
-            | -1 -> s
-            | i -> s.Substring(0, i + 1)
+            match sentenceEnd.Match s with
+            | m when m.Success -> s.Substring(0, m.Index + 1)
+            | _ -> s
         if s.Length > 160 then s.Substring(0, 157) + "..." else s
 
     /// Cuts lines after maxChars characters, with a hint what to do then.

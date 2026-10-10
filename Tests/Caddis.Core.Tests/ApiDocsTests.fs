@@ -19,6 +19,7 @@ let ``finds types by their short name`` () =
     let text = describe "Script"
     Assert.StartsWith("static class Caddis.Script in Caddis.Core", text)
     Assert.Contains("static member RunId: string with get", text)
+    Assert.Contains("The id of the current run, e.g. \"r12\".", text) // not cut at 'e.g.'
 
 [<Fact>]
 let ``shows curried F# functions`` () =

@@ -162,8 +162,10 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                 () // the client disconnected
         }
 
+    /// A backgroundTask, not a task: Start is called on the UI thread of the host,
+    /// and a task would continue there after each request, so no request would be accepted while a run blocks the UI thread.
     let acceptLoop (l: HttpListener) =
-        task {
+        backgroundTask {
             while l.IsListening do
                 try
                     let! ctx = l.GetContextAsync()

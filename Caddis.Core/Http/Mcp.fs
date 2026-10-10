@@ -198,7 +198,7 @@ type McpEndpoint(svc: CaddisService) =
                 "width",
                 intProp
                     $"Width in pixels. Default: follows the aspect ratio of the view if 'height' is given, otherwise the size of the view, scaled down to at most {CaptureSize.defaultMaxEdge} pixels on the long edge."
-                "height", intProp "Height in pixels. Default: like 'width'."
+                "height", intProp "Height in pixels. Default: follows the aspect ratio of the view if 'width' is given, otherwise like 'width'."
                 "displayMode", strProp "Name of a display mode, e.g. 'Shaded', 'Rendered', 'Wireframe'. Default: the mode of the view."
             ]
             required = []
@@ -210,9 +210,9 @@ type McpEndpoint(svc: CaddisService) =
             name = "caddis_export"
             title = "Export"
             description =
-                "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension. Returns the local path and download URL of the written files."
+                "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension, except PDF: it opens Rhino's print dialog. Returns the paths of the written files."
             properties = [
-                "format", strProp "File extension of the format, e.g. '3dm', 'stl', 'obj', 'step', 'iges', 'dwg', 'dxf', '3mf', 'fbx', 'gltf', 'pdf', 'svg'."
+                "format", strProp "File extension of the format, e.g. '3dm', 'stl', 'obj', 'step', 'iges', 'dwg', 'dxf', '3mf', 'fbx', 'gltf', 'svg'."
                 "name", strProp "File name without extension. Default: 'export'."
                 "objects", enumOf [ "all"; "selected" ] "Which objects to export. Default: 'all'."
                 "objectIds",

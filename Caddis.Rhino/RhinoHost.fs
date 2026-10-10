@@ -32,7 +32,7 @@ module RhinoScriptingSync =
     let private trySet (ctx: SynchronizationContext) (a: Assembly) =
         if a.GetName().Name = "Rhino.Scripting" then
             try
-                // Rhino.Scripting.RhinoSync since version 0.12, Rhino.RhinoSync before
+                // Rhino.Scripting.RhinoSync since version 0.7, Rhino.RhinoSync before
                 match a.GetType "Rhino.Scripting.RhinoSync" |> Option.ofObj |> Option.orElse (a.GetType "Rhino.RhinoSync" |> Option.ofObj) with
                 | None -> ()
                 | Some t ->
@@ -55,6 +55,12 @@ module RhinoScriptingSync =
 type RhinoHost() =
 
     let rhinoCommonPath = typeof<RhinoApp>.Assembly.Location
+
+    /// RhinoCommon uses System.Drawing.Bitmap, e.g. in RhinoView.CaptureToBitmap.
+    /// On Windows it is in the WindowsDesktop framework folder, which FSI does not search.
+    let references =
+        let drawing = try typeof<Drawing.Bitmap>.Assembly.Location with _ -> null
+        [| rhinoCommonPath; drawing |] |> Array.filter (String.IsNullOrEmpty >> not)
 
     /// The folder of the loaded RhinoCommon.dll comes first: on Windows it is 'System/netcore' with the .NET Core build.
     /// The folder of Rhino.exe has the .NET Framework build of RhinoCommon, but also Eto.dll and other shared dlls.
@@ -86,8 +92,11 @@ type RhinoHost() =
 
     // --- undo ---
 
-    /// The undo record Rhino began last, 0 after an undo or redo.
+    /// The undo record on top of Rhino's undo stack, 0 after an undo or redo.
     let mutable lastUndoRecord = 0u
+
+    /// The undo record below lastUndoRecord, 0 if unknown.
+    let mutable previousUndoRecord = 0u
 
     /// Set by document events while a run is in progress. Rhino keeps no undo record for runs without changes.
     let mutable runActive = false
@@ -96,8 +105,20 @@ type RhinoHost() =
 
     do
         Command.UndoRedo.Add(fun e ->
-            if e.IsBeginRecording then lastUndoRecord <- e.UndoSerialNumber
-            elif e.IsBeginUndo || e.IsBeginRedo || e.IsPurgeRecord then lastUndoRecord <- 0u)
+            if e.IsBeginRecording then
+                previousUndoRecord <- lastUndoRecord
+                lastUndoRecord <- e.UndoSerialNumber
+            elif e.IsPurgeRecord then
+                // Rhino purges a record without changes right after it ended, e.g. of a run that only printed,
+                // then the record below it is on top again.
+                if e.UndoSerialNumber = lastUndoRecord then
+                    lastUndoRecord <- previousUndoRecord
+                    previousUndoRecord <- 0u
+                elif e.UndoSerialNumber = previousUndoRecord then
+                    previousUndoRecord <- 0u
+            elif e.IsBeginUndo || e.IsBeginRedo then
+                lastUndoRecord <- 0u
+                previousUndoRecord <- 0u)
         RhinoDoc.AddRhinoObject.Add(fun _ -> changed ())
         RhinoDoc.DeleteRhinoObject.Add(fun _ -> changed ())
         RhinoDoc.ReplaceRhinoObject.Add(fun _ -> changed ())
@@ -151,6 +172,13 @@ type RhinoHost() =
         if isNull bitmap then failwith "Rhino could not capture the view."
         bitmap.Save(path, Drawing.Imaging.ImageFormat.Png)
 
+    /// True if the file starts like a 3dm file.
+    let isRhinoFile (path: string) =
+        let magic = "3D Geometry File Format"
+        use f = File.OpenRead path
+        let bytes = Array.zeroCreate<byte> magic.Length
+        f.ReadAtLeast(bytes, bytes.Length, false) = bytes.Length && Encoding.ASCII.GetString bytes = magic
+
     /// Writes any format Rhino can export, picked by the file extension, without showing dialogs.
     /// Other formats than 3dm are written with the scripted '-_Export' command, '_EnterEnd' accepts the default options.
     /// Not with RhinoDoc.Export or RhinoDoc.WriteFile: for formats like STL they show the options dialog,
@@ -158,7 +186,10 @@ type RhinoHost() =
     let export (selection: ExportSelection, path: string) =
         let doc = activeDoc ()
         if Command.InCommand() then failwith "A Rhino command is running. Finish or cancel it first."
-        let is3dm = Path.GetExtension(path).Equals(".3dm", StringComparison.OrdinalIgnoreCase)
+        let ext = Path.GetExtension(path).ToLowerInvariant()
+        if ext = ".pdf" then
+            failwith "Exporting to PDF opens Rhino's print dialog, which waits for a click. Capture a viewport instead, or write a PDF in a script with Rhino.FileIO.FilePdf."
+        let is3dm = ext = ".3dm"
         let previous = doc.Objects.GetSelectedObjects(false, false) |> Seq.map _.Id |> Array.ofSeq
         // selects only these objects, returns how many could be selected
         let selectOnly (ids: Guid seq) =
@@ -187,7 +218,11 @@ type RhinoHost() =
                 doc.Objects.UnselectAll() |> ignore
                 for id in previous do
                     doc.Objects.Select(id, true, true) |> ignore
-        if not ok || not (File.Exists path) then failwith $"Rhino could not export to '{Path.GetExtension path}'."
+        if not ok || not (File.Exists path) then failwith $"Rhino could not export to '{ext}'."
+        // for an extension without exporter Rhino writes a 3dm file
+        if not is3dm && isRhinoFile path then
+            File.Delete path
+            failwith $"Rhino has no exporter for '{ext}'."
 
     let undo (run: Run) : Result<string, string> =
         match run.UndoSerial with
@@ -213,7 +248,7 @@ type RhinoHost() =
 
         member _.LibFolders = libFolders
 
-        member _.References = [| rhinoCommonPath |]
+        member _.References = references
 
         member _.InvokeOnUi<'T>(f: unit -> 'T) : Task<'T> = invokeOnUi f
 

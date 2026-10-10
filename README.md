@@ -15,7 +15,7 @@ An F# interactive host for Rhino,
 runs F# scripts within the Rhino process.
 Controlled via http, for AI agents and remote script execution and automation within Rhino.
 
-> Early development. It builds and the core is tested outside of Rhino, but it has not been tested inside Rhino yet.
+> Early development. Tested in Rhino 8.35 on Windows, not yet on Mac.
 
 ## What it does
 - Hosts one persistent F# Interactive session inside Rhino 8 (.NET 8, Windows and Mac).
@@ -25,7 +25,7 @@ Controlled via http, for AI agents and remote script execution and automation wi
 - Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, and files.
   Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
 - Runs scripts either on the Rhino UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
-- Wraps every run in one Rhino undo record, captures viewports as PNG, and exports to any file format Rhino can write.
+- Wraps every run in one Rhino undo record, captures viewports as PNG, and exports to any file format Rhino can write, except PDF.
 
 ## Installation
 
@@ -49,6 +49,7 @@ Run the command `Caddis`. Its options:
 - `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.
 - `Cancel` the current run, `Reset` the F# session.
 - `AutoStart` starts the server when Rhino starts.
+- `EchoOutput` also writes the output of runs to the Rhino command line.
 - `ListenOnLan` makes the server reachable from other machines.
 - `NewToken` replaces the token.
 
@@ -69,10 +70,12 @@ The MCP tools are `caddis_eval`, `caddis_get_run`, `caddis_check`, `caddis_descr
 with the summaries from their XML doc files, so agents don't have to guess API names and overloads:
 a namespace (`Rhino.Geometry`) lists its types, a type (`Brep`) its members, a member (`Brep.CreateFromBox`) all overloads with docs.
 `search` finds names, e.g. `fillet`. Misspelled names get suggestions.
+F# modules are found only by their compiled names, e.g. `Microsoft.FSharp.Collections.ListModule.Map` for `List.map`.
 
 `caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
 `caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
-`caddis_check` type-checks against the current session, so definitions from earlier runs are known.
+`caddis_check` type-checks against the current session, so definitions from earlier runs are known,
+but not the definitions in files loaded with `#load`.
 
 MCP results are text written for the model, without `structuredContent`:
 Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
@@ -87,7 +90,7 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\"
 | Endpoint | |
 |---|---|
 | `GET /status` | State of the server and the F# session |
-| `POST /eval` | `{code?, path?, waitMs?, timeoutMs?, recordUndo?}`, returns the run, status 202 if still running after `waitMs` |
+| `POST /eval` | `{code?, path?, waitMs?, timeoutMs?, recordUndo?}`, returns the run, status 202 if still running after `waitMs`. Without `waitMs` it waits until the run finished |
 | `GET /runs`, `GET /runs/{id}?waitMs=` | Recent runs, one run, optionally waiting for it |
 | `POST /cancel` | `{runId?}`, background mode only |
 | `POST /reset` | New F# session |
@@ -103,7 +106,9 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\"
 Each Rhino instance writes its port to `%AppData%\Caddis\instances\<process id>.json`.
 
 ## In scripts
-RhinoCommon is referenced in every session. Caddis adds:
+RhinoCommon and System.Drawing.Common are referenced in every session.
+Other assemblies of Rhino can be referenced by file name, e.g. `#r "Eto.dll"` or `#r "Rhino.UI.dll"`,
+and NuGet packages via `#r "nuget: Rhino.Scripting"`, which needs the .NET SDK. Caddis adds:
 ```fsharp
 Caddis.Script.OutDir   // a folder for files of this run, they are returned with the result
 Caddis.Script.RunId    // e.g. "r12"

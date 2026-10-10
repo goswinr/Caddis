@@ -260,3 +260,38 @@ let ``writes a discovery file`` () =
     let path = IO.Path.Combine(server.Value.Service.Store.InstancesFolder, $"{Environment.ProcessId}.json")
     let info = JsonNode.Parse(IO.File.ReadAllText path)
     Assert.Equal(server.Value.Port, num [ "port" ] info)
+
+/// Posts to the UI thread of the host, like the SynchronizationContext of Rhino's UI thread.
+type UiContext(host: ICaddisHost) =
+    inherit Threading.SynchronizationContext()
+    override _.Post(d, state) = host.InvokeOnUi(fun () -> d.Invoke state) |> ignore
+    override this.CreateCopy() = this
+
+[<Fact>]
+let ``answers requests while a run blocks the UI thread the server was started on`` () =
+    let store = newStore ()
+    store.Save { CaddisSettings.defaults with port = 27830 }
+    let host = new HeadlessHost(ignore) :> ICaddisHost
+    use s = new CaddisServer(host, store)
+    // like Rhino, which starts the server from a command on the UI thread
+    let started =
+        host.InvokeOnUi(fun () ->
+            Threading.SynchronizationContext.SetSynchronizationContext(UiContext host)
+            s.Start())
+    match started.Result with
+    | Ok _ -> ()
+    | Error msg -> failwith msg
+    use c = new HttpClient(BaseAddress = Uri s.Url)
+    c.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", s.Token)
+    use evalReq =
+        new HttpRequestMessage(HttpMethod.Post, "/eval", Content = new StringContent("""{"code": "System.Threading.Thread.Sleep 3000", "waitMs": 0}"""))
+    let status, _ = send c evalReq
+    Assert.Equal(HttpStatusCode.Accepted, status)
+    let watch = Diagnostics.Stopwatch.StartNew()
+    use statusReq = new HttpRequestMessage(HttpMethod.Get, "/status")
+    let status, _ = send c statusReq
+    Assert.Equal(HttpStatusCode.OK, status)
+    use captureReq = new HttpRequestMessage(HttpMethod.Get, "/viewport")
+    let status, _ = send c captureReq
+    Assert.Equal(HttpStatusCode.Conflict, status) // the UI thread is busy
+    Assert.True(watch.ElapsedMilliseconds < 1500, $"The requests took {watch.ElapsedMilliseconds} ms.")

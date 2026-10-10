@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `caddis_check` and `POST /check` type-check against the current F# session, so definitions from earlier runs are known. The separate `FSharpChecker` is gone, which saves memory.
 - Captured output keeps its start and its end when it exceeds `maxOutputChars`, not only the start.
 - Viewport captures without a size are scaled down to at most 1280 pixels on the long edge, and a single given dimension keeps the view's aspect ratio.
+- System.Drawing.Common is referenced in every session, RhinoCommon uses its `Bitmap`.
+- PDF export is refused: it opened Rhino's print dialog and blocked until someone clicked.
 
 ### Fixed
 - Panel Output and Code views fill their tabs without extra padding; removed the panel's outer margin.
@@ -34,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Chunked request bodies were not limited to 20 MB.
 - A warning in Rhino when the configured port is taken and Caddis listens on another one, which MCP clients don't know about.
 - A clear error for invalid ids in `objectIds` of `caddis_export`.
+- In Rhino, values defined in earlier runs failed with a `TypeLoadException`, and after a reset could silently be those of an old session: Rhino's assembly resolver returned the wrong FSI assembly. Caddis now resolves them first.
+- In UI-thread mode no request was answered while a run was in progress, so busy errors and the `waitMs` of `caddis_get_run` didn't work: the HTTP accept loop continued on the UI thread.
+- `caddis_undo` refused to undo a run if a later run made no changes.
+- `caddis_check` with `path` did not find files loaded with a relative `#load`.
+- Exporting to an extension without exporter wrote a 3dm file, now it is an error.
+- `caddis_describe` cut summaries at "e.g." in member lists.
 
 ## [0.1.0] - 2026-10-10
 

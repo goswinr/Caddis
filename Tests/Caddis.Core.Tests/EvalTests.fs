@@ -80,6 +80,18 @@ let ``type-checks against the definitions of earlier runs`` () =
     Assert.Equal(2, err.startLine)
     Assert.Equal("", err.file)
 
+[<Fact>]
+let ``type-check finds files of #load next to the script`` () =
+    let dir = Directory.CreateTempSubdirectory("CaddisTests").FullName
+    File.WriteAllText(Path.Combine(dir, "helper.fsx"), "module Helper\nlet greet (name: string) = \"hi \" + name")
+    let path = Path.Combine(dir, "main.fsx")
+    File.WriteAllText(path, "#load \"helper.fsx\"\n#load \"missing.fsx\"")
+    for code in [ None; Some(File.ReadAllText path) ] do
+        let notFound = svc.Value.Check(code, Some path).Result |> Array.filter (fun d -> d.errorNumber = 79) // could not load file
+        let err = Assert.Single notFound // only missing.fsx, helper.fsx is found next to main.fsx
+        Assert.Equal(2, err.startLine)
+        // FCS's interaction check doesn't type-check the content of loaded files, so Helper.greet would be unknown
+
 /// The text an MCP client gets for a run.
 let mcpText (run: Run) =
     let text, _ = McpView.run svc.Value.Runs "http://127.0.0.1:7810" [] 0L run
@@ -126,6 +138,34 @@ let ``returns images saved by a run inline`` () =
     Assert.Equal("image/png", image["mimeType"].GetValue<string>())
     Assert.Equal("AQID", image["data"].GetValue<string>())
     Assert.Contains("plot.png (3 B, image/png, shown below)", text)
+
+/// Like Rhino's AssemblyResolve handler: it comes first and returns the first loaded assembly with the same simple name.
+let simpleNameResolver =
+    System.ResolveEventHandler(fun _ args ->
+        let name = System.Reflection.AssemblyName(args.Name).Name
+        System.AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.GetName().Name = name) |> Option.toObj)
+
+let putResolverFirst (h: System.ResolveEventHandler) =
+    let field =
+        typeof<System.Runtime.Loader.AssemblyLoadContext>
+            .GetField("AssemblyResolve", System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Static)
+    field.SetValue(null, System.Delegate.Combine(h, field.GetValue null :?> System.Delegate))
+
+[<Fact>]
+let ``keeps values of earlier runs with a host resolver that matches simple names`` () =
+    eval svc.Value "1" |> ignore // so that this process has an FSI-ASSEMBLY of another session
+    putResolverFirst simpleNameResolver
+    try
+        let s = newService ()
+        // parsed at runtime, so that the optimizer doesn't inline them into later runs
+        assertOk (eval s "let fromRun1 = System.Int32.Parse \"1\"")
+        assertOk (eval s "let fromRun2 = System.Int32.Parse \"20\"")
+        Assert.Equal("21", valueText (eval s "fromRun1 + fromRun2"))
+        s.Fsi.Reset().Wait()
+        assertOk (eval s "let fromRun1 = System.Int32.Parse \"300\"")
+        Assert.Equal("300", valueText (eval s "fromRun1"))
+    finally
+        System.AppDomain.CurrentDomain.remove_AssemblyResolve simpleNameResolver
 
 [<Fact>]
 let ``reset loses definitions`` () =
