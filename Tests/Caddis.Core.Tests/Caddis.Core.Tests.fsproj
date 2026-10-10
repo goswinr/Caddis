@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="8.0.403" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Caddis.Core/Caddis.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Helpers.fs" />
+    <Compile Include="EvalTests.fs" />
+    <Compile Include="BackgroundTests.fs" />
+    <Compile Include="HttpTests.fs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- plain net8.0, no WPF, so that it runs in Rhino 8 on Windows and Mac -->
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Caddis</RootNamespace>
+    <AssemblyName>Caddis.Core</AssemblyName>
+    <Description>Hosts F# Interactive in a .NET app and controls it via HTTP and MCP.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pinned to the same versions as the net8 build of Fesh (and so Fesh.Rhino), so that both can be loaded in the same Rhino process.
+    Newer FCS versions depend on System.Diagnostics.DiagnosticSource 9+, which does not load in Rhino 8. See https://github.com/dotnet/fsharp/issues/19174 -->
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.8.403" />
+    <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- FSharp.Compiler.Service pins this exact version -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Json.fs" />
+    <Compile Include="Settings.fs" />
+    <Compile Include="Output.fs" />
+    <Compile Include="Model.fs" />
+    <Compile Include="Script.fs" />
+    <Compile Include="Worker.fs" />
+    <Compile Include="FsiHost.fs" />
+    <Compile Include="Checker.fs" />
+    <Compile Include="Service.fs" />
+    <Compile Include="Http/Types.fs" />
+    <Compile Include="Http/Rest.fs" />
+    <Compile Include="Http/Mcp.fs" />
+    <Compile Include="Server.fs" />
+    <Compile Include="HeadlessHost.fs" />
+  </ItemGroup>
+</Project>

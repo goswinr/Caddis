@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Caddis.Core/Caddis.Core.fsproj" />
+  <Project Path="Caddis.Rhino/Caddis.Rhino.fsproj" />
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Caddis.Core.Tests/Caddis.Core.Tests.fsproj" />
+  </Folder>
+</Solution>

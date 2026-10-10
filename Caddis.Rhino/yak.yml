@@ -1,0 +1,17 @@
+name: Caddis
+version: 0.0.0 # Overridden with the CHANGELOG.md version by yak build.
+url: "https://github.com/goswinr/Caddis"
+icon: logo.png
+authors:
+  - Goswin Rothenthal
+description: >
+  Caddis hosts a persistent F# Interactive session inside Rhino, controlled
+  through HTTP and MCP for AI agents, remote script execution and automation.
+  Requires Rhino 8.19 or later running on .NET 8, on Windows or Mac.
+keywords:
+  - rhinoscripting
+  - fsharp
+  - mcp
+  - automation
+
+# https://developer.rhino3d.com/guides/yak/the-package-manifest/

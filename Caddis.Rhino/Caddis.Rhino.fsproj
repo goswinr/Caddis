@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Rhino 8 on .NET 8, Windows and Mac. Rhino 8 on .NET Framework can't load it. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <TargetExt>.rhp</TargetExt>
+    <RootNamespace>Caddis.Rhino</RootNamespace>
+    <AssemblyName>Caddis.Rhino</AssemblyName>
+    <AssemblyTitle>Caddis</AssemblyTitle>
+    <!-- Yak compares this with the package version; keep the git hash out of it. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Description>An F# interactive host for Rhino, controlled via HTTP and MCP.</Description>
+    <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the .rhp -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Rhino provides RhinoCommon, Eto and Rhino.UI at runtime -->
+    <PackageReference Include="RhinoCommon" Version="8.19.25132.1001" PrivateAssets="all" ExcludeAssets="runtime" />
+    <!-- a dependency of RhinoCommon, provided by .NET (Windows) or Rhino (Mac) at runtime -->
+    <PackageReference Include="System.Drawing.Common" Version="7.0.0" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="FSharp.Core" Version="8.0.403" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="../Docs/img/favicon.ico" Link="Resources/Caddis.ico" LogicalName="Caddis.Rhino.Resources.Caddis.ico" />
+    <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.Rhino.Resources.Caddis.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="RhinoHost.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Panel.fs" />
+    <Compile Include="PlugIn.fs" />
+    <Compile Include="Commands.fs" />
+  </ItemGroup>
+
+  <Target Name="WriteChangelogVersion" AfterTargets="AfterBuild" DependsOnTargets="SetVersionFromChangelog">
+    <Error Condition="'@(CurrentReleaseChangelog)' == ''" Text="CHANGELOG.md must contain a versioned release for Yak packaging." />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/bin/ChangelogVersion.txt" Lines="@(CurrentReleaseChangelog)" Overwrite="true" />
+  </Target>
+</Project>

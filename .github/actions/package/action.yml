@@ -1,0 +1,80 @@
+name: Package
+description: Publish Caddis for .NET 8 and build a cross-platform Rhino 8 Yak package without pushing it.
+
+# Used by build.yml and release.yml. Requires a checkout and the .NET 10 SDK.
+# bin/Release/rh8 contains manifest.yml, logo.png, LICENSE and net8.0/.
+# The net8.0 folder makes Rhino choose the .NET 8 plugin on Windows and Mac.
+# https://developer.rhino3d.com/guides/yak/creating-a-multi-targeted-rhino-plugin-package/
+
+outputs:
+  version:
+    description: Version of the latest release in CHANGELOG.md
+    value: ${{ steps.pack.outputs.version }}
+  package-path:
+    description: Path to the built .yak file, relative to the repository root
+    value: ${{ steps.pack.outputs.package-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Publish net8.0
+      # Rhino provides the runtime. Publish includes Caddis.Core and the F# dependencies.
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Rhino/Caddis.Rhino.fsproj
+        --configuration Release --framework net8.0 --self-contained false
+        --output bin/Release/rh8/net8.0
+
+    - name: Copy package metadata
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Copy-Item -LiteralPath 'Caddis.Rhino/yak.yml' -Destination 'bin/Release/rh8/manifest.yml'
+        Copy-Item -LiteralPath 'Docs/img/logo128.png' -Destination 'bin/Release/rh8/logo.png'
+        Copy-Item -LiteralPath 'LICENSE' -Destination 'bin/Release/rh8/LICENSE'
+
+    - name: Download Yak
+      # Use the same version and hash as Fesh.Rhino. Update both values together.
+      # https://developer.rhino3d.com/guides/yak/yak-cli-reference/#downloads
+      shell: pwsh
+      env:
+        YAK_VERSION: '0.19.1'
+        YAK_SHA256: '656221A1E887A702191B9811A477517D02B5F663BE2CC6528F5E0C815DA37D12'
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Invoke-WebRequest `
+          -Uri "https://files.mcneel.com/yak/tools/$env:YAK_VERSION/win-x64/yak.exe" `
+          -OutFile 'bin/yak.exe'
+
+        $hash = (Get-FileHash -LiteralPath 'bin/yak.exe' -Algorithm SHA256).Hash
+        if ($hash -ne $env:YAK_SHA256) {
+          throw "Downloaded yak.exe $env:YAK_VERSION has an unexpected SHA256 hash: $hash"
+        }
+
+    - name: Build Yak
+      id: pack
+      shell: pwsh
+      working-directory: bin/Release/rh8
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $version = (Get-Content -LiteralPath '../../../Caddis.Rhino/bin/ChangelogVersion.txt' -Raw).Trim()
+        if ($version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Expected a stable semantic version from CHANGELOG.md, found '$version'."
+        }
+
+        ../../yak.exe build --platform any --version $version
+        if ($LASTEXITCODE -ne 0) {
+          throw "yak build failed with exit code $LASTEXITCODE"
+        }
+
+        $yakFiles = @(Get-ChildItem -LiteralPath . -Filter '*.yak' -File)
+        $expectedName = "caddis-$version-rh8_19-any.yak"
+        if ($yakFiles.Count -ne 1 -or $yakFiles[0].Name -cne $expectedName) {
+          throw "Expected exactly one package named $expectedName, found: $($yakFiles.Name -join ', ')"
+        }
+
+        # Keep RhinoCommon's 8.19 minimum; Caddis has no .NET Framework fallback.
+        Move-Item -LiteralPath $yakFiles[0].FullName -Destination "../$expectedName" -Force
+        "version=$version" >> $env:GITHUB_OUTPUT
+        "package-path=bin/Release/$expectedName" >> $env:GITHUB_OUTPUT
+        Write-Host "Built $expectedName"

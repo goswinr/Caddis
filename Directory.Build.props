@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <!-- Version comes from the latest release in CHANGELOG.md, as in Fesh.Rhino. -->
+    <ChangelogFile>$(MSBuildThisFileDirectory)CHANGELOG.md</ChangelogFile>
+    <Authors>Goswin Rothenthal</Authors>
+    <Copyright>Goswin Rothenthal 2026</Copyright>
+
+    <!-- FSharp.Core is referenced explicitly in each project.
+    It must match the version that FSharp.Compiler.Service pins, see Caddis.Core.fsproj -->
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+
+    <NeutralLanguage>en</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages> <!-- only the English resources of FCS -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <OtherFlags>$(OtherFlags) --warnon:1182</OtherFlags> <!-- 1182: warn on unused variables -->
+    <NoWarn>$(NoWarn);FS3370</NoWarn> <!-- 3370: allow arr.[i] syntax -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ionide.KeepAChangelog.Tasks" Version="0.3.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

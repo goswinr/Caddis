@@ -1,0 +1,67 @@
+name: Publish Yak Package
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-yak-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.x
+            10.x
+
+      - name: Build
+        run: dotnet build Caddis.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test Caddis.slnx --configuration Release --no-build
+
+      - name: Publish and build Yak package
+        id: package
+        uses: ./.github/actions/package
+
+      - name: Check git tag matches CHANGELOG.md
+        shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          CHANGELOG_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if ($env:TAG_NAME -cne $env:CHANGELOG_VERSION) {
+            throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION) must match."
+          }
+
+      - name: Push new version to Yak
+        shell: pwsh
+        env:
+          PACKAGE_PATH: ${{ steps.package.outputs.package-path }}
+          # Generate this token with yak.exe login --ci, then add it as a repository secret.
+          YAK_TOKEN: ${{ secrets.YAK_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:YAK_TOKEN)) {
+            throw 'The repository secret YAK_TOKEN is required to publish to Yak.'
+          }
+          bin/yak.exe push $env:PACKAGE_PATH
+          if ($LASTEXITCODE -ne 0) {
+            throw "yak push failed with exit code $LASTEXITCODE"
+          }
