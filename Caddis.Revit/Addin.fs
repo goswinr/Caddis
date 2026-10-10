@@ -12,6 +12,7 @@ module internal Ribbon =
 
     let mutable private startStop: PushButton = null
     let mutable private mode: PushButton = null
+    let mutable private cancel: PushButton = null
     /// Every button with its current icon, to draw them again when Revit's theme changes.
     let private icons = Collections.Generic.Dictionary<string, PushButton * RibbonIcons.Icon>()
 
@@ -25,7 +26,7 @@ module internal Ribbon =
         for b, icon in Seq.toList icons.Values do
             setIcon b icon
 
-    /// Synchronizes button labels and checkboxes. Called on the UI thread from the panel and Revit's Idling event.
+    /// Synchronizes button labels, icons, availability and checkboxes. Called on the UI thread from the panel and Revit's Idling event.
     let update () =
         let set (b: PushButton) (text: string) icon =
             if not (isNull b) && b.ItemText <> text then
@@ -37,6 +38,14 @@ module internal Ribbon =
             set mode (if s.Service.Fsi.Mode = UiThread then "Mode: on UI thread" else "Mode: on background thread") RibbonIcons.mode
             RibbonSettings.update ()
         | None -> ()
+        let canCancel =
+            App.server
+            |> Option.bind (fun s -> s.Service.Fsi.Current)
+            |> Option.exists (fun r -> r.Mode = Background && not r.IsFinished && not r.CancelRequested)
+        if not (isNull cancel) then
+            let icon = if canCancel then RibbonIcons.cancel else RibbonIcons.cancelUnavailable
+            if snd icons[cancel.Name] <> icon then setIcon cancel icon
+            if cancel.Enabled <> canCancel then cancel.Enabled <- canCancel
 
     let create (uiApp: UIControlledApplication) =
         let tab = "Caddis"
@@ -66,8 +75,9 @@ module internal Ribbon =
                 RibbonIcons.mode
         add session "Reset" "Reset F# Session" "ResetCommand" "Starts a new F# session, all values defined so far are lost." RibbonIcons.reset
         |> ignore
-        add session "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode." RibbonIcons.cancel
-        |> ignore
+        cancel <-
+            add session "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode." RibbonIcons.cancelUnavailable
+        cancel.Enabled <- false
         let status = uiApp.CreateRibbonPanel(tab, "Status")
         add status "Panel" "Caddis Details Panel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code." RibbonIcons.panel
         |> ignore

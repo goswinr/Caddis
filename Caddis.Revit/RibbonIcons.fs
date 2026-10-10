@@ -17,6 +17,7 @@ module internal RibbonIcons =
         | ThreadMode
         | ResetSession
         | CancelRun
+        | CancelRunUnavailable
         | Panel
         | Info
 
@@ -27,6 +28,7 @@ module internal RibbonIcons =
     let mode = ThreadMode
     let reset = ResetSession
     let cancel = CancelRun
+    let cancelUnavailable = CancelRunUnavailable
     let panel = Panel
     let info = Info
 
@@ -71,6 +73,21 @@ module internal RibbonIcons =
 
     let private lightPalette = palette false
     let private darkPalette = palette true
+
+    let private grayscalePalette (p: Palette) =
+        let gray (source: Brush) =
+            let c = (source :?> SolidColorBrush).Color
+            let value = byte (Math.Round(0.299 * float c.R + 0.587 * float c.G + 0.114 * float c.B))
+            let b = SolidColorBrush(Color.FromArgb(c.A, value, value, value))
+            b.Freeze()
+            b :> Brush
+        { Face = gray p.Face; Top = gray p.Top; Side = gray p.Side; Edge = gray p.Edge
+          Ink = gray p.Ink; Blue = gray p.Blue; BlueShade = gray p.BlueShade
+          Green = gray p.Green; GreenShade = gray p.GreenShade
+          Red = gray p.Red; RedShade = gray p.RedShade; Gold = gray p.Gold; GoldShade = gray p.GoldShade }
+
+    let private lightGrayscalePalette = grayscalePalette lightPalette
+    let private darkGrayscalePalette = grayscalePalette darkPalette
 
     // All shapes use a 32-unit canvas. Major edges land on even coordinates so they
     // remain crisp at 16 px; the small version also omits secondary surface details.
@@ -153,7 +170,8 @@ module internal RibbonIcons =
             // Extend both arcs into the arrowhead so they meet its long diagonal edge.
             path p.GreenShade "F1 M30,23 A8,8 0 1 1 26.8,16.6 L24.4,19.8 A4,4 0 1 0 26,23 Z M30,11 V21 H20 Z"
             path p.Green "F1 M30,22 A8,8 0 1 1 26.8,15.6 L24.4,18.8 A4,4 0 1 0 26,22 Z M30,10 V20 H20 Z"
-        | CancelRun ->
+        | CancelRun
+        | CancelRunUnavailable ->
             sheet 4.0 2.0
             code ()
             path p.RedShade "M18,17 L23,22 L28,17 L30,19 L25,24 L30,29 L28,31 L23,26 L18,31 L16,29 L21,24 L16,19 Z"
@@ -186,7 +204,11 @@ module internal RibbonIcons =
         use dc = visual.RenderOpen()
         let scale = float size / 32.0
         dc.PushTransform(ScaleTransform(scale, scale))
-        let colors = if UIThemeManager.CurrentTheme = UITheme.Dark then darkPalette else lightPalette
+        let dark = UIThemeManager.CurrentTheme = UITheme.Dark
+        let colors =
+            if icon = CancelRunUnavailable then
+                if dark then darkGrayscalePalette else lightGrayscalePalette
+            elif dark then darkPalette else lightPalette
         artwork dc colors (size <= 16) icon
         dc.Pop()
         dc.Close()
