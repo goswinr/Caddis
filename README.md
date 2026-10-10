@@ -12,104 +12,92 @@
 [![license](https://img.shields.io/github/license/goswinr/Caddis)](LICENSE)
 ![code size](https://img.shields.io/github/languages/code-size/goswinr/Caddis.svg)
 
-An F# interactive host for Rhino,
-runs F# scripts within the Rhino process.
-Controlled via http, for AI agents and remote script execution and automation within Rhino.
-There is also an add-in for Revit 2024 to 2027, see [Revit](#revit).
+An F# interactive host for Rhino and Revit.
+Caddis runs F# scripts inside the Rhino or Revit process and is controlled via HTTP:
+AI agents like Claude Code use its [MCP](https://modelcontextprotocol.io) endpoint, curl and your own scripts its REST endpoints.
+For AI agents, remote script execution and automation.
 
-> Early development. Tested in Rhino 8.35 on Windows, not yet on Mac, and in Revit 2026.5.
+> Early development. Tested in Rhino 8.35 and Revit 2026.5 on Windows, not yet on Mac.
+
+| App | Runs in | Install | Read more |
+|---|---|---|---|
+| Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | Rhino's `PackageManager`, search for `Caddis` (after the first Yak release) | [Caddis for Rhino](Caddis.Rhino/README.md) |
+| Revit | Revit 2024 to 2027 on Windows | `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
 
 ## What it does
-- Hosts one persistent F# Interactive session inside Rhino 8 (.NET 8 on Windows and Mac, or .NET Framework 4.8 on Windows).
+- Hosts one persistent F# Interactive session inside the app.
   Values, functions and types defined in one run stay available in the next.
-- Serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`, so AI agents like Claude Code can run F# in Rhino,
-  and plain REST endpoints for curl and scripts.
-- Returns results: status, the value of the last expression, stdout, what was printed to the Rhino command line (e.g. by `RhinoApp.WriteLine` or commands run via `RhinoApp.RunScript`), stderr, compiler diagnostics, exceptions with the script line, and files.
+- Serves an MCP endpoint at `/mcp`, so AI agents can run F# in the app, and plain REST endpoints for curl and scripts.
+- Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, notes of the app, e.g. Revit's warnings, and files.
   Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
-- Runs scripts either on the Rhino UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
-- Runs Rhino commands like typed at the command line, e.g. `-_Line 0,0,0 10,0,0`, and returns what they printed and the objects they created.
-- Wraps every run in one Rhino undo record, captures viewports as PNG, and exports to any file format Rhino can write, except PDF.
+- Runs scripts either on the app's UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
+- Wraps every run in one undo step, captures viewports as PNG, and exports to the file formats of the app.
+- Looks up the signatures and docs of the loaded APIs, e.g. RhinoCommon or the Revit API, so agents don't have to guess API names and overloads.
+- Shows the server state, the recent runs, and the output and code of the selected run in a panel docked in the app, in the app's light or dark theme.
+- In Rhino it also runs Rhino commands like typed at the command line, in Revit it reports Revit's blocking dialogs and presses their buttons.
 
-## Installation
-
-After the first Yak release, install via Rhino's `PackageManager` command and search for `Caddis`.
-The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
-On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`). There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
-
-### Manual installation
-
-Build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
-then drag `Caddis.Rhino/bin/Debug/net8.0/Caddis.Rhino.rhp` into Rhino 8.
-Rhino on .NET Framework loads the build in `bin/Debug/net48` next to it, Rhino 9 Beta the one in `bin/Debug/net10.0`.
-The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like Fesh.Rhino for Rhino 9, and has the panel.
-
-Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
-both use the same versions of FSharp.Core and FSharp.Compiler.Service.
-
-## Usage in Rhino
-Run the command `Caddis`. Its options:
-- `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port.
-- `Panel` opens a panel with the server state and settings, the recent runs, and the output and code of the selected run.
-  It follows Rhino's light, dark or custom theme colors. The code is read-only, with F# syntax highlighting, line numbers and search (Ctrl+F),
-  formatted with Fantomas unless the `Format` button is off.
-- `CopyMcpCommand` copies the command to add Caddis to Claude Code, including the token.
-- `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.
-- `Cancel` the current run, `Reset` the F# session.
-- `AutoStart` starts the server when Rhino starts.
-- `EchoOutput` also writes the output of runs to the Rhino command line.
-- `CancelWaitingCommands` (off by default, also a checkbox in the panel) cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`,
-  when they wait 3 s for input that the macro doesn't give. The script goes on, the result has a note with the prompt.
-  Without it such a command waits until someone gives the input in Rhino. In background mode only commands started via `Caddis.Script.OnUi` are watched,
-  so commands you type in Rhino while a script runs are never cancelled.
-- `ListenOnLan` makes the server reachable from other machines.
-- `NewToken` replaces the token.
-
-While a run is in progress, all viewports have a dark yellow border: in UI-thread mode it shows why Rhino is blocked,
-in background mode that a script may change the document while you work. Viewport captures don't include it.
-
-See [Caddis for Rhino](Caddis.Rhino/README.md) for screenshots of the panel in both themes and of the border.
-
-It is scriptable, e.g. `-Caddis Start`.
+What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md) and [Caddis for Revit](Caddis.Revit/README.md).
 
 ## Connect an AI agent
-In Rhino run `Caddis` then `CopyMcpCommand`, and paste the command in a terminal. It looks like:
+Start the server in the app, then copy the command that adds Caddis to Claude Code:
+in Rhino with the command `Caddis` and its option `CopyMcpCommand`, in Revit with the button `Copy MCP` on the `Caddis` ribbon tab.
+The panel has a `Copy MCP command` button too. Paste the command in a terminal, it looks like:
 ```
 claude mcp add --transport http --scope user caddis http://127.0.0.1:7810/mcp --header "Authorization: Bearer <token>"
 ```
 
 `--scope user` makes Caddis available across your Claude Code projects.
 
-The MCP tools are `caddis_eval`, `caddis_command`, `caddis_get_run`, `caddis_check`, `caddis_describe`, `caddis_status`, `caddis_cancel`, `caddis_reset`,
-`caddis_set_mode`, `caddis_undo`, `caddis_capture_viewport` and `caddis_export`, in Revit also `caddis_dialog` and not `caddis_command`.
+Rhino and Revit have their own port and MCP name, so that both can run and stay registered in Claude Code at the same time:
 
-`caddis_describe` looks up types and members of the loaded assemblies, e.g. RhinoCommon, and returns their signatures in F# syntax
-with the summaries from their XML doc files, so agents don't have to guess API names and overloads:
+| App | Default port | MCP name |
+|---|---|---|
+| Rhino | 7810 | `caddis` |
+| Revit | 7820 | `caddis-revit` |
+
+If the port is taken, the next free one is used. The token is shared by both apps.
+`New token` in either app replaces it for every running instance immediately; update all clients with the new token.
+
+## MCP tools
+
+| Tool | |
+|---|---|
+| `caddis_eval` | Run F# code or a script file in the session |
+| `caddis_get_run` | A run, waiting for it if it is still running |
+| `caddis_check` | Type-check F# code against the current session without running it |
+| `caddis_describe` | Signatures and docs of namespaces, types and members of the loaded assemblies |
+| `caddis_status` | State of the server, the F# session and the document |
+| `caddis_cancel` | Cancel the current run, in background mode |
+| `caddis_reset` | Start a new F# session |
+| `caddis_set_mode` | Run scripts on the UI thread or in the background |
+| `caddis_undo` | Undo a run in the app |
+| `caddis_capture_viewport` | PNG of a viewport |
+| `caddis_export` | Export to a file |
+| `caddis_command` | Rhino only: run Rhino command macros, see [Rhino commands](Caddis.Rhino/README.md#rhino-commands) |
+| `caddis_dialog` | Revit only: list Revit's open dialogs or press one of their buttons, see [Differences to Rhino](Caddis.Revit/README.md#differences-to-rhino) |
+
+`caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
+`caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
+Cancellation skips queued `Script.OnUi` callbacks. A callback already executing in the app must finish first;
+the run stays busy until it returns, then cancellation stops the script before it continues.
+
+`caddis_check` type-checks against the current session, so definitions from earlier runs are known,
+but not the definitions in files loaded with `#load`.
+
+`caddis_describe` looks up types and members of the loaded assemblies and returns their signatures in F# syntax
+with the summaries from their XML doc files:
 a namespace (`Rhino.Geometry`) lists its types, a type (`Brep`) its members, a member (`Brep.CreateFromBox`) all overloads with docs.
 `search` finds names, e.g. `fillet`. Misspelled names get suggestions.
 F# modules are found only by their compiled names, e.g. `Microsoft.FSharp.Collections.ListModule.Map` for `List.map`.
 
-`caddis_command` runs Rhino command macros, as typed at the command line or in a button macro, e.g. `["-_Line 0,0,0 10,0,0", "_Zoom _All _Extents"]`,
-one after the other until one does not succeed. It always runs on the UI thread.
-It returns the result of each command, the ids of the objects they created, changed and deleted, the selection if it changed,
-and the text they printed to the command line, e.g. of `_What`, `_Length` or `_Area`.
-`select` selects objects by id before the first command. A command that waits for input that its macro doesn't give is cancelled
-after `inputTimeoutMs` (default 3 s), the result shows its prompt; 0 waits for the person in Rhino, e.g. for `_Pause`.
-A leading `!` is left out. Each command that changes the document is one undo step, `caddis_undo` undoes all of a call.
-A command that opens a dialog blocks Rhino until someone closes it, so use the scripted `-` version of a command.
-
-`caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
-`caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
-Cancellation skips queued `Script.OnUi` callbacks. A callback already executing in the host must finish first;
-the run stays busy until it returns, then cancellation stops the script before it continues.
-`caddis_check` type-checks against the current session, so definitions from earlier runs are known,
-but not the definitions in files loaded with `#load`.
+`caddis_export` is a run like `caddis_eval`: it returns `running` after `waitMs`, and `caddis_get_run` returns its files.
+An explicit `objectIds` array must be nonempty and contain only valid ids of the app.
 
 MCP results are text written for the model, without `structuredContent`:
 Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
 
 ## REST
 Every request needs the header `Authorization: Bearer <token>`.
-The token is in `%AppData%\Caddis\token.txt` on Windows and `~/.config/Caddis/token.txt` on Mac.
 ```
 curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
 ```
@@ -118,151 +106,60 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\"
 |---|---|
 | `GET /status` | State of the server and the F# session |
 | `POST /eval` | `{code?, path?, waitMs?, timeoutMs?, recordUndo?}`, returns the run, status 202 if still running after `waitMs`. Without `waitMs` it waits until the run finished |
-| `POST /command` | `{commands, select?, inputTimeoutMs?, waitMs?}`, runs Rhino commands, returns the run like `/eval` |
 | `GET /runs`, `GET /runs/{id}?waitMs=` | Recent runs, one run, optionally waiting for it |
 | `POST /cancel` | `{runId?}`, background mode only |
 | `POST /reset` | New F# session |
 | `POST /mode` | `{mode: "ui" \| "background"}` |
 | `POST /check` | `{code?, path?}`, type-check against the current session without running |
 | `GET /describe?name=&filter=&search=` | Signatures and docs of a namespace, type or member, or a search of names |
-| `POST /undo` | `{runId?}`, undo a run in Rhino |
+| `POST /undo` | `{runId?}`, undo a run in the app |
 | `GET /viewport?view=&width=&height=&displayMode=` | PNG of a viewport |
 | `POST /export` | `{format, name?, objects?: "all" \| "selected", objectIds?, waitMs?}`, an export is a run like `/eval` |
 | `GET /files/{id}/{name}` | A file of a run, capture or export |
+| `POST /command` | Rhino only: `{commands, select?, inputTimeoutMs?, waitMs?}`, runs Rhino commands, returns the run like `/eval` |
+| `GET /dialogs`, `POST /dialog` | Revit only: Revit's open dialogs, `{button, dialog?}` presses a button of one |
+| `GET /help` | A short description of all endpoints |
 | `POST /mcp` | MCP endpoint |
 
-Each Rhino instance writes its port to `%AppData%\Caddis\instances\<process id>.json`.
-
 ## In scripts
-RhinoCommon and System.Drawing.Common are referenced in every session.
-Other assemblies of Rhino can be referenced by file name, e.g. `#r "Eto.dll"` or `#r "Rhino.UI.dll"`,
-and NuGet packages via `#r "nuget: Rhino.Scripting"`, which needs the .NET SDK. Caddis adds:
+Caddis adds to every session:
 ```fsharp
 Caddis.Script.OutDir   // a folder for files of this run, they are returned with the result
 Caddis.Script.RunId    // e.g. "r12"
-Caddis.Script.OnUi(fun () -> ...)  // run code on the Rhino UI thread, needed in background mode for UI calls
+Caddis.Script.OnUi(fun () -> ...)  // run code on the app's UI thread, needed in background mode for calls into the app
 ```
+Each app references its API in every session and adds its own helpers,
+see [scripts in Rhino](Caddis.Rhino/README.md#in-scripts) and [scripts in Revit](Caddis.Revit/README.md#in-scripts).
 
-Scripts can check these conditional compilation symbols with `#if`, e.g. to run in several hosts or runtimes:
+Scripts can check these conditional compilation symbols with `#if`, e.g. to run in several apps or runtimes:
 
 | Symbol | Defined |
 |---|---|
 | `CADDIS` | in every Caddis session |
-| `RHINO`, `REVIT` | in the host app of that name |
-| `NETFRAMEWORK` | in Rhino on .NET Framework |
+| `RHINO`, `REVIT` | in the app of that name |
+| `NETFRAMEWORK` | on .NET Framework, in Rhino 8 on Windows and Revit 2024 |
 | `NET`, `NETCOREAPP` | on .NET 8 and later |
 | `INTERACTIVE` | by F# Interactive itself, in every session |
 
-`extraFsiArgs` in `%AppData%\Caddis\settings.json` (`~/.config/Caddis/settings.json` on Mac) can add more, e.g. `"--define:MYSYMBOL"`.
+`extraFsiArgs` in the settings file of the app can add more, e.g. `"--define:MYSYMBOL"`.
 
-## Revit
-> Tested in Revit 2026.5 on Windows.
+## Files
+Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis` on Mac:
 
-`Caddis.Revit` is an add-in for Revit 2024 to 2027. It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino,
-except `caddis_command`: Revit has no command line. It adds `caddis_dialog` for Revit's dialogs.
-
-### Installation
-Download and run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest).
-It needs no admin rights. It installs Caddis in `%LocalAppData%\Caddis.Revit` and registers it with every installed Revit from 2024 on,
-with a `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>`. For a Revit installed later, start `%LocalAppData%\Caddis.Revit\current\Caddis.Revit.Bootstrapper.exe` again.
-When Revit starts, Caddis checks for a newer release and offers to download it. It is installed when the last Revit has closed.
-Uninstall it in Windows' 'Installed apps'.
-
-There is a build of Caddis for each .NET that Revit runs on:
-
-| Revit | .NET | Build | FSharp.Compiler.Service, FSharp.Core |
-|---|---|---|---|
-| 2024 | .NET Framework 4.8 | `net48`, the panel with Avalonia 11 | 43.12.401, 10.1.401 |
-| 2025 and 2026, up to their .4 updates | .NET 8 | `net8.0` | 43.8.403, 8.0.403 |
-| 2025 and 2026 from their .5 updates on, 2027 | .NET 10 | `net10.0` | 43.12.401, 10.1.401 |
-
-Revit 2024 loads the net48 build. Revit 2025 and later load `Caddis.Revit.Loader`, which loads the net8.0 or the net10.0 build, for the .NET that Revit runs on.
-So Caddis keeps working when Revit is updated from .NET 8 to .NET 10.
-The builds reference the Revit API of the oldest Revit they run in, from the package [Revit_All_Main_Versions_API_x64](https://www.nuget.org/packages/Revit_All_Main_Versions_API_x64):
-2024.0 for net48, 2025.0 for net8.0 and net10.0. Revit on .NET fails to load an add-in that references a newer RevitAPI than its own, e.g. Revit 2025.5 has RevitAPI 25.5.
-Exporting to STEP needs Revit 2025 or later.
-
-The versions of FSharp.Compiler.Service and FSharp.Core are those of the build of [Fesh](https://github.com/goswinr/Fesh) for the same .NET.
-Revit loads only one version of them, so Caddis.Revit can run next to a Fesh.Revit only if it uses the same versions.
-
-### Installation for development
-```
-dotnet build Caddis.Revit -c Release
-./Caddis.Revit/install-dev.ps1 -Year 2026 -Configuration Release
-```
-The script writes `Caddis.addin` to `%AppData%\Autodesk\Revit\Addins\2026`, pointing at the build output for the .NET of that Revit:
-net48 for Revit 2024, otherwise as named in `RevitAPI.runtimeconfig.json` in the folder of Revit. `-Framework` picks a build.
-It replaces the registration of the installer, start `Caddis.Revit.Bootstrapper.exe` to restore it.
-On its first start, and after every rebuild, Revit asks whether to load the unsigned add-in, choose 'Always Load'.
-Revit locks the dll while it runs, close Revit before building again. `install-dev.ps1 -Uninstall` removes the add-in.
-
-### Usage in Revit
-The `Caddis` ribbon tab has the panels `Server` with `Start` / `Stop`, `Copy MCP` and `New token`, `F# Session` with `Mode`, `Reset F#` and `Cancel run`,
-`Status` with `Panel` and `Info`, and `Settings` with native checkboxes for `Start with Revit` and `Listen on the network (LAN)`, synchronized with the panel even when it is hidden.
-Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest ones.
-
-`Panel` shows or hides the optional Caddis pane, like the panel in Rhino: the server state and settings,
-the recent runs, and the output and code of the selected run. It docks next to the Project Browser,
-can be moved like any Revit pane, and Revit remembers where it is and whether it is shown.
-Its buttons show their messages in the pane instead of in dialogs.
-The pane follows Revit's light or dark UI theme immediately, including dropdowns, run selection,
-output, scrollbars and keyboard focus. Rhino and Revit share the Avalonia panel in `Caddis.UI`,
-with themes scoped to the panel. Revit hosts it inside its WPF docking container.
-The code viewer includes F# highlighting, line numbers, Ctrl+F search and optional Fantomas formatting.
-See the [Revit panel documentation](Caddis.Revit/README.md#dockable-panel).
-
-Revit has its own settings file `settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
-so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time. The token is shared.
-`New token` in either app replaces it for every running instance immediately; update all clients with the new token.
-```
-claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp --header "Authorization: Bearer <token>"
-```
-
-### Differences to Rhino
-- The Revit API can only be used in Revit's API context, being on the UI thread is not enough.
-  Runs on the `ui` thread (the default) run inside an external event, which Revit runs only while no command, edit mode or modal dialog is active.
-  Until then a run stays `running` and its result says it has not started yet.
-- A Revit dialog, e.g. 'Project Not Saved Recently' or 'Unresolved References', blocks every call until it is closed.
-  `caddis_status` and the results of runs still running name an open dialog with its text and buttons.
-  `caddis_dialog` lists it or presses one of its buttons (REST: `GET /dialogs`, `POST /dialog`).
-- Each run on the `ui` thread is wrapped in a transaction group. Scripts open their own transactions,
-  or use `Caddis.Revit.Script.Transact("name", fun doc -> ...)`. If the run succeeds, its transactions are one undo step `Caddis r12`, which `caddis_undo` reverts.
-  If it fails, Caddis rolls back all its changes.
-  A failure to finalize the transaction group is also a failed run (`runtimeError`, MCP `isError: true`).
-- Revit's warnings about the changes of a run, e.g. overlapping walls, are removed and listed in the notes of the result.
-  An error rolls back its transaction instead of showing Revit's dialog.
-- The result lists the ids of the elements a run created and deleted. Changed elements are counted per category,
-  because Revit reports many it updates itself, e.g. schedules; their ids are saved to a file.
-- In `background` mode every Revit API call must be inside `Caddis.Revit.Script.OnUi(fun () -> ...)` or `Script.Transact`.
-  Each transaction is an undo step of its own, and a failed run is not rolled back.
-- `caddis_undo` posts Revit's Undo command, which runs right after the call.
-- `caddis_capture_viewport` uses `Document.ExportImage`: it shows the whole view or its crop region, not the zoom of the window.
-  `displayMode` is a display style, e.g. `HiddenLine`, `Shading` or `Realistic`.
-- `caddis_export` writes dwg, dxf, dgn, pdf, dwf and dwfx from the active view, fbx, obj, stl, step and sat from a 3D view,
-  and ifc and nwc from the whole model. With `selected` or `objectIds`, element ids as strings such as `["316577"]`, Caddis isolates those elements in the view during the export.
-  An explicit `objectIds` array must be nonempty and contain only valid id strings; malformed arrays are rejected in both apps.
-  Exports of a large model take a while, e.g. 47 s for a 159 MB ifc of the Snowdon Towers sample. Like `caddis_eval` an export is a run:
-  it returns `running` after `waitMs`, and `caddis_get_run` returns its files.
-
-In scripts RevitAPI, RevitAPIUI and `Caddis.Revit.dll` are referenced:
-```fsharp
-Caddis.Revit.Script.Doc      // the active Document
-Caddis.Revit.Script.UiDoc    // the active UIDocument, e.g. for the selection
-Caddis.Revit.Script.UiApp    // the UIApplication
-Caddis.Revit.Script.Transact("name", fun doc -> ...)  // a committed transaction, also in background mode
-Caddis.Revit.Script.OnUi(fun () -> ...)  // in Revit's API context, needed in background mode
-```
-`Caddis.Revit.Script` also has `OutDir` and `RunId` of `Caddis.Script`.
-
-In Revit on .NET, scripts can't use WPF types, e.g. `System.Windows.Window`: F# Interactive type-checks against the .NET SDK's reference assemblies,
-whose `WindowsBase.dll` is an empty stub that takes precedence over the real one, also with `#r`. Reflection works.
+| File | |
+|---|---|
+| `token.txt` | The token, shared by Rhino and Revit |
+| `settings.json` | The settings of Caddis in Rhino |
+| `settings-revit.json` | The settings of Caddis in Revit |
+| `instances\<process id>.json` | The port of each running server |
+| `revit.log` | Caddis' own messages in Revit |
 
 ## Security
 Anyone who can send requests to Caddis can run any code on your computer.
 - Every request needs the token.
 - By default the server only listens on localhost.
 - Requests from web pages, with an `Origin` header, are rejected.
-- With `ListenOnLan` the token is sent unencrypted over the network.
+- When it listens on the network (LAN), the token is sent unencrypted over the network.
   On Windows this needs a one-time `netsh http add urlacl ...` as administrator, Caddis prints the exact command.
 
 ## Development
@@ -270,50 +167,31 @@ Anyone who can send requests to Caddis can run any code on your computer.
 dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
-`Caddis.Core` has no Rhino or Revit dependency and is tested with a headless host. `Caddis.Rhino` is the Rhino plugin, `Caddis.Revit` the Revit add-in.
-In Revit 2025 and later `Caddis.Revit.Loader` loads the build of `Caddis.Revit` for Revit's .NET. `Caddis.Revit.Bootstrapper` is the app of the Revit installer, it registers the add-in.
-`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` with Avalonia 12. It and Core also target `net48`, for Rhino and Revit 2024 on .NET Framework, the panel with Avalonia 11.
-Each plugin supplies actions, theme colors and its docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
-`Tests/Caddis.UI.Tests` checks the shared view with Avalonia's headless platform on both runtimes.
+
+| Project | |
+|---|---|
+| `Caddis.Core` | The F# session, HTTP server, REST and MCP, without a Rhino or Revit dependency, tested with a headless host |
+| `Caddis.UI` | The shared Avalonia panel, styles, output formatting and code viewer |
+| `Caddis.Rhino` | The Rhino plugin, see [Caddis for Rhino](Caddis.Rhino/README.md) |
+| `Caddis.Revit` | The Revit add-in, see [Caddis for Revit](Caddis.Revit/README.md) |
+| `Caddis.Revit.Loader` | Loads the build of `Caddis.Revit` for the .NET of Revit 2025 and later |
+| `Caddis.Revit.Bootstrapper` | The app of the Revit installer, it registers the add-in and installs updates |
+| `Tests` | Tests of Core, and of the shared panel with Avalonia's headless platform on both runtimes |
+
+`Caddis.Core` and `Caddis.UI` target `net8.0;net10.0` with Avalonia 12, and `net48` for Rhino and Revit 2024 on .NET Framework, with Avalonia 11.
+Each app supplies the panel's actions, theme colors and docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
 See [plan.md](plan.md) for the design and the open tasks.
 
-### Yak releases
-
-Build and release CI use the same [packaging action](.github/actions/package/action.yml).
-It publishes the plugin and its dependencies into `bin/Release/rh8/net8.0`, `bin/Release/rh8/net48` and `bin/Release/rh9/net10.0`,
-adds the Yak manifest, logo and license to `rh8` and `rh9`, then builds two distributions of the same version:
-`bin/Release/caddis-<version>-rh8_19-any.yak` for Rhino 8 and `bin/Release/caddis-<version>-rh9_0-any.yak` for Rhino 9.
-The package manager gives each Rhino version only its own distribution.
+### Releases
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
-using `Ionide.KeepAChangelog.Tasks`, as in Fesh.Rhino.
+using `Ionide.KeepAChangelog.Tasks`, as in Fesh.Rhino. To publish a release:
 
-To publish a release:
+1. Add a versioned entry to `CHANGELOG.md`, for example `## [0.1.0] - 2026-10-10`, and commit it.
+2. Push a matching tag, for example `0.1.0` (without a `v` prefix).
 
-1. Generate a Yak CI token with `yak.exe login --ci` and save it as the repository Actions secret `YAK_TOKEN`.
-2. Add a versioned entry to `CHANGELOG.md`, for example `## [0.1.0] - 2026-10-10`, and commit it.
-3. Push a matching tag, for example `0.1.0` (without a `v` prefix).
-
-The [release workflow](.github/workflows/release.yml) builds, tests, packages, checks the tag against the changelog,
-and pushes both packages to Yak. Build CI also creates them on every push and pull request to `main`.
-
-### Revit releases
-
-The same tag starts the [Revit release workflow](.github/workflows/release-revit.yml).
-Its [packaging action](.github/actions/package-revit/action.yml), which build CI runs too, publishes into `bin/publish/revit`
-the app of the installer `Caddis.Revit.Bootstrapper.exe` for .NET Framework 4.8, and the folders `net48`, `net8.0`, `net10.0` and `loader`.
-[Velopack](https://velopack.io/) packs, signs and uploads them as `Caddis.Revit-win-Setup.exe` to the GitHub release of the tag,
-with the notes in [InstallNotes-revit.md](.github/InstallNotes-revit.md), like [Fesh.Revit](https://github.com/goswinr/Fesh.Revit).
-The bootstrapper writes the `.addin` files when Caddis is installed or updated and when it is started, and deletes them when Caddis is uninstalled.
-Caddis in Revit starts it to check for updates when Revit starts, and to install a downloaded one when the last Revit closes.
-So Velopack runs in its own process, not in Revit, where it could conflict with the Velopack of another add-in, e.g. of an older Fesh.Revit.
-
-The workflow signs with Azure Trusted Signing, like Fesh.Revit, see [signing-metadata.json](.github/signing-metadata.json). It needs:
-
-1. A GitHub environment `releaseRevit` in the repository settings.
-2. An Azure app registration with the role 'Trusted Signing Certificate Profile Signer' and a federated credential
-   for the subject `repo:goswinr/Caddis:environment:releaseRevit`.
-3. Its ids as the Actions secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`.
+The tag starts two release workflows, each needs a one-time setup:
+[Yak packages for Rhino](Caddis.Rhino/README.md#yak-releases) and [the Revit installer](Caddis.Revit/README.md#releases).
 
 ## License
 [MIT](LICENSE)
