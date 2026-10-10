@@ -6,6 +6,9 @@ open System.Runtime.InteropServices
 open System.Windows.Input
 open System.Windows.Interop
 open Avalonia
+#if NETFRAMEWORK
+open Avalonia.VisualTree
+#endif
 open Caddis.UI
 
 module private NativePanel =
@@ -72,13 +75,27 @@ type internal AvaloniaHost(content: Avalonia.Controls.Control) =
         if this.Handle = 0n then false
         else
             NativePanel.SetFocus this.Handle |> ignore
+            let last = request.FocusNavigationDirection = FocusNavigationDirection.Last || request.FocusNavigationDirection = FocusNavigationDirection.Previous
+#if NETFRAMEWORK
+            // Avalonia 11's focus manager can't find the first or last focusable element, so take the tab stops in the order of the visual tree.
+            let tabStops =
+                content.GetSelfAndVisualDescendants()
+                |> Seq.choose (function
+                    | :? Avalonia.Input.InputElement as e when
+                        e.Focusable && e.IsEffectivelyVisible && e.IsEffectivelyEnabled && Avalonia.Input.KeyboardNavigation.GetIsTabStop e
+                        ->
+                        Some e
+                    | _ -> None)
+                |> Array.ofSeq
+            match (if last then Array.tryLast tabStops else Array.tryHead tabStops) with
+            | Some target -> target.Focus(Avalonia.Input.NavigationMethod.Tab)
+            | None -> false
+#else
             let manager = Avalonia.Controls.TopLevel.GetTopLevel(content).FocusManager
-            let target =
-                if request.FocusNavigationDirection = FocusNavigationDirection.Last || request.FocusNavigationDirection = FocusNavigationDirection.Previous then
-                    manager.FindLastFocusableElement()
-                else manager.FindFirstFocusableElement()
+            let target = if last then manager.FindLastFocusableElement() else manager.FindFirstFocusableElement()
             if isNull target then false
             else target.Focus(Avalonia.Input.NavigationMethod.Tab)
+#endif
 
     override this.TranslateAcceleratorCore(msg: MSG byref, _modifiers) =
         // Deliver keyboard input to Avalonia before WPF can treat it as a host shortcut.

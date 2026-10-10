@@ -1,7 +1,12 @@
 # Caddis for Revit
 
-An F# interactive host for Revit 2026.5, controlled through HTTP and MCP.
+An F# interactive host for Revit 2024 to 2027, controlled through HTTP and MCP.
 See the [main README](../README.md#revit) for installation and usage.
+
+It builds for each .NET that Revit runs on: `net48` for Revit 2024, `net8.0` for Revit 2025 and 2026 up to their .4 updates,
+`net10.0` for Revit 2025 and 2026 from their .5 updates on and Revit 2027. In Revit 2025 and later the add-in is
+[Caddis.Revit.Loader](../Caddis.Revit.Loader/CaddisLoader.cs), which loads the build for Revit's .NET when Revit starts.
+In Revit 2024 the panel uses Avalonia 11, since Avalonia 12 needs .NET 8.
 
 ## Ribbon
 

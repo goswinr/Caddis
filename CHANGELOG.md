@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs have `notes` from the host, shown in MCP results and the panel.
 - Tooltips for all buttons, checkboxes and the thread mode in the panel, also on disabled buttons, e.g. why `Cancel run` is disabled.
 - The logo in the panel opens the GitHub repository.
-- `Caddis.Revit`, an add-in for Revit 2026.5 on .NET 10, tested in Revit 2026.5: the same F# session, REST and MCP tools without `caddis_command`. Runs on the UI thread run in Revit's API context via an external event, each in a transaction group: one undo step if it succeeds, rolled back if it fails.
+- `Caddis.Revit`, an add-in for Revit 2024 to 2027, tested in Revit 2026.5: the same F# session, REST and MCP tools without `caddis_command`. Runs on the UI thread run in Revit's API context via an external event, each in a transaction group: one undo step if it succeeds, rolled back if it fails.
 - Revit: warnings are removed and listed as notes, errors roll back their transaction. Results list the created, changed and deleted element ids. `Caddis.Revit.Script` has `Doc`, `UiDoc`, `UiApp`, `Transact` and `OnUi`.
 - Revit: its own settings file, port 7820 and MCP name `caddis-revit`, a ribbon tab, and `install-dev.ps1` to register a build.
 - Revit: an optional dockable Caddis pane, shown and hidden with the ribbon button `Panel`, like the panel in Rhino: server state and settings, the recent runs, and the output and code of the selected run.
@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scripts can use the conditional compilation symbols `CADDIS`, the host app (`RHINO`, `REVIT`), and `NETFRAMEWORK` or `NET` and `NETCOREAPP`. F# Interactive only defines `INTERACTIVE`.
 - Rhino 9 Beta on .NET 10: Caddis.Rhino also targets net10.0, with RhinoCommon 9.0.26209.18303-beta, FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401 like Fesh.Rhino, and the panel. Tested in Rhino 9.0.26272.
 - A second Yak package for Rhino 9, `caddis-<version>-rh9_0-any.yak` with the net10.0 build, next to `caddis-<version>-rh8_19-any.yak` with net8.0 and net48. The release workflow pushes both.
+- Revit 2024 to 2027: Caddis.Revit targets net48 for Revit 2024, net8.0 for Revit 2025 and 2026 up to their .4 updates, and net10.0 for Revit 2025 and 2026 from their .5 updates on and Revit 2027, each with the FSharp.Compiler.Service and FSharp.Core of Caddis.Core for that runtime. In Revit 2024 the panel uses Avalonia 11. Exporting to STEP needs Revit 2025.
+- Revit: `Caddis.Revit.Loader` is the add-in in Revit 2025 and later. It loads the net8.0 or the net10.0 build for the .NET that Revit runs on, so Caddis keeps working when Revit is updated from .NET 8 to .NET 10.
+- Revit: an installer, `Caddis.Revit-win-Setup.exe`, made with Velopack and signed with Azure Trusted Signing like Fesh.Revit. Its app `Caddis.Revit.Bootstrapper` registers Caddis with every installed Revit from 2024 on, in `%AppData%\Autodesk\Revit\Addins`. The workflow `release-revit.yml` uploads it to the GitHub release of the tag.
+- Revit: when Revit starts, Caddis checks for a newer release and offers to download it. It is installed when the last Revit has closed. Velopack runs in the bootstrapper's process, not in Revit, where it could conflict with the Velopack of another add-in. `Info` shows the versions of Caddis and .NET.
 
 ### Changed
 - Revit: ribbon icons use custom vector artwork in Revit's style, with gray surfaces, blue accents and colored action markers, instead of Windows font glyphs. Both 16 and 32 pixel icons follow the screen's scale and Revit's light or dark theme; the Panel button shows a docked pane.
@@ -58,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PDF export is refused: it opened Rhino's print dialog and blocked until someone clicked.
 - F# Interactive in background mode starts without `--exec`, so FCS itself makes runs cancellable, instead of Caddis setting a private field via reflection. `--gui+` and `--debug:full` are no longer passed, they have no effect in a hosted session.
 - `extraFsiArgs` that make FCS close the host app, e.g. `--help`, `--version`, `--langversion:?` or `--abortonerror`, are ignored with a message.
+- Revit: the Revit API comes from the package `Revit_All_Main_Versions_API_x64` instead of `Nice3point.Revit.Api` 2026.4: version 2024.0 for net48 and 2025.0 for net8.0 and net10.0, the oldest Revit each build runs in. Revit on .NET fails to load an add-in that references a newer RevitAPI than its own.
+- Revit: `install-dev.ps1` registers the build for the .NET of the installed Revit, read from its `RevitAPI.runtimeconfig.json`, or the one given with `-Framework`.
 
 ### Fixed
 - Cancelling a background run no longer blocks on a queued `Script.OnUi` call. Cancelled callbacks are skipped and retain their original run context; already-started callbacks finish before the run completes.

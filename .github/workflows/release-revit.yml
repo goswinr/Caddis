@@ -1,0 +1,129 @@
+name: Release Revit Installer
+
+on:
+  push:
+    tags:
+      # not for prerelease tags like 0.2.0-beta1
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-revit-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Windows: Velopack signs with signtool.exe and Azure Trusted Signing.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    # Run in a GitHub Environment so that the `sub` claim of the OIDC token is
+    # repo:goswinr/Caddis:environment:releaseRevit for every tag, as in Fesh.Revit.
+    # Add required reviewers or branch limits to this environment in the repository settings to gate releases.
+    environment:
+      name: releaseRevit
+    permissions:
+      contents: write # vpk upload creates the GitHub release
+      # OIDC: azure/login exchanges a short-lived token from GitHub for an Azure access token, no client secret is stored.
+      # Azure trusts it only if its `sub` claim matches the federated credential of the app registration:
+      #   repo:goswinr/Caddis:environment:releaseRevit
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # vpk and dotnet run later must not read GITHUB_TOKEN from .git/config.
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.x
+            10.x
+
+      - name: Build
+        run: dotnet build Caddis.slnx --configuration Release
+
+      - name: Test
+        run: dotnet test Caddis.slnx --configuration Release --no-build
+
+      - name: Publish for every Revit
+        id: package
+        uses: ./.github/actions/package-revit
+
+      - name: Check git tag matches CHANGELOG.md
+        shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          CHANGELOG_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if ($env:TAG_NAME -cne $env:CHANGELOG_VERSION) {
+            throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION) must match."
+          }
+
+      - name: Azure login
+        # This step opens a session that can sign with the Trusted Signing certificate, so it is pinned to a commit.
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          # Configure a federated credential on the Azure app registration with:
+          #   Issuer:   https://token.actions.githubusercontent.com
+          #   Subject:  repo:goswinr/Caddis:environment:releaseRevit
+          #   Audience: api://AzureADTokenExchange
+          # and grant the app the role "Trusted Signing Certificate Profile Signer".
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # vpk signs with the credential of the Azure CLI session, it needs no Az PowerShell session.
+
+      - name: Pack, sign and release with Velopack
+        # https://docs.velopack.io/reference/cli/content/vpk-windows
+        # One installer for every Revit: Caddis.Revit-win-Setup.exe, installed to %LocalAppData%\Caddis.Revit.
+        # The bootstrapper runs on .NET Framework 4.8, on x64 like Revit. Revit brings the runtime of the other builds.
+        shell: pwsh
+        env:
+          # vpk reads the token from VPK_TOKEN, so it is never on the command line.
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.package.outputs.version }}
+          PACK_DIR: ${{ steps.package.outputs.pack-dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Check([string]$step) {
+            if ($LASTEXITCODE -ne 0) { throw "$step failed with exit code $LASTEXITCODE" }
+          }
+
+          # Pinned, it runs in the signing session. The same version as the Velopack package in Caddis.Revit.Bootstrapper. Bump manually.
+          dotnet tool install vpk --global --version 1.2.161
+          Check 'Installing vpk'
+
+          # the previous release, for delta updates
+          vpk download github --repoUrl https://github.com/goswinr/Caddis --outputDir bin/installer
+          Check 'vpk download'
+
+          vpk pack `
+            --packId Caddis.Revit `
+            --packTitle 'Caddis for Revit' `
+            --packVersion $env:VERSION `
+            --packDir $env:PACK_DIR `
+            --mainExe Caddis.Revit.Bootstrapper.exe `
+            --framework net48 `
+            --runtime win-x64 `
+            --icon Docs/img/favicon.ico `
+            --splashImage Docs/img/logo128.png `
+            --packAuthors 'Goswin Rothenthal' `
+            --releaseNotes .github/InstallNotes-revit.md `
+            --azureTrustedSignFile .github/signing-metadata.json `
+            --outputDir bin/installer `
+            --noPortable `
+            --shortcuts None
+          Check 'vpk pack'
+
+          vpk upload github `
+            --publish `
+            --repoUrl https://github.com/goswinr/Caddis `
+            --releaseName "Caddis $env:VERSION for Revit" `
+            --tag $env:VERSION `
+            --outputDir bin/installer
+          Check 'vpk upload'

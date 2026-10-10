@@ -39,6 +39,9 @@ jobs:
       - name: Test
         run: dotnet test Caddis.slnx --configuration Release --no-build
 
-      # Exercise the same packaging path as release.yml on every push and pull request.
+      # Exercise the same packaging paths as release.yml and release-revit.yml on every push and pull request.
       - name: Publish and build Yak package
         uses: ./.github/actions/package
+
+      - name: Publish for every Revit
+        uses: ./.github/actions/package-revit

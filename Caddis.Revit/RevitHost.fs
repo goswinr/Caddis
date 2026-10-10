@@ -332,7 +332,11 @@ type RevitHost(app: ControlledApplication) =
 
     // --- export ---
 
+#if NETFRAMEWORK
+    let formats = "dwg, dxf, dgn, sat, pdf, dwf, dwfx, ifc, fbx, obj, stl, nwc" // STEP needs Revit 2025
+#else
     let formats = "dwg, dxf, dgn, sat, pdf, dwf, dwfx, ifc, fbx, obj, stl, step, nwc"
+#endif
 
     /// The active view if it is a 3D view, otherwise the default 3D view '{3D}'.
     let view3D (uidoc: UIDocument) (ext: string) : View =
@@ -357,6 +361,9 @@ type RevitHost(app: ControlledApplication) =
         let uidoc = activeUiDoc ()
         let doc = uidoc.Document
         let ext = Path.GetExtension(path).ToLowerInvariant()
+#if NETFRAMEWORK
+        if ext = ".step" || ext = ".stp" then failwith "Exporting to STEP needs Revit 2025 or later."
+#endif
         let folder = Path.GetDirectoryName path
         let name = Path.GetFileNameWithoutExtension path
         let elementIds =
@@ -405,8 +412,10 @@ type RevitHost(app: ControlledApplication) =
                 | ".fbx" -> doc.Export(folder, name, viewSet (), new FBXExportOptions())
                 | ".obj" -> doc.Export(folder, name, new OBJExportOptions(ViewId = view.Id))
                 | ".stl" -> doc.Export(folder, name, new STLExportOptions(ViewId = view.Id))
+#if !NETFRAMEWORK
                 | ".step"
                 | ".stp" -> doc.Export(folder, name, new STEPExportOptions(ViewId = view.Id))
+#endif
                 | ".ifc" ->
                     let options = new IFCExportOptions()
                     if elementIds.IsSome then options.FilterViewId <- view.Id

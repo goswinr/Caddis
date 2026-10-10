@@ -53,15 +53,20 @@ Caddis.Rhino/  net8.0 (Rhino 8), net10.0 (Rhino 9), net48 (Rhino 8 on .NET Frame
   Panel.fs         the Eto docking shell and Rhino services for the shared PanelView
   Commands.fs      Caddis command: Start / Stop, Panel, CopyMcpCommand, Mode, Cancel, Reset, AutoStart, EchoOutput, ListenOnLan, NewToken
   yak.yml
-Caddis.Revit/  net10.0-windows
+Caddis.Revit/  net48 (Revit 2024), net8.0-windows (Revit 2025 and 2026 up to .4), net10.0-windows (Revit 2025.5, 2026.5 and later, 2027)
   AvaloniaHost.fs  WPF HwndHost, native parenting, keyboard input and DPI changes
   PanelTheme.fs    Revit light/dark colors and ThemeChanged subscription
   Panel.fs         pane registration (unchanged ID), WPF shell and Revit services for PanelView
+  Updates.fs       starts the bootstrapper to check for updates, and to install them when the last Revit has closed
+Caddis.Revit.Loader/        net8.0, C#: the add-in in Revit 2025 and later, loads the net8.0 or net10.0 build for Revit's .NET
+Caddis.Revit.Bootstrapper/  net48: the Velopack app of the Revit installer, writes and deletes the .addin files, runs the updates
+                            (Velopack is not loaded into Revit, where it could conflict with the Velopack of an older Fesh.Revit)
 Tests/         xUnit tests for Core and the shared UI, both on net8.0 and net10.0, Core also on net48
 ```
 
 `Caddis.Core` declares interfaces for the Rhino hooks (`beforeEval`, `afterEval`, `capture`, `export`), and `Caddis.Rhino` implements them.
 Since 2026-10-10 `Caddis.Revit/` (net10.0-windows) implements them for Revit 2026, see [Revit](#revit).
+Since 2026-10-10 it also targets net48 and net8.0-windows, for Revit 2024 to 2027, with the Revit API from `Revit_All_Main_Versions_API_x64`, and has a Velopack installer like Fesh.Revit.
 
 Like Fesh.Rhino, use `DisableImplicitFSharpCoreReference` and reference `FSharp.Core` 8.0.403 and `FSharp.Compiler.Service` 43.8.403 explicitly. RhinoCommon 8.x is referenced with `PrivateAssets="all" ExcludeAssets="runtime"`.
 

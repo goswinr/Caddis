@@ -4,6 +4,7 @@
 
 [![build](https://github.com/goswinr/Caddis/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/build.yml)
 [![publish yak](https://github.com/goswinr/Caddis/actions/workflows/release.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release.yml)
+[![release revit](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml)
 
 ![latest tag](https://img.shields.io/github/v/tag/goswinr/Caddis?label=Latest%20Tag)
 ![yak version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fyak.rhino3d.com%2Fpackages%2Fcaddis&query=%24.version&logo=rhinoceros&label=Yak%20Package%20Manager&color=%23a3d6ff)
@@ -14,7 +15,7 @@
 An F# interactive host for Rhino,
 runs F# scripts within the Rhino process.
 Controlled via http, for AI agents and remote script execution and automation within Rhino.
-There is also an add-in for Revit 2026, see [Revit](#revit).
+There is also an add-in for Revit 2024 to 2027, see [Revit](#revit).
 
 > Early development. Tested in Rhino 8.35 on Windows, not yet on Mac, and in Revit 2026.5.
 
@@ -157,18 +158,41 @@ Scripts can check these conditional compilation symbols with `#if`, e.g. to run 
 ## Revit
 > Tested in Revit 2026.5 on Windows.
 
-`Caddis.Revit` is an add-in for Revit 2026.5 on .NET 10. It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino,
+`Caddis.Revit` is an add-in for Revit 2024 to 2027. It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino,
 except `caddis_command`: Revit has no command line. It adds `caddis_dialog` for Revit's dialogs.
 
-It uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like the .NET 10 build of [Fesh](https://github.com/goswinr/Fesh).
-Revit loads only one version of them, so Caddis.Revit can run next to a Fesh.Revit built for .NET 10, not next to one built for .NET 8.
+### Installation
+Download and run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest).
+It needs no admin rights. It installs Caddis in `%LocalAppData%\Caddis.Revit` and registers it with every installed Revit from 2024 on,
+with a `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>`. For a Revit installed later, start `%LocalAppData%\Caddis.Revit\current\Caddis.Revit.Bootstrapper.exe` again.
+When Revit starts, Caddis checks for a newer release and offers to download it. It is installed when the last Revit has closed.
+Uninstall it in Windows' 'Installed apps'.
+
+There is a build of Caddis for each .NET that Revit runs on:
+
+| Revit | .NET | Build | FSharp.Compiler.Service, FSharp.Core |
+|---|---|---|---|
+| 2024 | .NET Framework 4.8 | `net48`, the panel with Avalonia 11 | 43.12.401, 10.1.401 |
+| 2025 and 2026, up to their .4 updates | .NET 8 | `net8.0` | 43.8.403, 8.0.403 |
+| 2025 and 2026 from their .5 updates on, 2027 | .NET 10 | `net10.0` | 43.12.401, 10.1.401 |
+
+Revit 2024 loads the net48 build. Revit 2025 and later load `Caddis.Revit.Loader`, which loads the net8.0 or the net10.0 build, for the .NET that Revit runs on.
+So Caddis keeps working when Revit is updated from .NET 8 to .NET 10.
+The builds reference the Revit API of the oldest Revit they run in, from the package [Revit_All_Main_Versions_API_x64](https://www.nuget.org/packages/Revit_All_Main_Versions_API_x64):
+2024.0 for net48, 2025.0 for net8.0 and net10.0. Revit on .NET fails to load an add-in that references a newer RevitAPI than its own, e.g. Revit 2025.5 has RevitAPI 25.5.
+Exporting to STEP needs Revit 2025 or later.
+
+The versions of FSharp.Compiler.Service and FSharp.Core are those of the build of [Fesh](https://github.com/goswinr/Fesh) for the same .NET.
+Revit loads only one version of them, so Caddis.Revit can run next to a Fesh.Revit only if it uses the same versions.
 
 ### Installation for development
 ```
 dotnet build Caddis.Revit -c Release
-./Caddis.Revit/install-dev.ps1 -Configuration Release
+./Caddis.Revit/install-dev.ps1 -Year 2026 -Configuration Release
 ```
-The script writes `Caddis.addin` to `%AppData%\Autodesk\Revit\Addins\2026`, pointing at the build output.
+The script writes `Caddis.addin` to `%AppData%\Autodesk\Revit\Addins\2026`, pointing at the build output for the .NET of that Revit:
+net48 for Revit 2024, otherwise as named in `RevitAPI.runtimeconfig.json` in the folder of Revit. `-Framework` picks a build.
+It replaces the registration of the installer, start `Caddis.Revit.Bootstrapper.exe` to restore it.
 On its first start, and after every rebuild, Revit asks whether to load the unsigned add-in, choose 'Always Load'.
 Revit locks the dll while it runs, close Revit before building again. `install-dev.ps1 -Uninstall` removes the add-in.
 
@@ -230,7 +254,7 @@ Caddis.Revit.Script.OnUi(fun () -> ...)  // in Revit's API context, needed in ba
 ```
 `Caddis.Revit.Script` also has `OutDir` and `RunId` of `Caddis.Script`.
 
-Scripts can't use WPF types, e.g. `System.Windows.Window`: F# Interactive type-checks against the .NET SDK's reference assemblies,
+In Revit on .NET, scripts can't use WPF types, e.g. `System.Windows.Window`: F# Interactive type-checks against the .NET SDK's reference assemblies,
 whose `WindowsBase.dll` is an empty stub that takes precedence over the real one, also with `#r`. Reflection works.
 
 ## Security
@@ -247,7 +271,8 @@ dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
 `Caddis.Core` has no Rhino or Revit dependency and is tested with a headless host. `Caddis.Rhino` is the Rhino plugin, `Caddis.Revit` the Revit add-in.
-`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` with Avalonia 12. It and Core also target `net48`, for Rhino on .NET Framework, the panel with Avalonia 11.
+In Revit 2025 and later `Caddis.Revit.Loader` loads the build of `Caddis.Revit` for Revit's .NET. `Caddis.Revit.Bootstrapper` is the app of the Revit installer, it registers the add-in.
+`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` with Avalonia 12. It and Core also target `net48`, for Rhino and Revit 2024 on .NET Framework, the panel with Avalonia 11.
 Each plugin supplies actions, theme colors and its docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
 `Tests/Caddis.UI.Tests` checks the shared view with Avalonia's headless platform on both runtimes.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
@@ -271,6 +296,24 @@ To publish a release:
 
 The [release workflow](.github/workflows/release.yml) builds, tests, packages, checks the tag against the changelog,
 and pushes both packages to Yak. Build CI also creates them on every push and pull request to `main`.
+
+### Revit releases
+
+The same tag starts the [Revit release workflow](.github/workflows/release-revit.yml).
+Its [packaging action](.github/actions/package-revit/action.yml), which build CI runs too, publishes into `bin/publish/revit`
+the app of the installer `Caddis.Revit.Bootstrapper.exe` for .NET Framework 4.8, and the folders `net48`, `net8.0`, `net10.0` and `loader`.
+[Velopack](https://velopack.io/) packs, signs and uploads them as `Caddis.Revit-win-Setup.exe` to the GitHub release of the tag,
+with the notes in [InstallNotes-revit.md](.github/InstallNotes-revit.md), like [Fesh.Revit](https://github.com/goswinr/Fesh.Revit).
+The bootstrapper writes the `.addin` files when Caddis is installed or updated and when it is started, and deletes them when Caddis is uninstalled.
+Caddis in Revit starts it to check for updates when Revit starts, and to install a downloaded one when the last Revit closes.
+So Velopack runs in its own process, not in Revit, where it could conflict with the Velopack of another add-in, e.g. of an older Fesh.Revit.
+
+The workflow signs with Azure Trusted Signing, like Fesh.Revit, see [signing-metadata.json](.github/signing-metadata.json). It needs:
+
+1. A GitHub environment `releaseRevit` in the repository settings.
+2. An Azure app registration with the role 'Trusted Signing Certificate Profile Signer' and a federated credential
+   for the subject `repo:goswinr/Caddis:environment:releaseRevit`.
+3. Its ids as the Actions secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`.
 
 ## License
 [MIT](LICENSE)

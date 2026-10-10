@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- The app of the Velopack installer for Revit. It registers Caddis with every installed Revit from 2024 on,
+    and runs Velopack's updates for Caddis in Revit. For .NET Framework 4.8, which every Windows 10 and 11 has,
+    so that the installer needs no runtime, also for Revit 2024. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Caddis.Revit.Bootstrapper</RootNamespace>
+    <AssemblyName>Caddis.Revit.Bootstrapper</AssemblyName>
+    <AssemblyTitle>Caddis for Revit</AssemblyTitle>
+    <Product>Caddis for Revit</Product>
+    <Company>Goswin Rothenthal</Company> <!-- shown in the details of the exe in Windows Explorer -->
+    <Description>Installs, updates and registers Caddis with Revit.</Description>
+    <ApplicationIcon>../Docs/img/favicon.ico</ApplicationIcon>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
+    <!-- the same version as vpk in .github/workflows/release-revit.yml -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Revit.fs" />
+    <Compile Include="Updates.fs" />
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+
+  <!-- for the check of the git tag in .github/workflows/release-revit.yml -->
+  <Target Name="WriteChangelogVersion" AfterTargets="AfterBuild" DependsOnTargets="SetVersionFromChangelog">
+    <Error Condition="'@(CurrentReleaseChangelog)' == ''" Text="CHANGELOG.md must contain a versioned release for the Revit installer." />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/bin/ChangelogVersion.txt" Lines="@(CurrentReleaseChangelog)" Overwrite="true" />
+  </Target>
+</Project>

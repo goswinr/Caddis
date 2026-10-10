@@ -1,0 +1,75 @@
+name: Package for Revit
+description: Publish Caddis for every Revit runtime, with the loader and the bootstrapper, into the folder that Velopack packs.
+
+# Used by build.yml and release-revit.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for net48.
+# bin/publish/revit becomes the folder %LocalAppData%\Caddis.Revit\current of the installation:
+#   Caddis.Revit.Bootstrapper.exe  the Velopack app, net48: registers Caddis with every installed Revit from 2024 on
+#   net48/    Caddis.Revit for Revit 2024 on .NET Framework 4.8, the panel with Avalonia 11
+#   net8.0/   for Revit 2025 and 2026 up to their .4 updates, on .NET 8
+#   net10.0/  for Revit 2025.5, 2026.5 and later updates, and Revit 2027, on .NET 10
+#   loader/   Caddis.Revit.Loader, registered in Revit 2025 and later: loads net8.0 or net10.0, for the runtime Revit runs on
+
+outputs:
+  version:
+    description: Version of the latest release in CHANGELOG.md
+    value: ${{ steps.version.outputs.version }}
+  pack-dir:
+    description: The folder for vpk pack, relative to the repository root
+    value: bin/publish/revit
+
+runs:
+  using: composite
+  steps:
+    # One step per build, so that a failure in one is not masked by another.
+    # Revit provides the runtime. Publish includes Caddis.Core and the F# dependencies.
+    - name: Publish Caddis.Revit net48
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Revit/Caddis.Revit.fsproj
+        --configuration Release --framework net48
+        --output bin/publish/revit/net48
+
+    - name: Publish Caddis.Revit net8.0
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Revit/Caddis.Revit.fsproj
+        --configuration Release --framework net8.0-windows --self-contained false
+        --output bin/publish/revit/net8.0
+
+    - name: Publish Caddis.Revit net10.0
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Revit/Caddis.Revit.fsproj
+        --configuration Release --framework net10.0-windows --self-contained false
+        --output bin/publish/revit/net10.0
+
+    - name: Publish Caddis.Revit.Loader
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Revit.Loader/Caddis.Revit.Loader.csproj
+        --configuration Release --self-contained false
+        --output bin/publish/revit/loader
+
+    - name: Publish Caddis.Revit.Bootstrapper
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.Revit.Bootstrapper/Caddis.Revit.Bootstrapper.fsproj
+        --configuration Release
+        --output bin/publish/revit
+
+    - name: Read version
+      id: version
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $version = (Get-Content -LiteralPath 'Caddis.Revit.Bootstrapper/bin/ChangelogVersion.txt' -Raw).Trim()
+        if ($version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Expected a stable semantic version from CHANGELOG.md, found '$version'."
+        }
+        "version=$version" >> $env:GITHUB_OUTPUT
+        foreach ($dll in 'net48/Caddis.Revit.dll', 'net8.0/Caddis.Revit.dll', 'net10.0/Caddis.Revit.dll', 'loader/Caddis.Revit.Loader.dll', 'Caddis.Revit.Bootstrapper.exe') {
+          if (-not (Test-Path -LiteralPath "bin/publish/revit/$dll")) {
+            throw "bin/publish/revit/$dll is missing."
+          }
+        }
+        Write-Host "Published Caddis $version for Revit to bin/publish/revit"

@@ -180,6 +180,9 @@ type CaddisApplication() =
 
         member _.OnStartup(uiApp: UIControlledApplication) : Result =
             try
+                // before Caddis.Core uses System.Text.Json or FCS, so that on .NET Framework it gets its versions, not Revit's older ones
+                try FsiAssemblyResolver.install ()
+                with e -> RevitLog.write $"Caddis: putting its assembly resolver first failed: {e.Message}"
                 ApiContext.init ()
                 RevitDialogs.mainWindow <- uiApp.MainWindowHandle
                 let host = RevitHost(uiApp.ControlledApplication)
@@ -195,6 +198,7 @@ type CaddisApplication() =
                 with e -> RevitLog.write $"Caddis: registering the panel failed: {e.Message}"
                 if server.Service.Settings.autoStart then App.start true
                 Ribbon.update ()
+                Updates.check ()
                 Result.Succeeded
             with e ->
                 RevitLog.write $"Caddis failed to load: {e}"
@@ -206,4 +210,5 @@ type CaddisApplication() =
             uiApp.Idling.RemoveHandler idling
             App.shutdown ()
             ApiContext.shutdown ()
+            Updates.installOnExit ()
             Result.Succeeded
