@@ -24,6 +24,8 @@ module internal Updates =
 
     /// When the last Revit closes: the bootstrapper lets Velopack install a downloaded release once this Revit has exited.
     /// While another Revit is running it may use Caddis, then the next one to close does it. Called in OnShutdown.
+    /// A Revit that has exited may still be listed for minutes, e.g. while a thread of it is stuck in a driver, it doesn't count.
     let installOnExit () =
-        if File.Exists bootstrapper && Process.GetProcessesByName("Revit").Length = 1 then
+        let running (p: Process) = try not p.HasExited with _ -> false
+        if File.Exists bootstrapper && (Process.GetProcessesByName "Revit" |> Array.filter running).Length = 1 then
             start $"--install-update {Process.GetCurrentProcess().Id}"

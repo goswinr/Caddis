@@ -53,10 +53,13 @@ module FsiAssemblyResolver =
     let private hostFolder = AppDomain.CurrentDomain.BaseDirectory
 
     /// The name of the assembly at the path if it has the requested version or a higher one.
-    let private satisfying (requested: AssemblyName) (path: string) =
+    /// With orLowerRevision also if only its revision is lower, e.g. System.Memory 4.0.1.1 for 4.0.1.2: a patch with the same API.
+    let private satisfying (orLowerRevision: bool) (requested: AssemblyName) (path: string) =
         try
             let found = AssemblyName.GetAssemblyName path
-            if keyToken found = keyToken requested && (isNull requested.Version || found.Version >= requested.Version) then Some found else None
+            let f, r = found.Version, requested.Version
+            let ok = isNull r || f >= r || (orLowerRevision && f.Major = r.Major && f.Minor = r.Minor && f.Build = r.Build)
+            if keyToken found = keyToken requested && ok then Some found else None
         with _ ->
             None // missing, or a native library
 
@@ -67,6 +70,8 @@ module FsiAssemblyResolver =
     /// But the host's copy first if it has the requested version or a higher one: the loader binds a request for exactly its version to it,
     /// e.g. Avalonia's for System.Memory 4.0.1.2 to Rhino 8's. A request for an older one, e.g. AvaloniaEdit's for 4.0.1.1, must get the same copy,
     /// or calls between them that pass its types, e.g. ReadOnlyMemory<char>, fail with a MissingMethodException.
+    /// Also if the host's copy has a lower revision only: Revit 2024 has System.Memory 4.0.1.1, the loader binds AvaloniaEdit's request to it,
+    /// so Avalonia's for 4.0.1.2 must get it too.
     let private resolveOwn (args: ResolveEventArgs) : Assembly =
         let fromOtherFolder =
             match args.RequestingAssembly with
@@ -77,10 +82,10 @@ module FsiAssemblyResolver =
         if fromOtherFolder || not (File.Exists path) then
             null
         else
-            match satisfying requested (Path.Combine(hostFolder, requested.Name + ".dll")) with
+            match satisfying true requested (Path.Combine(hostFolder, requested.Name + ".dll")) with
             | Some host -> Assembly.Load host // by its exact version, the copy the loader binds to
             | None ->
-                match satisfying requested path with
+                match satisfying false requested path with
                 | Some found ->
                     match AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.FullName = found.FullName) with
                     | Some a -> a
