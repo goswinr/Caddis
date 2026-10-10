@@ -51,9 +51,11 @@ jobs:
           }
 
       - name: Push new version to Yak
+        # Both distributions of the version: Rhino 8 first, then Rhino 9.
         shell: pwsh
         env:
-          PACKAGE_PATH: ${{ steps.package.outputs.package-path }}
+          RH8_PACKAGE_PATH: ${{ steps.package.outputs.rh8-package-path }}
+          RH9_PACKAGE_PATH: ${{ steps.package.outputs.rh9-package-path }}
           # Generate this token with yak.exe login --ci, then add it as a repository secret.
           YAK_TOKEN: ${{ secrets.YAK_TOKEN }}
         run: |
@@ -61,7 +63,12 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:YAK_TOKEN)) {
             throw 'The repository secret YAK_TOKEN is required to publish to Yak.'
           }
-          bin/yak.exe push $env:PACKAGE_PATH
-          if ($LASTEXITCODE -ne 0) {
-            throw "yak push failed with exit code $LASTEXITCODE"
+          foreach ($path in $env:RH8_PACKAGE_PATH, $env:RH9_PACKAGE_PATH) {
+            if ([string]::IsNullOrWhiteSpace($path)) {
+              throw 'The packaging action did not return the path of a package.'
+            }
+            bin/yak.exe push $path
+            if ($LASTEXITCODE -ne 0) {
+              throw "yak push of $path failed with exit code $LASTEXITCODE"
+            }
           }

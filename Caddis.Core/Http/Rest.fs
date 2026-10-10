@@ -7,7 +7,7 @@ open System.Text.Json.Nodes
 open Caddis
 
 let private segments (path: string) =
-    path.Split('/', StringSplitOptions.RemoveEmptyEntries) |> List.ofArray |> List.map Uri.UnescapeDataString
+    path.Split([| '/' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray |> List.map Uri.UnescapeDataString
 
 let private queryInt (req: Request) (name: string) =
     match Int32.TryParse req.query[name] with

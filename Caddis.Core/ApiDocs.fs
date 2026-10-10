@@ -346,7 +346,7 @@ type ApiDocs(host: ICaddisHost) =
 
     /// The words of a PascalCase or camelCase name, in lower case, e.g. 'CreateFromBox' -> create, from, box.
     static let words (name: string) =
-        Regex.Matches(name, "[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])") |> Seq.map _.Value.ToLowerInvariant() |> Array.ofSeq
+        Regex.Matches(name, "[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])") |> Seq.cast<Match> |> Seq.map _.Value.ToLowerInvariant() |> Array.ofSeq
 
     /// The candidates most similar to a name: containing it, contained in it, containing all its words, or a few typos away.
     /// e.g. 'CreateFromBox' for 'CreateBox'.

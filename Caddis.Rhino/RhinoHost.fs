@@ -83,7 +83,7 @@ type RhinoHost() =
         |> Array.distinct
 
     let description =
-        let os = if OperatingSystem.IsMacOS() then "Mac" else "Windows"
+        let os = if Runtime.InteropServices.RuntimeInformation.IsOSPlatform Runtime.InteropServices.OSPlatform.OSX then "Mac" else "Windows"
         $"Rhino {RhinoApp.Version} on {os}"
 
     // --- echo of script output, written line by line ---
@@ -134,7 +134,9 @@ type RhinoHost() =
     let addedFirst = Dictionary<Guid, bool>()
 
     let touched (id: Guid) (added: bool) =
-        if commandRunActive && addedFirst.TryAdd(id, added) then touchedObjects.Add id
+        if commandRunActive && not (addedFirst.ContainsKey id) then
+            addedFirst[id] <- added
+            touchedObjects.Add id
 
     do
         Command.UndoRedo.Add(fun e ->
@@ -249,9 +251,8 @@ type RhinoHost() =
     /// True if the file starts like a 3dm file.
     let isRhinoFile (path: string) =
         let magic = "3D Geometry File Format"
-        use f = File.OpenRead path
-        let bytes = Array.zeroCreate<byte> magic.Length
-        f.ReadAtLeast(bytes, bytes.Length, false) = bytes.Length && Encoding.ASCII.GetString bytes = magic
+        use r = new BinaryReader(File.OpenRead path)
+        Encoding.ASCII.GetString(r.ReadBytes magic.Length) = magic
 
     /// Writes any format Rhino can export, picked by the file extension, without showing dialogs.
     /// Other formats than 3dm are written with the scripted '-_Export' command, '_EnterEnd' accepts the default options.

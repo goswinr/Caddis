@@ -10,18 +10,23 @@ open System.Threading.Tasks
 type WorkerThread(name: string) =
     let queue = new BlockingCollection<unit -> unit>()
 
-    let thread =
-        Thread(
-            ThreadStart(fun () ->
-                for work in queue.GetConsumingEnumerable() do
-                    try work () with _ -> () // work items handle their own exceptions, this only keeps the thread alive
-            ),
-            IsBackground = true,
-            Name = name
-        )
+    let rec run () =
+#if NETFRAMEWORK
+        try
+#endif
+            for work in queue.GetConsumingEnumerable() do
+                try work () with _ -> () // work items handle their own exceptions, this only keeps the thread alive
+#if NETFRAMEWORK
+        with :? ThreadAbortException ->
+            // a late abort of a cancelled run, see FsiHost
+            Thread.ResetAbort()
+            run ()
+#endif
+
+    let thread = Thread(ThreadStart run, IsBackground = true, Name = name)
 
     do
-        if OperatingSystem.IsWindows() then thread.SetApartmentState ApartmentState.STA // so that scripts can create windows
+        if Environment.OSVersion.Platform = PlatformID.Win32NT then thread.SetApartmentState ApartmentState.STA // so that scripts can create windows
         thread.Start()
 
     /// True if called from this worker's thread.

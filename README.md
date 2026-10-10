@@ -19,7 +19,7 @@ There is also an add-in for Revit 2026, see [Revit](#revit).
 > Early development. Tested in Rhino 8.35 on Windows, not yet on Mac, and in Revit 2026.5.
 
 ## What it does
-- Hosts one persistent F# Interactive session inside Rhino 8 (.NET 8, Windows and Mac).
+- Hosts one persistent F# Interactive session inside Rhino 8 (.NET 8 on Windows and Mac, or .NET Framework 4.8 on Windows).
   Values, functions and types defined in one run stay available in the next.
 - Serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`, so AI agents like Claude Code can run F# in Rhino,
   and plain REST endpoints for curl and scripts.
@@ -32,13 +32,15 @@ There is also an add-in for Revit 2026, see [Revit](#revit).
 ## Installation
 
 After the first Yak release, install via Rhino's `PackageManager` command and search for `Caddis`.
-The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8.
+The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
+On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`), without the panel: it is drawn with Avalonia 12, which needs .NET 8.
 
 ### Manual installation
 
 Build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
 then drag `Caddis.Rhino/bin/Debug/net8.0/Caddis.Rhino.rhp` into Rhino 8.
-Rhino must run on .NET 8, see the Rhino command `SetDotNetRuntime`.
+Rhino on .NET Framework loads the build in `bin/Debug/net48` next to it, Rhino 9 Beta the one in `bin/Debug/net10.0`.
+The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like Fesh.Rhino for Rhino 9, and has the panel.
 
 Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
 both use the same versions of FSharp.Core and FSharp.Compiler.Service.
@@ -140,6 +142,18 @@ Caddis.Script.RunId    // e.g. "r12"
 Caddis.Script.OnUi(fun () -> ...)  // run code on the Rhino UI thread, needed in background mode for UI calls
 ```
 
+Scripts can check these conditional compilation symbols with `#if`, e.g. to run in several hosts or runtimes:
+
+| Symbol | Defined |
+|---|---|
+| `CADDIS` | in every Caddis session |
+| `RHINO`, `REVIT` | in the host app of that name |
+| `NETFRAMEWORK` | in Rhino on .NET Framework |
+| `NET`, `NETCOREAPP` | on .NET 8 and later |
+| `INTERACTIVE` | by F# Interactive itself, in every session |
+
+`extraFsiArgs` in `%AppData%\Caddis\settings.json` (`~/.config/Caddis/settings.json` on Mac) can add more, e.g. `"--define:MYSYMBOL"`.
+
 ## Revit
 > Tested in Revit 2026.5 on Windows.
 
@@ -233,7 +247,7 @@ dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
 `Caddis.Core` has no Rhino or Revit dependency and is tested with a headless host. `Caddis.Rhino` is the Rhino plugin, `Caddis.Revit` the Revit add-in.
-`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` like Core.
+`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0`. Core also targets `net48`, for Rhino on .NET Framework.
 Each plugin supplies actions, theme colors and its docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
 `Tests/Caddis.UI.Tests` checks the shared view with Avalonia's headless platform on both runtimes.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
@@ -242,8 +256,10 @@ See [plan.md](plan.md) for the design and the open tasks.
 ### Yak releases
 
 Build and release CI use the same [packaging action](.github/actions/package/action.yml).
-It publishes the plugin and its dependencies into `bin/Release/rh8/net8.0`, includes the Yak manifest,
-logo and license, then builds `bin/Release/caddis-<version>-rh8_19-any.yak`.
+It publishes the plugin and its dependencies into `bin/Release/rh8/net8.0`, `bin/Release/rh8/net48` and `bin/Release/rh9/net10.0`,
+adds the Yak manifest, logo and license to `rh8` and `rh9`, then builds two distributions of the same version:
+`bin/Release/caddis-<version>-rh8_19-any.yak` for Rhino 8 and `bin/Release/caddis-<version>-rh9_0-any.yak` for Rhino 9.
+The package manager gives each Rhino version only its own distribution.
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
 using `Ionide.KeepAChangelog.Tasks`, as in Fesh.Rhino.
 
@@ -254,7 +270,7 @@ To publish a release:
 3. Push a matching tag, for example `0.1.0` (without a `v` prefix).
 
 The [release workflow](.github/workflows/release.yml) builds, tests, packages, checks the tag against the changelog,
-and pushes to Yak. Build CI also creates the package on every push and pull request to `main`.
+and pushes both packages to Yak. Build CI also creates them on every push and pull request to `main`.
 
 ## License
 [MIT](LICENSE)

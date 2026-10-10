@@ -98,8 +98,23 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
 
     /// On Mac and Linux make the file readable for the current user only.
     let restrictToUser (path: string) =
+#if NETFRAMEWORK
+        ignore path // .NET Framework runs on Windows only
+#else
         if not (OperatingSystem.IsWindows()) then
             try File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite) with _ -> ()
+#endif
+
+    /// Creates a new file, on Mac and Linux readable for the current user only.
+    let createNew (path: string) : FileStream =
+#if NETFRAMEWORK
+        new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+#else
+        let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None)
+        if not (OperatingSystem.IsWindows()) then
+            options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+        new FileStream(path, options)
+#endif
 
     /// Publish a complete token atomically, so readers never see an empty or partial replacement.
     let writeToken (overwrite: bool) =
@@ -107,11 +122,8 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
         let token = Convert.ToHexString(RandomNumberGenerator.GetBytes 24).ToLowerInvariant()
         let tempPath = Path.Combine(folder, $"token-{Guid.NewGuid():N}.tmp")
         try
-            let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None)
-            if not (OperatingSystem.IsWindows()) then
-                options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
             do
-                use stream = new FileStream(tempPath, options)
+                use stream = createNew tempPath
                 use writer = new StreamWriter(stream, UTF8Encoding(false))
                 writer.Write token
             restrictToUser tempPath

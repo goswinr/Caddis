@@ -30,6 +30,13 @@ let ``Script.OnUi runs on the UI thread`` () =
     Assert.Equal("\"Caddis headless UI\"", valueText run)
 
 [<Fact>]
+let ``type-checks on the background thread`` () =
+    assertOk (eval svc.Value "let definedBeforeBackgroundCheck = 1")
+    let diagnostics = svc.Value.Check(Some "let e = definedBeforeBackgroundCheck + 1\nlet f: int = \"x\"", None).Result
+    let err = Assert.Single diagnostics
+    Assert.Equal(2, err.startLine)
+
+[<Fact>]
 let ``rejects a second run while one is in progress`` () =
     let first = start "System.Threading.Thread.Sleep 1500"
     let ex = Assert.ThrowsAny<exn>(fun () -> start "1" |> ignore)

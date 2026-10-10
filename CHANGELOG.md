@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Revit: changed elements are counted per category in MCP results, e.g. '95 <Path of Travel Lines>, 3 Schedules', their ids are saved to a file. A script that leaves a transaction open gets its run rolled back with a note.
 - `caddis_dialog` tool, `GET /dialogs` and `POST /dialog` (Revit only): list the host app's open modal dialog with its text and buttons, or press a button. `caddis_status` and results of runs still running name an open dialog, since it blocks all calls into Revit.
 - Runs have `started`: a run still waiting for the host app says in MCP that it has not started yet.
+- Rhino 8 on .NET Framework, started with `/netfx`: Caddis.Core and Caddis.Rhino also target net48, with FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401 like Fesh.Rhino. Runs, values of earlier runs, cancellation, timeouts, type-checks and script line numbers in stack traces work like on .NET 8. The panel needs .NET 8, it is not available there.
+- Scripts can use the conditional compilation symbols `CADDIS`, the host app (`RHINO`, `REVIT`), and `NETFRAMEWORK` or `NET` and `NETCOREAPP`. F# Interactive only defines `INTERACTIVE`.
+- Rhino 9 Beta on .NET 10: Caddis.Rhino also targets net10.0, with RhinoCommon 9.0.26209.18303-beta, FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401 like Fesh.Rhino, and the panel. Tested in Rhino 9.0.26272.
+- A second Yak package for Rhino 9, `caddis-<version>-rh9_0-any.yak` with the net10.0 build, next to `caddis-<version>-rh8_19-any.yak` with net8.0 and net48. The release workflow pushes both.
 
 ### Changed
 - Revit: ribbon icons use custom vector artwork in Revit's style, with gray surfaces, blue accents and colored action markers, instead of Windows font glyphs. Both 16 and 32 pixel icons follow the screen's scale and Revit's light or dark theme; the Panel button shows a docked pane.
@@ -52,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Viewport captures without a size are scaled down to at most 1280 pixels on the long edge, and a single given dimension keeps the view's aspect ratio.
 - System.Drawing.Common is referenced in every session, RhinoCommon uses its `Bitmap`.
 - PDF export is refused: it opened Rhino's print dialog and blocked until someone clicked.
+- F# Interactive in background mode starts without `--exec`, so FCS itself makes runs cancellable, instead of Caddis setting a private field via reflection. `--gui+` and `--debug:full` are no longer passed, they have no effect in a hosted session.
+- `extraFsiArgs` that make FCS close the host app, e.g. `--help`, `--version`, `--langversion:?` or `--abortonerror`, are ignored with a message.
 
 ### Fixed
 - Cancelling a background run no longer blocks on a queued `Script.OnUi` call. Cancelled callbacks are skipped and retain their original run context; already-started callbacks finish before the run completes.
@@ -71,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `caddis_check` with `path` did not find files loaded with a relative `#load`.
 - Exporting to an extension without exporter wrote a 3dm file, now it is an error.
 - `caddis_describe` cut summaries at "e.g." in member lists.
+- Loading the .rhp again while Caddis is loaded, e.g. by dragging it into Rhino, started a second server on the next port before Rhino refused the plugin, and the panel no longer opened.
+- An error while writing an HTTP response was swallowed and the client got an empty `200`. It is logged to the host app now, e.g. a `MissingMethodException` when another plugin loaded a different FSharp.Core first.
 
 ## [0.1.0] - 2026-10-10
 

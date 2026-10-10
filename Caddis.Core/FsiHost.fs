@@ -38,14 +38,48 @@ exception BusyException of runId: string
 /// Rhino's returns the first FSI-ASSEMBLY of the process. Then a value of an earlier run fails with a TypeLoadException,
 /// or after a reset silently is the value of an old session.
 /// This handler goes first and resolves by full name among the assemblies of the session that asks.
+/// On .NET Framework it also resolves the dependencies of Caddis, see resolveOwn.
 module FsiAssemblyResolver =
 
     let private sessions = ResizeArray<FsiEvaluationSession>()
 
+#if NETFRAMEWORK
+    /// The folder of Caddis.Core, with FCS and its dependencies.
+    let private ownFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
+
+    let private keyToken (n: AssemblyName) = match n.GetPublicKeyToken() with null -> [||] | t -> t
+
+    /// A .NET Framework plugin has no binding redirects. Then a request for e.g. System.Reflection.Metadata 10.0.0.2 fails
+    /// if the host app's folder has an older version, and the host's handler returns that, e.g. Rhino 8 its 7.0.0.0.
+    /// FCS then fails with a MissingMethodException when it writes the debug symbols of --multiemit+.
+    /// This returns the assembly in the folder of Caddis.Core if it has the requested version or a higher one, like a binding redirect.
+    let private resolveOwn (args: ResolveEventArgs) : Assembly =
+        let fromOtherFolder =
+            match args.RequestingAssembly with
+            | null -> false
+            | r -> r.IsDynamic || (r.Location <> "" && not (String.Equals(Path.GetDirectoryName r.Location, ownFolder, StringComparison.OrdinalIgnoreCase)))
+        let requested = AssemblyName args.Name
+        let path = Path.Combine(ownFolder, requested.Name + ".dll")
+        if fromOtherFolder || not (File.Exists path) then
+            null
+        else
+            let found = AssemblyName.GetAssemblyName path
+            if keyToken found = keyToken requested && (isNull requested.Version || found.Version >= requested.Version) then
+                match AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.FullName = found.FullName) with
+                | Some a -> a
+                | None -> Assembly.LoadFrom path
+            else
+                null
+#endif
+
     let private resolve (args: ResolveEventArgs) : Assembly =
         // 'FSI-ASSEMBLY,' or 'FSI-ASSEMBLY-MULTI,', the full name is compared below
         if not (args.Name.StartsWith("FSI-ASSEMBLY", StringComparison.Ordinal)) then
+#if NETFRAMEWORK
+            try resolveOwn args with _ -> null
+#else
             null
+#endif
         else
             let live = lock sessions (fun () -> sessions.ToArray())
             let find (s: FsiEvaluationSession) = s.DynamicAssemblies |> Array.tryFind (fun a -> a.FullName = args.Name)
@@ -61,17 +95,29 @@ module FsiAssemblyResolver =
     let private handler = ResolveEventHandler(fun _ args -> resolve args)
 
     /// Puts the handler first in AppDomain.AssemblyResolve, before the handlers of the host app.
-    /// The event has no public way to insert at the front, so this sets its backing field in AssemblyLoadContext.
+    /// The event has no public way to insert at the front, so this sets its backing field:
+    /// in AssemblyLoadContext on .NET Core, in the AppDomain on .NET Framework.
     let private ensureFirst () =
-        match typeof<Runtime.Loader.AssemblyLoadContext>.GetField("AssemblyResolve", BindingFlags.NonPublic ||| BindingFlags.Static) with
+#if NETFRAMEWORK
+        let field = typeof<AppDomain>.GetField("_AssemblyResolve", BindingFlags.NonPublic ||| BindingFlags.Instance)
+        let owner = box AppDomain.CurrentDomain
+#else
+        let field = typeof<Runtime.Loader.AssemblyLoadContext>.GetField("AssemblyResolve", BindingFlags.NonPublic ||| BindingFlags.Static)
+        let owner = null
+#endif
+        match field with
         | null ->
             AppDomain.CurrentDomain.remove_AssemblyResolve handler
             AppDomain.CurrentDomain.add_AssemblyResolve handler
-            failwith "the field AssemblyLoadContext.AssemblyResolve was not found"
+            failwith "the backing field of the AssemblyResolve event was not found"
         | field ->
             lock sessions (fun () ->
-                let others = Delegate.Remove(field.GetValue null :?> Delegate, handler)
-                field.SetValue(null, Delegate.Combine(handler, others)))
+                let others = Delegate.Remove(field.GetValue owner :?> Delegate, handler)
+                field.SetValue(owner, Delegate.Combine(handler, others)))
+
+    /// Puts the handler first. On .NET Framework call it before Caddis.Core uses System.Text.Json or FCS,
+    /// so that their dependencies are resolved in the folder of Caddis.Core. Raises an exception if the handler could not be put first.
+    let install () = ensureFirst ()
 
     /// Call when a session was created. Raises an exception if the handler could not be put first.
     let register (s: FsiEvaluationSession) =
@@ -158,25 +204,44 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
 
     // --- the session ---
 
-    let fsiArgs () =
+    /// FCS calls exit for these options, that would close the host app.
+    let endsProcess (arg: string) =
+        match arg.Trim().TrimStart('-', '/').ToLowerInvariant() with
+        | "help" | "?" | "full-help" | "version" | "langversion:?" | "abortonerror" -> true
+        | a -> a.StartsWith("fsi-server-report-references", StringComparison.Ordinal)
+
+    /// A conditional compilation symbol for the host app, e.g. RHINO.
+    let hostSymbol = host.Info.appName.ToUpperInvariant() |> String.filter Char.IsLetterOrDigit
+
+    let fsiArgs (mode: ThreadMode) =
         let s = getSettings ()
         [|
             "fsi.exe" // the first argument is ignored, like a program name
             "--langversion:preview"
-            "--exec" // don't read further input from stdin
-            "--debug+"
-            "--debug:full"
-            "--optimize+"
-            "--nologo"
-            "--multiemit+" // one assembly per evaluation, needed for line numbers in stack traces
-            if OperatingSystem.IsWindows() then "--gui+"
+            // A hosted session never exits, --exec only makes it non-interactive. Then FCS doesn't evaluate inside
+            // ControlledExecution, so runs can't be cancelled. Runs on the UI thread are never cancelled.
+            if mode = UiThread then "--exec"
+            "--nologo" // the banner would be echoed to the host
+            // One assembly per evaluation, needed for line numbers in stack traces. The default on .NET Core, not on .NET Framework.
+            "--multiemit+"
+            // FSI only defines INTERACTIVE
+#if NETFRAMEWORK
+            "--define:NETFRAMEWORK"
+#else
+            "--define:NET"
+            "--define:NETCOREAPP"
+#endif
+            "--define:CADDIS"
+            if hostSymbol <> "" then "--define:" + hostSymbol
             "-r:" + typeof<Script>.Assembly.Location // so that scripts can use Caddis.Script
             for r in host.References do "-r:" + r
             for dir in host.LibFolders do "--lib:" + dir
-            for a in s.extraFsiArgs do a
+            for a in s.extraFsiArgs do
+                if endsProcess a then host.Log $"Caddis: the F# Interactive argument '{a}' is ignored, it would close {host.Info.appName}."
+                else a
         |]
 
-    let createSession () : FsiEvaluationSession =
+    let createSession (mode: ThreadMode) : FsiEvaluationSession =
         // Don't change the global fsi object, e.g. its PrintWidth: it is shared with other FSI sessions in this process, e.g. from Fesh.
         let config = FsiEvaluationSession.GetDefaultConfiguration(FSharp.Compiler.Interactive.Shell.Settings.fsi, false)
         // FCS resolves FSharp.Core relative to the current directory, which is usually the folder of the host app.
@@ -184,40 +249,59 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
         let prevDir = Environment.CurrentDirectory
         try
             Directory.SetCurrentDirectory(Path.GetDirectoryName typeof<list<int>>.Assembly.Location)
-            FsiEvaluationSession.Create(config, fsiArgs (), new StringReader(""), fsiOut, fsiErr)
+#if NETFRAMEWORK
+            NetFramework.showPortablePdbLineNumbers ()
+            FsiEvaluationSession.Create(config, fsiArgs mode, new StringReader(""), fsiOut, fsiErr, legacyReferenceResolver = NetFramework.referenceResolver)
+#else
+            FsiEvaluationSession.Create(config, fsiArgs mode, new StringReader(""), fsiOut, fsiErr)
+#endif
         finally
             try Directory.SetCurrentDirectory prevDir with _ -> ()
 
     let flags = BindingFlags.NonPublic ||| BindingFlags.Instance
 
+#if NETFRAMEWORK
+    /// The run whose code FSI is evaluating, and its thread. Only in background mode.
+    let mutable evaluating: (Run * Thread) option = None
+
+    /// Called under the state lock. Takes the thread of the run, so that it is aborted only once.
+    /// On .NET Framework FCS has no CancellationTokenSource, an interactive session catches a ThreadAbortException,
+    /// resets it and returns an OperationCanceledException.
+    /// see https://github.com/dotnet/fsharp/blob/main/src/Compiler/Interactive/ControlledExecution.fs
+    let tryTakeStop (_: FsiEvaluationSession) (run: Run) : (unit -> unit) option =
+        match evaluating with
+        | Some(r, thread) when obj.ReferenceEquals(r, run) ->
+            evaluating <- None
+            // Abort blocks while the thread is in a finally block, so never under a lock.
+            Some(fun () -> Task.Run(fun () -> try thread.Abort() with _ -> ()) |> ignore)
+        | _ -> None
+#else
     /// The internal ControlledExecution of a session.
     /// see https://github.com/dotnet/fsharp/blob/main/src/Compiler/Interactive/ControlledExecution.fs
     let controlledExecution (s: FsiEvaluationSession) : obj =
         let controller = s.GetType().GetField("fsiInterruptController", flags).GetValue s
         controller.GetType().GetField("controlledExecution", flags).GetValue controller
 
-    /// FCS evaluates inside System.Runtime.ControlledExecution.Run only in interactive sessions,
-    /// that creates a new CancellationTokenSource for each evaluation.
-    /// A hosted session is not interactive, so set the flag via reflection to make runs cancellable.
-    let enableCancellation (s: FsiEvaluationSession) =
-        try
-            let ce = controlledExecution s
-            ce.GetType().GetField("isInteractive", flags).SetValue(ce, true)
-        with e ->
-            host.Log $"Caddis: background runs can't be cancelled, setting up cancellation via reflection failed: {e.Message}"
-
-    /// Snapshot the exact source under the state lock, then cancel it asynchronously outside the lock.
-    let tryGetCancellation (s: FsiEvaluationSession) : CancellationTokenSource option =
+    /// Called under the state lock. An interactive session evaluates inside System.Runtime.ControlledExecution.Run,
+    /// with a new CancellationTokenSource for each evaluation. Snapshot that exact source, so a later run's source is never cancelled.
+    let tryTakeStop (s: FsiEvaluationSession) (_: Run) : (unit -> unit) option =
         try
             let ce = controlledExecution s
             match ce.GetType().GetField("cts", flags).GetValue ce with
             | :? ValueOption<CancellationTokenSource> as cts ->
                 match cts with
-                | ValueSome c -> Some c
+                | ValueSome c ->
+                    Some(fun () ->
+                        try
+                            // ControlledExecution's abort callback may wait for the evaluation thread.
+                            // It must not block the caller, the state lock, or the abandonment deadline.
+                            c.CancelAsync().ContinueWith(Action<Task>(fun t -> if t.IsFaulted then t.Exception |> ignore)) |> ignore
+                        with :? ObjectDisposedException -> ())
                 | ValueNone -> None
             | _ -> None
         with _ ->
             None
+#endif
 
     /// Creates a new session in the background, after stopping and disposing the old one.
     let startSession () : Task =
@@ -244,10 +328,9 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                                     FsiAssemblyResolver.unregister s
                                     try (s :> IDisposable).Dispose() with _ -> ())
                             try
-                                let s = createSession ()
+                                let s = createSession m
                                 try FsiAssemblyResolver.register s
                                 with e -> host.Log $"Caddis: values of earlier runs might not be found, setting up the resolver for FSI assemblies failed: {e.Message}"
-                                if m = Background then enableCancellation s
                                 lock sync (fun () ->
                                     session <- Some s
                                     worker <- if m = Background then Some(new WorkerThread("Caddis FSI")) else None
@@ -387,9 +470,20 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                         beginCapture run
                         host.BeforeRun run
                         beforeRunDone <- true
+#if NETFRAMEWORK
+                        let result, diagnostics =
+                            if run.Mode = Background then lock sync (fun () -> evaluating <- Some(run, Thread.CurrentThread))
+                            try s.EvalInteractionNonThrowing(run.Code, run.ScriptPath)
+                            finally lock sync (fun () -> evaluating <- None)
+#else
                         let result, diagnostics = s.EvalInteractionNonThrowing(run.Code, run.ScriptPath)
+#endif
                         outcome <- outcomeOf run result diagnostics
                     with e ->
+#if NETFRAMEWORK
+                        // FSI resets an abort only while it runs the code, not e.g. while it compiles it
+                        if (e :? ThreadAbortException) then Thread.ResetAbort()
+#endif
                         outcome <-
                             if run.CancelRequested then cancelledOutcome run
                             else { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn run.ScriptPath e) }
@@ -407,7 +501,16 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                                 outcome <- { outcome with status = RuntimeError; value = None; message = Some message }
                 outcome
         let context: ScriptState.Context = { run = run; invokeOnUi = invokeForRun run }
-        let outcome = ScriptState.withContext context evaluate
+        let outcome =
+#if NETFRAMEWORK
+            try
+                ScriptState.withContext context evaluate
+            with :? ThreadAbortException ->
+                Thread.ResetAbort() // aborted after FSI returned, during cleanup the abort waits until the finally block ends
+                cancelledOutcome run
+#else
+            ScriptState.withContext context evaluate
+#endif
         finishRun run outcome
 
     // --- public members ---
@@ -586,20 +689,13 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                     while not run.IsFinished && (DateTime.UtcNow < deadline || run.HasActiveUiCallback) do
                         // Give cleanup its full grace period once an already-started host call returns.
                         if run.HasActiveUiCallback then deadline <- DateTime.UtcNow + abandonAfter
-                        // FCS creates this source only after evaluation starts. Never cancel a later run's source.
-                        let source =
+                        // FCS can be stopped only after evaluation starts. Never stop a later run.
+                        let stop =
                             lock sync (fun () ->
                                 match current, session with
-                                | Some r, Some s when obj.ReferenceEquals(r, run) && not run.HasActiveUiCallback -> tryGetCancellation s
+                                | Some r, Some s when obj.ReferenceEquals(r, run) && not run.HasActiveUiCallback -> tryTakeStop s run
                                 | _ -> None)
-                        match source with
-                        | Some c ->
-                            try
-                                // ControlledExecution's abort callback may wait for the evaluation thread.
-                                // It must not block the caller, the state lock, or the abandonment deadline.
-                                c.CancelAsync().ContinueWith(Action<Task>(fun t -> if t.IsFaulted then t.Exception |> ignore)) |> ignore
-                            with :? ObjectDisposedException -> ()
-                        | None -> ()
+                        stop |> Option.iter (fun f -> f ())
                         let! _ = Task.WhenAny(run.Completion, Task.Delay 250)
                         ()
                     if not run.IsFinished then this.Abandon run

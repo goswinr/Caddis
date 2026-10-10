@@ -27,7 +27,7 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 Four projects keep the core and shared UI independent of the host APIs:
 
 ```
-Caddis.Core/   net8.0;net10.0, no Rhino or Revit dependency
+Caddis.Core/   net8.0;net10.0;net48, no Rhino or Revit dependency
   Settings.fs      port, listenOnLan, autostart, threadMode, token → AppData/Caddis/settings.json
   Output.fs        TextWriter that captures output per run; swaps Console.Out/Err during an eval
   FsiHost.fs       session create/reset, eval, modes, cancel (ported from Fesh Src/Fsi.fs)
@@ -44,7 +44,7 @@ Caddis.UI/     net8.0;net10.0, shared Avalonia content, no Rhino or Revit depend
   PanelView.fs     shared view (PanelView.axaml, PanelStyles.axaml): state, settings, runs, output and code
   RunDetails.fs    output formatting, including Rhino commands and Revit grouped element changes
   FSharpHighlighting.fs  light/dark F# highlighting (FSharp.xshd); code formatting uses Fantomas 7
-Caddis.Rhino/  net8.0, TargetExt .rhp
+Caddis.Rhino/  net8.0 (Rhino 8), net10.0 (Rhino 9), net48 (Rhino 8 on .NET Framework, no panel), TargetExt .rhp
   AssemblyInfo.fs  new plugin GUID (not Fesh's)
   PlugIn.fs        load, UI SynchronizationContext, autostart, Rhino.Scripting hookup
   RhinoOps.fs      undo record wrapping, redraw, InCommand guard, viewport capture, export, undo

@@ -163,8 +163,11 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                 }
             try
                 do! respond ctx resp
-            with _ ->
-                () // the client disconnected
+            with
+            | :? HttpListenerException
+            | :? IOException
+            | :? ObjectDisposedException -> () // the client disconnected
+            | e -> host.Log $"Caddis: writing the response to {r.HttpMethod} {r.Url.AbsolutePath} failed: {e}"
         }
 
     /// A backgroundTask, not a task: Start is called on the UI thread of the host,

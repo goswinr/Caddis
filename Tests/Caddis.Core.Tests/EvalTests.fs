@@ -57,7 +57,7 @@ let ``returns files saved to Script.OutDir`` () =
 
 [<Fact>]
 let ``evaluates a file with its source directory`` () =
-    let dir = Directory.CreateTempSubdirectory("CaddisTests").FullName
+    let dir = newTempDir ()
     let path = Path.Combine(dir, "test.fsx")
     File.WriteAllText(path, "__SOURCE_DIRECTORY__")
     let run = svc.Value.Eval({ evalArgs "" with code = None; path = Some path }).Result
@@ -82,7 +82,7 @@ let ``type-checks against the definitions of earlier runs`` () =
 
 [<Fact>]
 let ``type-check finds files of #load next to the script`` () =
-    let dir = Directory.CreateTempSubdirectory("CaddisTests").FullName
+    let dir = newTempDir ()
     File.WriteAllText(Path.Combine(dir, "helper.fsx"), "module Helper\nlet greet (name: string) = \"hi \" + name")
     let path = Path.Combine(dir, "main.fsx")
     File.WriteAllText(path, "#load \"helper.fsx\"\n#load \"missing.fsx\"")
@@ -146,10 +146,16 @@ let simpleNameResolver =
         System.AppDomain.CurrentDomain.GetAssemblies() |> Array.tryFind (fun a -> a.GetName().Name = name) |> Option.toObj)
 
 let putResolverFirst (h: System.ResolveEventHandler) =
+#if NETFRAMEWORK
+    let field = typeof<System.AppDomain>.GetField("_AssemblyResolve", System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Instance)
+    let owner = box System.AppDomain.CurrentDomain
+#else
     let field =
         typeof<System.Runtime.Loader.AssemblyLoadContext>
             .GetField("AssemblyResolve", System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Static)
-    field.SetValue(null, System.Delegate.Combine(h, field.GetValue null :?> System.Delegate))
+    let owner = null
+#endif
+    field.SetValue(owner, System.Delegate.Combine(h, field.GetValue owner :?> System.Delegate))
 
 [<Fact>]
 let ``keeps values of earlier runs with a host resolver that matches simple names`` () =
@@ -174,3 +180,38 @@ let ``reset loses definitions`` () =
     s.Fsi.Reset().Wait()
     let run = eval s "beforeReset"
     Assert.Equal(CompileError, run.Status)
+
+[<Fact>]
+let ``defines symbols for the runtime and the host`` () =
+    let code =
+        String.concat "\n" [
+            "let symbols = ResizeArray<string>()"
+            for s in [ "CADDIS"; "HEADLESS"; "NETFRAMEWORK"; "NETCOREAPP"; "INTERACTIVE" ] do
+                $"#if {s}\nsymbols.Add \"{s}\"\n#endif"
+            "String.concat \",\" symbols"
+        ]
+#if NETFRAMEWORK
+    Assert.Equal("\"CADDIS,HEADLESS,NETFRAMEWORK,INTERACTIVE\"", valueText (eval svc.Value code))
+#else
+    Assert.Equal("\"CADDIS,HEADLESS,NETCOREAPP,INTERACTIVE\"", valueText (eval svc.Value code))
+#endif
+
+#if NETFRAMEWORK
+[<Fact>]
+let ``shows script lines in a host that ignores portable PDBs`` () =
+    // like Rhino.exe, which doesn't say which .NET Framework version it targets
+    System.AppContext.SetSwitch("Switch.System.Diagnostics.IgnorePortablePDBsInStackTraces", true)
+    typeof<obj>.Assembly
+        .GetType("System.AppContextSwitches")
+        .GetField("_ignorePortablePDBsInStackTraces", System.Reflection.BindingFlags.NonPublic ||| System.Reflection.BindingFlags.Static)
+        .SetValue(null, 1)
+    let run = eval (newService ()) "let a = 1\nlet b = 2\nif a < b then failwith \"boom\""
+    Assert.Equal(Some 3, run.Outcome.exn.Value.scriptLine)
+#endif
+
+[<Fact>]
+let ``ignores extra FSI arguments that would close the host`` () =
+    let store = newStore ()
+    store.Save { CaddisSettings.defaults with extraFsiArgs = [| "--help"; "-?"; "/version"; "--langversion:?"; "--define:EXTRA" |] }
+    let s = CaddisService(new HeadlessHost(ignore), store, RunRegistry(Path.Combine(store.Folder, "runs")))
+    Assert.Equal("1", valueText (eval s "#if EXTRA\n1\n#else\n0\n#endif"))

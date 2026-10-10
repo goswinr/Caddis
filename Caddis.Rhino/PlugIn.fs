@@ -14,16 +14,29 @@ type CaddisPlugIn() =
     override _.LoadTime = PlugInLoadTime.AtStartup
 
     override this.OnLoad(errorMessage) =
-        if Environment.Version.Major < 8 then
+        if App.server.IsSome then
+            // Loading the .rhp again, e.g. by dragging it into Rhino, calls OnLoad of a second instance
+            // before Rhino refuses it because its id is in use. It must not start a second server.
+            errorMessage <- "Caddis is already loaded."
+            LoadReturnCode.ErrorNoDialog
+#if !NETFRAMEWORK
+        elif Environment.Version.Major < 8 then
             errorMessage <-
                 $"Caddis needs .NET 8, but Rhino is running on {RuntimeInformation.FrameworkDescription}. Use the Rhino command 'SetDotNetRuntime' to switch."
             LoadReturnCode.ErrorShowDialog
+#endif
         else
             try
+                // before Caddis.Core uses System.Text.Json or FCS, so that on .NET Framework it gets its versions, not Rhino's older ones
+                try FsiAssemblyResolver.install ()
+                with e -> RhinoLog.writeLine $"Caddis: putting its assembly resolver first failed: {e.Message}"
                 RhinoScriptingSync.install ()
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
                 RhinoApp.Closing.Add(fun _ -> App.shutdown ())
+#if NETFRAMEWORK
+                ignore this // the panel needs .NET 8
+#else
                 try
                     Rhino.UI.Panels.RegisterPanel(
                         this, typeof<CaddisPanel>, "Caddis", typeof<CaddisPanel>.Assembly,
@@ -31,6 +44,7 @@ type CaddisPlugIn() =
                     )
                 with e ->
                     RhinoLog.writeLine $"Caddis: registering the panel failed: {e.Message}"
+#endif
                 if server.Service.Settings.autoStart then App.start ()
                 LoadReturnCode.Success
             with e ->

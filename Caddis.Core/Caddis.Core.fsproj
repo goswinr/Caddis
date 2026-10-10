@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- plain net8.0, no WPF, so that it runs in Rhino 8 on Windows and Mac. net10.0 for Revit 2026.5. -->
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <!-- plain net8.0, no WPF, so that it runs in Rhino 8 on Windows and Mac. net10.0 for Revit 2026.5. net48 for Rhino on .NET Framework. -->
+    <TargetFrameworks>net8.0;net10.0;net48</TargetFrameworks>
     <RootNamespace>Caddis</RootNamespace>
     <AssemblyName>Caddis.Core</AssemblyName>
     <Description>Hosts F# Interactive in a .NET app and controls it via HTTP and MCP.</Description>
@@ -20,8 +20,15 @@
     <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <!-- Like Fesh 0.34.0-net472. System.Text.Json is in-box only on .NET Core, this version matches the 10.0.2 dependencies of FCS. -->
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
+    <PackageReference Include="System.Text.Json" Version="10.0.2" />
+  </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Compat.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="Settings.fs" />
     <Compile Include="Output.fs" />

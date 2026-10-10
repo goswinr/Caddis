@@ -12,6 +12,16 @@ open Caddis
 [<assembly: CollectionBehavior(DisableTestParallelization = true)>]
 do ()
 
+#if NETFRAMEWORK
+type System.Net.Http.HttpClient with
+    /// HttpClient.Send is .NET 5+
+    member c.Send(request: System.Net.Http.HttpRequestMessage) = c.SendAsync(request).GetAwaiter().GetResult()
+#endif
+
+/// A new temporary folder.
+let newTempDir () =
+    Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisTests", Guid.NewGuid().ToString "N")).FullName
+
 /// A settings store in a new temporary folder.
 let newStore () =
     SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisTests", Guid.NewGuid().ToString "N"))

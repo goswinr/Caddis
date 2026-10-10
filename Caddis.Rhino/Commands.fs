@@ -28,7 +28,9 @@ type CaddisCommand() =
             let mutable cancelWaiting = new OptionToggle(settings.cancelWaitingCommands, "Off", "On")
             let mutable lan = new OptionToggle(settings.listenOnLan, "Off", "On")
             let iStartStop = go.AddOption(if server.IsRunning then "Stop" else "Start")
+#if !NETFRAMEWORK // the panel needs .NET 8
             let iPanel = go.AddOption "Panel"
+#endif
             let iCopy = go.AddOption "CopyMcpCommand"
             let iMode = go.AddOptionList("Mode", [| "UIThread"; "Background" |], (match server.Service.Fsi.Mode with UiThread -> 0 | Background -> 1))
             let iCancel = go.AddOption "Cancel"
@@ -51,7 +53,9 @@ type CaddisCommand() =
                     elif i = iLan then App.setListenOnLan lan.CurrentValue
                     else
                         if i = iStartStop then (if server.IsRunning then App.stop () else App.start ())
+#if !NETFRAMEWORK
                         elif i = iPanel then Rhino.UI.Panels.OpenPanel typeof<CaddisPanel>.GUID
+#endif
                         elif i = iCopy then App.copyMcpCommand ()
                         elif i = iMode then App.setMode (if go.Option().CurrentListOptionIndex = 1 then Background else UiThread)
                         elif i = iCancel then App.cancel ()
