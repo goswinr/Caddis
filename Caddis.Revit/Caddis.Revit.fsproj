@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Revit 2026.5 runs on .NET 10. WPF for the ribbon icons and the clipboard. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Caddis.Revit</RootNamespace>
+    <AssemblyName>Caddis.Revit</AssemblyName>
+    <AssemblyTitle>Caddis</AssemblyTitle>
+    <Description>An F# interactive host for Revit, controlled via HTTP and MCP.</Description>
+    <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the dll.
+    Fesh.Revit found that without it FSharp.Core fails to load in Revit 2025. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Revit provides its API at runtime. There is no package for 2026.5 yet, the API of 2026 updates is the same. -->
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2026.4.10" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2026.4.10" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="FSharp.Core" Version="10.1.401" /> <!-- the version that FCS pins in the net10.0 build of Caddis.Core -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.Revit.Resources.Caddis.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Log.fs" />
+    <Compile Include="ApiContext.fs" />
+    <Compile Include="Script.fs" />
+    <Compile Include="RevitInfo.fs" />
+    <Compile Include="RevitDialogs.fs" />
+    <Compile Include="RevitHost.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Panel.fs" />
+    <Compile Include="Addin.fs" />
+  </ItemGroup>
+</Project>

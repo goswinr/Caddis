@@ -228,6 +228,8 @@ type RunKind =
     | FSharpCode
     /// Commands of the host app, e.g. Rhino command macros like "-_Line 0,0,0 10,0,0", see ICaddisHost.RunCommands.
     | HostCommands
+    /// An export to a file, see ICaddisHost.Export.
+    | HostExport
 
 module RunKind =
 
@@ -235,6 +237,7 @@ module RunKind =
         match k with
         | FSharpCode -> "fsharp"
         | HostCommands -> "commands"
+        | HostExport -> "export"
 
 
 /// What one macro of a command run did, e.g. "-_Line 0,0,0 10,0,0".
@@ -246,17 +249,20 @@ type CommandStep = {
     waitedAt: string option
     }
 
-/// What a command run did.
+/// What a command run did. Object ids are in the format of the host, e.g. GUIDs in Rhino.
 type CommandReport = {
     /// The macros that ran, in order.
     steps: CommandStep list
     /// The macros after the one that failed.
     notRun: string list
-    created: Guid[]
-    changed: Guid[]
-    deleted: Guid[]
+    created: string[]
+    changed: string[]
+    /// The changed objects counted per group, e.g. per Revit category, most first. If not empty, results show it instead of the ids of changed objects:
+    /// Revit reports many elements that it updated itself, e.g. schedules.
+    changedGroups: (string * int) list
+    deleted: string[]
     /// The selected objects after the commands, if the selection changed.
-    selected: Guid[] option
+    selected: string[] option
     }
 
 module CommandReport =
@@ -277,7 +283,7 @@ module CommandReport =
     ]
 
     let toJson (r: CommandReport) : JsonNode =
-        let ids (a: Guid[]) = a |> Seq.map string |> Json.ofStrings :> JsonNode
+        let ids (a: string[]) = Json.ofStrings a :> JsonNode
         Json.obj [
             "steps",
             Json.arr [
@@ -291,6 +297,7 @@ module CommandReport =
             "notRun", Json.ofStrings r.notRun
             "created", ids r.created
             "changed", ids r.changed
+            "changedByGroup", (if r.changedGroups.IsEmpty then null else Json.obj [ for g, n in r.changedGroups -> g, Json.ofInt n ] :> JsonNode)
             "deleted", ids r.deleted
             "selected", Json.ofOption ids r.selected
         ]
@@ -337,6 +344,10 @@ type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: 
     /// The files in the output folder, set when the run finishes.
     member _.Files = files
 
+    /// Set when the evaluation thread picks up the run. A run on the UI thread waits until the host app runs it,
+    /// e.g. Revit only when no dialog or command is active.
+    member val Started = false with get, set
+
     member _.CancelRequested = cancelRequested
     member _.TimeoutRequested = timeoutRequested
     member _.MarkCancelRequested() = cancelRequested <- true
@@ -351,7 +362,7 @@ type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: 
     /// The runtime serial number of the document of the undo record.
     member val DocSerial = 0u with get, set
 
-    /// Set by the host after a command run.
+    /// Set by the host after a command run. Also after an F# run by a host that tracks the objects it changed, e.g. Revit, then without steps.
     member val Commands: CommandReport option = None with get, set
 
     /// F# runs: cancel host commands that the script starts, e.g. via RhinoApp.RunScript, when they wait this long for input.
@@ -387,6 +398,7 @@ type Run(id: string, kind: RunKind, mode: ThreadMode, code: string, scriptPath: 
             "id", Json.ofString id
             "kind", Json.ofString (RunKind.toString kind)
             "status", Json.ofString (RunStatus.toString o.status)
+            "started", Json.ofBool this.Started
             "mode", Json.ofString (ThreadMode.toString mode)
             "scriptPath", Json.ofString scriptPath
             "startedAt", Json.ofString (startedAt.ToString "o")
@@ -517,7 +529,8 @@ module CaptureSize =
 type ExportSelection =
     | AllObjects
     | SelectedObjects
-    | ObjectIds of Guid[]
+    /// Ids in the format of the host, see HostInfo.isObjectId.
+    | ObjectIds of string[]
 
 
 /// Commands to run in the host app, see ICaddisHost.RunCommands.
@@ -525,14 +538,104 @@ type CommandRequest = {
     /// Run one after the other until one doesn't succeed.
     macros: string[]
     /// Objects to select before the first command, replacing the selection.
-    select: Guid[] option
+    select: string[] option
     /// Cancel a command that waits this long for input. None waits until someone gives the input in the host app.
     inputTimeout: TimeSpan option
     }
 
 
+/// A modal dialog of the host app, which blocks calls into it until it is closed.
+type HostDialog = {
+    /// e.g. the window handle "0x5A0C2E"
+    id: string
+    title: string
+    /// The text of the dialog, e.g. its question.
+    text: string
+    /// The names of its buttons, e.g. ["Save the project"; "Cancel"].
+    buttons: string list
+    }
+
+module HostDialog =
+
+    let toJson (d: HostDialog) : JsonNode =
+        Json.obj [
+            "id", Json.ofString d.id
+            "title", Json.ofString d.title
+            "text", Json.ofString d.text
+            "buttons", Json.ofStrings d.buttons
+        ]
+
+    /// e.g. "'Project Not Saved Recently' (id 0x5A0C2E): You have not saved ... Buttons: 'Save the project', 'Cancel'."
+    let describe (d: HostDialog) =
+        let text = if String.IsNullOrWhiteSpace d.text then "" else ": " + d.text.Trim()
+        let buttons = d.buttons |> List.map (fun b -> $"'{b}'") |> String.concat ", "
+        $"'{d.title}' (id {d.id}){text} Buttons: {buttons}."
+
+
+/// The texts of the caddis_command tool, for hosts that have commands.
+type CommandToolTexts = {
+    description: string
+    /// The 'commands' argument.
+    commands: string
+    /// The 'select' argument.
+    select: string
+    /// The 'inputTimeoutMs' argument.
+    inputTimeoutMs: string
+    }
+
+/// The texts of the MCP endpoint that depend on the host app, written for the model.
+type McpTexts = {
+    /// Sent on initialize: what Caddis does in this app and how to use the tools.
+    instructions: string
+    eval: string
+    /// The 'recordUndo' argument of caddis_eval.
+    recordUndo: string
+    /// None if the host has no commands, then caddis_command is not offered.
+    command: CommandToolTexts option
+    describe: string
+    /// The 'name' argument of caddis_describe.
+    describeName: string
+    status: string
+    cancel: string
+    setMode: string
+    undo: string
+    capture: string
+    /// The 'view' argument of caddis_capture_viewport.
+    captureView: string
+    /// The 'displayMode' argument of caddis_capture_viewport.
+    captureDisplayMode: string
+    export: string
+    /// The 'format' argument of caddis_export.
+    exportFormat: string
+    /// The 'objects' argument of caddis_export.
+    exportObjects: string
+    /// The 'objectIds' argument of caddis_export.
+    exportObjectIds: string
+    /// The description of caddis_dialog. None if the host can't find its dialogs, then the tool is not offered.
+    dialog: string option
+    }
+
+/// What differs between the apps that host Caddis, e.g. Rhino and Revit.
+type HostInfo = {
+    /// e.g. "Rhino" or "Revit", used in messages.
+    appName: string
+    /// The name of the MCP server, in its serverInfo and in the 'claude mcp add' command, e.g. "caddis".
+    mcpServerName: string
+    /// Where the person copies the 'claude mcp add' command, e.g. "the Rhino command 'Caddis CopyMcpCommand'".
+    copyMcpCommandUi: string
+    /// What object ids look like, for error messages, e.g. "an object id (a GUID)".
+    objectIdKind: string
+    /// True if the text is an object id of this host.
+    isObjectId: string -> bool
+    mcp: McpTexts
+    }
+
+
 /// The services an app that hosts Caddis provides, e.g. Rhino.
 type ICaddisHost =
+    /// The texts and names that depend on the host app.
+    abstract Info: HostInfo
+
     /// e.g. "Rhino 8.19 on Windows"
     abstract Description: string
 
@@ -551,9 +654,9 @@ type ICaddisHost =
     /// Called on the evaluation thread right before the code of a run is evaluated.
     abstract BeforeRun: Run -> unit
 
-    /// Called on the evaluation thread after a run, also after errors and cancellation.
+    /// Called on the evaluation thread after a run, also after errors and cancellation, with the status the run will end with.
     /// Writes what was printed to the host's command line during the run to run.CommandLine.
-    abstract AfterRun: Run -> unit
+    abstract AfterRun: run: Run * status: RunStatus -> unit
 
     /// Called for all script output, from any thread.
     abstract Echo: kind: OutputKind * text: string -> unit
@@ -573,6 +676,13 @@ type ICaddisHost =
 
     /// Undoes the changes of the given run, if they are the last ones. Called on the UI thread.
     abstract Undo: Run -> Result<string, string>
+
+    /// The modal dialogs the host app shows. Called from any thread, also while the UI thread is busy, so it must not need it.
+    /// Empty if the host can't find them.
+    abstract Dialogs: unit -> HostDialog list
+
+    /// Presses a button of a dialog, found by its name. dialogId is from Dialogs, or empty for the only dialog. Called from any thread.
+    abstract PressDialogButton: dialogId: string * button: string -> Result<string, string>
 
     /// Runs commands of the host app, e.g. Rhino command macros, writes what they print to run.CommandLine,
     /// sets run.Commands and the undo records, and returns the outcome. Called on the UI thread.

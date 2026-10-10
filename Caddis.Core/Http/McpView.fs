@@ -128,22 +128,29 @@ let image (f: FileItem) : JsonNode =
 /// The objects that a command run created, changed, deleted and selected, one line per group.
 /// Long groups list only the first ids, all of them are saved to a file.
 let private objectLines (runs: RunRegistry) (runId: string) (c: CommandReport) : string list =
-    let group (name: string) (ids: Guid[]) = [
+    let saveAll (name: string) (ids: string[]) =
+        try
+            let file = runs.SaveLog(runId, name, String.concat "\n" ids)
+            $", all in {file.path}"
+        with _ ->
+            ""
+    let group (name: string) (ids: string[]) = [
         if ids.Length > 0 then
-            let shown = ids |> Seq.truncate maxIds |> Seq.map string |> String.concat ", "
-            if ids.Length <= maxIds then
-                $"{name} ({ids.Length}): {shown}"
-            else
-                let saved =
-                    try
-                        let file = runs.SaveLog(runId, name, ids |> Seq.map string |> String.concat "\n")
-                        $", all in {file.path}"
-                    with _ ->
-                        ""
-                $"{name} ({ids.Length}, the first {maxIds}{saved}): {shown}"
+            let shown = ids |> Seq.truncate maxIds |> String.concat ", "
+            if ids.Length <= maxIds then $"{name} ({ids.Length}): {shown}"
+            else $"{name} ({ids.Length}, the first {maxIds}{saveAll name ids}): {shown}"
     ]
+    // counts per group instead of ids, e.g. per Revit category, the ids are saved to a file
+    let changed =
+        match c.changedGroups with
+        | [] -> group "changed" c.changed
+        | groups when c.changed.Length > 0 ->
+            let counts = groups |> List.map (fun (g, n) -> $"{n} {g}") |> String.concat ", "
+            let saved = saveAll "changed" c.changed
+            [ $"changed ({c.changed.Length}{saved}): {counts}" ]
+        | _ -> []
     group "created" c.created
-    @ group "changed" c.changed
+    @ changed
     @ group "deleted" c.deleted
     @ (match c.selected with
        | Some [||] -> [ "selected: nothing" ]
@@ -151,8 +158,9 @@ let private objectLines (runs: RunRegistry) (runId: string) (c: CommandReport) :
        | None -> [])
 
 /// A run as text for the model, and the images it saved as image content items.
+/// appName: the host app, e.g. "Rhino".
 /// stdoutFrom: only show stdout from this character offset on, e.g. to poll a running run for new output.
-let run (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: int64) (r: Run) : string * JsonNode list =
+let run (appName: string) (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: int64) (r: Run) : string * JsonNode list =
     let o = r.Outcome
     let sb = StringBuilder()
     let line (s: string) = sb.Append(s).Append('\n') |> ignore
@@ -186,13 +194,18 @@ let run (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: 
         line $"Run {r.Id}: {RunStatus.toString r.Status} after {int64 r.Duration.TotalMilliseconds} ms{undo}."
     else
         line $"Run {r.Id}: still running after %.1f{r.Duration.TotalSeconds} s."
-        if r.Kind = HostCommands then
+        if not r.Started then
             line
-                $"A command waits in Rhino for input or in a dialog. Wait for the result with caddis_get_run (runId '{r.Id}'). caddis_cancel cancels a command that waits for input, a dialog must be closed in Rhino."
+                $"It has not started yet: {appName} runs it only when it is idle, not while a dialog, a command or an edit mode is active in it. Wait for the result with caddis_get_run (runId '{r.Id}')."
+        elif r.Kind = HostCommands then
+            line
+                $"A command waits in {appName} for input or in a dialog. Wait for the result with caddis_get_run (runId '{r.Id}'). caddis_cancel cancels a command that waits for input, a dialog must be closed in {appName}."
+        elif r.Kind = HostExport then
+            line $"The export is still running in {appName}. Wait for the files with caddis_get_run (runId '{r.Id}'), an export can't be cancelled."
         elif r.Mode = Background then
             line $"Wait for the result with caddis_get_run (runId '{r.Id}'), or stop the run with caddis_cancel."
         else
-            line $"Wait for the result with caddis_get_run (runId '{r.Id}'). It runs on the UI thread, so it can't be cancelled and Rhino is blocked until it finishes."
+            line $"Wait for the result with caddis_get_run (runId '{r.Id}'). It runs on the UI thread, so it can't be cancelled and {appName} is blocked until it finishes."
     o.message |> Option.iter line
     for n in r.Notes do line n
     for n in notes do line n
@@ -205,7 +218,7 @@ let run (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: 
         section "objects" (objectLines runs r.Id c |> String.concat "\n"))
     section "F# Interactive" fsiOut
     section (if stdoutFrom > 0L then $"stdout from character {stdoutFrom}" else "stdout") stdout
-    section "Rhino command line" commandLine
+    section $"{appName} command line" commandLine
     section "stderr" stderr
     section "diagnostics" (diagnosticLines r.ScriptPath (relevant o.diagnostics) |> String.concat "\n")
     o.exn |> Option.iter (fun x -> section "exception" (exceptionText r.ScriptPath x))

@@ -13,19 +13,22 @@ type CommandHost(runCommands: Run * CommandRequest -> RunOutcome) =
     let inner = new HeadlessHost(ignore) :> ICaddisHost
 
     interface ICaddisHost with
+        member _.Info = inner.Info
         member _.Description = inner.Description
         member _.LibFolders = inner.LibFolders
         member _.References = inner.References
         member _.InvokeOnUi<'T>(f: unit -> 'T) = inner.InvokeOnUi f
         member _.CannotRunReason() = inner.CannotRunReason()
         member _.BeforeRun r = inner.BeforeRun r
-        member _.AfterRun r = inner.AfterRun r
+        member _.AfterRun(r, s) = inner.AfterRun(r, s)
         member _.Echo(k, t) = inner.Echo(k, t)
         member _.Log m = inner.Log m
         member _.Status() = inner.Status()
         member _.CaptureView(v, w, h, d, p) = inner.CaptureView(v, w, h, d, p)
         member _.Export(s, p) = inner.Export(s, p)
         member _.Undo r = inner.Undo r
+        member _.Dialogs() = inner.Dialogs()
+        member _.PressDialogButton(d, b) = inner.PressDialogButton(d, b)
         member _.RunCommands(run, req) = runCommands (run, req)
 
 let newServiceWith (host: ICaddisHost) =
@@ -50,8 +53,9 @@ let ``a command run reports its steps and leaves out a leading exclamation mark`
                 Some {
                     steps = [ for m in req.macros -> { macro = m; commands = [ "Line", "Success" ]; waitedAt = None } ]
                     notRun = []
-                    created = [| Guid.NewGuid() |]
+                    created = [| string (Guid.NewGuid()) |]
                     changed = [||]
+                    changedGroups = []
                     deleted = [||]
                     selected = None
                 }
@@ -65,9 +69,9 @@ let ``a command run reports its steps and leaves out a leading exclamation mark`
     let req = received.Value
     Assert.Equal<string[]>([| "-_Line 0,0,0 10,0,0" |], req.macros)
     Assert.Equal(Some(TimeSpan.FromMilliseconds(float CaddisService.DefaultInputTimeoutMs)), req.inputTimeout)
-    let text, _ = McpView.run svc.Runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" svc.Runs "http://127.0.0.1:7810" [] 0L run
     Assert.Contains("--- commands ---\n-_Line 0,0,0 10,0,0 -> Line: Success", text)
-    Assert.Contains("--- Rhino command line ---\nCommand: -_Line", text)
+    Assert.Contains("--- Headless command line ---\nCommand: -_Line", text)
 
 [<Fact>]
 let ``inputTimeoutMs 0 waits for the user`` () =
@@ -140,7 +144,7 @@ let ``MCP shows the notes of a run`` () =
     let run = Run("r1", FSharpCode, UiThread, "1", "", runs.CreateFolder "r1", 10_000, true)
     run.AddNote "Caddis cancelled the command Length that the script started."
     run.Complete(RunOutcome.ofStatus Succeeded) |> ignore
-    let text, _ = McpView.run runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" runs "http://127.0.0.1:7810" [] 0L run
     Assert.Contains("ok after", text)
     Assert.Contains("\nCaddis cancelled the command Length that the script started.", text)
 
@@ -148,8 +152,8 @@ let ``MCP shows the notes of a run`` () =
 let ``MCP shows the objects of a command run and saves long id lists`` () =
     let runs = RunRegistry(Path.Combine(Path.GetTempPath(), "CaddisTests", "runs-" + Guid.NewGuid().ToString "N"))
     let run = Run("c1", HostCommands, UiThread, "-_Line 0,0,0 10,0,0\n-_Loft\n_Zoom", "", runs.CreateFolder "c1", 10_000, true)
-    let created = Guid.NewGuid()
-    let deleted = Array.init (McpView.maxIds + 10) (fun _ -> Guid.NewGuid())
+    let created = string (Guid.NewGuid())
+    let deleted = Array.init (McpView.maxIds + 10) (fun _ -> string (Guid.NewGuid()))
     run.Commands <-
         Some {
             steps = [
@@ -159,13 +163,14 @@ let ``MCP shows the objects of a command run and saves long id lists`` () =
             notRun = [ "_Zoom" ]
             created = [| created |]
             changed = [||]
+            changedGroups = []
             deleted = deleted
             selected = Some [||]
         }
     run.UndoSerial <- Some 7u
     run.UndoSteps <- 2
     run.Complete(RunOutcome.withMessage Cancelled "Caddis cancelled Loft.") |> ignore
-    let text, _ = McpView.run runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" runs "http://127.0.0.1:7810" [] 0L run
     Assert.Contains("its changes can be undone with caddis_undo (2 undo steps)", text)
     Assert.Contains("-_Loft -> Loft: Cancel (cancelled while waiting at the prompt 'Select curves to loft ( Point )')\n_Zoom -> not run", text)
     Assert.Contains($"created (1): {created}", text)

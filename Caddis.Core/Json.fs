@@ -35,9 +35,9 @@ module Json =
     let prop (name: string) (node: JsonNode) : JsonNode option =
         match node with
         | :? JsonObject as o ->
-            match o.TryGetPropertyValue name with
-            | true, v when not (isNull v) -> Some v
-            | _ -> None
+            // .NET 10 has an overload with the index too
+            let mutable v: JsonNode = null
+            if o.TryGetPropertyValue(name, &v) && not (isNull v) then Some v else None
         | _ -> None
 
     let tryString (name: string) (node: JsonNode) : string option =

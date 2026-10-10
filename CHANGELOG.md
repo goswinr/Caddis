@@ -21,8 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs have `notes` from the host, shown in MCP results and the panel.
 - Tooltips for all buttons, checkboxes and the thread mode in the panel.
 - The logo in the panel opens the GitHub repository.
+- `Caddis.Revit`, an add-in for Revit 2026.5 on .NET 10, tested in Revit 2026.5: the same F# session, REST and MCP tools without `caddis_command`. Runs on the UI thread run in Revit's API context via an external event, each in a transaction group: one undo step if it succeeds, rolled back if it fails.
+- Revit: warnings are removed and listed as notes, errors roll back their transaction. Results list the created, changed and deleted element ids. `Caddis.Revit.Script` has `Doc`, `UiDoc`, `UiApp`, `Transact` and `OnUi`.
+- Revit: its own settings file, port 7820 and MCP name `caddis-revit`, a ribbon tab, and `install-dev.ps1` to register a build.
+- Revit: an optional dockable Caddis pane, shown and hidden with the ribbon button `Panel`, like the panel in Rhino: server state and settings, the recent runs, and the output and code of the selected run.
+- Revit: changed elements are counted per category in MCP results, e.g. '95 <Path of Travel Lines>, 3 Schedules', their ids are saved to a file. A script that leaves a transaction open gets its run rolled back with a note.
+- `caddis_dialog` tool, `GET /dialogs` and `POST /dialog` (Revit only): list the host app's open modal dialog with its text and buttons, or press a button. `caddis_status` and results of runs still running name an open dialog, since it blocks all calls into Revit.
+- Runs have `started`: a run still waiting for the host app says in MCP that it has not started yet.
 
 ### Changed
+- Caddis.Core is independent of the host app: `ICaddisHost.Info` gives the app name, the MCP server name, the texts of the MCP tools and the format of object ids. Object ids are strings, `AfterRun` gets the status of the run, `SettingsStore` takes a settings file name and defaults per host.
+- Caddis.Core targets net8.0 for Rhino 8 (FSharp.Compiler.Service 43.8.403, FSharp.Core 8.0.403) and net10.0 for Revit (FSharp.Compiler.Service 43.12.401, FSharp.Core 10.1.401). The resolver for values of earlier runs also matches the `FSI-ASSEMBLY-MULTI` assemblies of FCS 43.12.
+- `caddis_export` and `POST /export` start a run of kind `export`, like `caddis_eval`: it returns `running` after `waitMs` (MCP default 50 s) and `caddis_get_run` returns its files. It takes the one run slot, so other runs get 409 meanwhile, and it can't be cancelled.
 - Copied Claude Code MCP setup command uses user scope so Caddis is available across projects.
 - Panel run details show executed code in its own read-only tab, separate from output and diagnostics.
 - Panel checkboxes align in one column beside the button and thread-mode rows, leaving more vertical space for runs and details.

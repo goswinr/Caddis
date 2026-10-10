@@ -94,7 +94,7 @@ let ``type-check finds files of #load next to the script`` () =
 
 /// The text an MCP client gets for a run.
 let mcpText (run: Run) =
-    let text, _ = McpView.run svc.Value.Runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" svc.Value.Runs "http://127.0.0.1:7810" [] 0L run
     text
 
 [<Fact>]
@@ -133,7 +133,7 @@ let ``shortens long output for MCP clients and saves it to a file`` () =
 [<Fact>]
 let ``returns images saved by a run inline`` () =
     let run = eval svc.Value "System.IO.File.WriteAllBytes(System.IO.Path.Combine(Caddis.Script.OutDir, \"plot.png\"), [| 1uy; 2uy; 3uy |])"
-    let text, images = McpView.run svc.Value.Runs "http://127.0.0.1:7810" [] 0L run
+    let text, images = McpView.run "Headless" svc.Value.Runs "http://127.0.0.1:7810" [] 0L run
     let image = Assert.Single images
     Assert.Equal("image/png", image["mimeType"].GetValue<string>())
     Assert.Equal("AQID", image["data"].GetValue<string>())

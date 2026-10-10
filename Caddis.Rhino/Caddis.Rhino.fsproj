@@ -18,7 +18,7 @@
     <PackageReference Include="RhinoCommon" Version="8.19.25132.1001" PrivateAssets="all" ExcludeAssets="runtime" />
     <!-- a dependency of RhinoCommon, provided by .NET (Windows) or Rhino (Mac) at runtime -->
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" PrivateAssets="all" ExcludeAssets="runtime" />
-    <PackageReference Include="FSharp.Core" Version="8.0.403" />
+    <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- the version that FCS pins in the net8.0 build of Caddis.Core -->
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="RhinoInfo.fs" />
     <Compile Include="RhinoHost.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Panel.fs" />

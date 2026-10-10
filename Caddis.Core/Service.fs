@@ -22,8 +22,8 @@ type EvalArgs = {
 type CommandArgs = {
     /// Command macros, e.g. "-_Line 0,0,0 10,0,0".
     commands: string[]
-    /// Objects to select before the first command, replacing the selection.
-    select: Guid[] option
+    /// Objects to select before the first command, replacing the selection, in the id format of the host.
+    select: string[] option
     /// Cancel a command that waits this long for input, 0 waits until someone gives it. None uses the default.
     inputTimeoutMs: int option
     /// Return after this time even if the run has not finished, it keeps running. None waits until it finished, 0 returns at once.
@@ -117,6 +117,7 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
 
     /// Starts a run of host commands, e.g. Rhino command macros. Raises a BusyException if a run is in progress.
     member _.StartCommands(args: CommandArgs) : Run =
+        if host.Info.mcp.command.IsNone then failwith $"{host.Info.appName} has no commands to run, use /eval instead."
         // '!' cancels a running command in button macros, RunScript doesn't support it, and commands never run while another one does
         let macros =
             args.commands
@@ -152,7 +153,7 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
         match given name, given search with
         | Some n, _ -> api.Describe(n, given filter |> Option.toObj)
         | None, Some s -> api.Search s
-        | None, None -> invalidArg "name" "Provide 'name', e.g. 'Rhino.Geometry', 'Brep' or 'Brep.CreateFromBox', or 'search', e.g. 'offset'."
+        | None, None -> invalidArg "name" "Provide 'name' of a namespace, type or member, e.g. 'System.IO', 'File' or 'File.ReadAllText', or 'search', e.g. 'offset'."
 
     /// Saves a viewport as PNG. Returns the id of the output folder and the file.
     /// Raises a BusyException if a run is in progress on the UI thread, a background run doesn't block the capture.
@@ -169,23 +170,24 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             | None -> return failwith "The viewport capture did not write a file."
         }
 
-    /// Exports objects to a file of the given format, e.g. "stl". Returns the id of the output folder and the files.
+    /// Starts an export of objects to a file of the given format, e.g. "stl", as a run. Its files are those of the run when it finished.
     /// Some formats write more than one file, e.g. obj and mtl. Raises a BusyException if a run is in progress.
-    member _.Export(format: string, name: string option, selection: ExportSelection) : Task<string * FileItem[]> =
-        task {
-            failIfBusy false
-            let ext = if isNull format then "" else format.Trim().TrimStart('.').ToLowerInvariant()
-            if ext = "" || ext.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 then
-                invalidArg "format" $"Invalid file format '{format}', use a file extension like 'stl', '3dm' or 'step'."
-            let id = runs.NextId "x"
-            let dir = runs.CreateFolder id
-            let baseName = name |> Option.filter (String.IsNullOrWhiteSpace >> not) |> Option.map safeFileName |> Option.defaultValue "export"
-            let path = Path.Combine(dir, baseName + "." + ext)
-            do! host.InvokeOnUi(fun () -> host.Export(selection, path))
-            let files = FileItem.listFolder dir
-            if files.Length = 0 then failwith $"Nothing was exported to '.{ext}'."
-            return id, files
-        }
+    member _.StartExport(format: string, name: string option, selection: ExportSelection) : Run =
+        let ext = if isNull format then "" else format.Trim().TrimStart('.').ToLowerInvariant()
+        if ext = "" || ext.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 then
+            invalidArg "format" $"Invalid file format '{format}', use a file extension like 'stl', '3dm' or 'step'."
+        let baseName = name |> Option.filter (String.IsNullOrWhiteSpace >> not) |> Option.map safeFileName |> Option.defaultValue "export"
+        fsi.StartExport(ext, baseName, selection)
+
+    /// The modal dialogs of the host app, which block calls into it. Empty if the host can't find them.
+    member _.Dialogs() : HostDialog list =
+        try host.Dialogs()
+        with _ -> []
+
+    /// Presses a button of a dialog of the host app. An empty dialog id means the only dialog.
+    member _.PressDialogButton(dialogId: string option, button: string) : Result<string, string> =
+        if String.IsNullOrWhiteSpace button then invalidArg "button" "Provide the name of the 'button' to press."
+        host.PressDialogButton(dialogId |> Option.defaultValue "", button.Trim())
 
     /// Undoes the given run, or the latest run with an undo record. Raises a BusyException if a run is in progress.
     member _.Undo(runId: string option) : Task<Result<string, string>> =
@@ -214,13 +216,17 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             "firstLine", Json.ofString (if firstLine.Length > 100 then firstLine.Substring(0, 100) + "..." else firstLine)
         ]
 
-    member _.Status(extra: (string * JsonNode) list) : JsonObject =
+    member self.Status(extra: (string * JsonNode) list) : JsonObject =
         let memoryMB =
             use p = Process.GetCurrentProcess()
             p.WorkingSet64 / 1024L / 1024L
         let hostStatus =
             try host.Status()
             with e -> [ "hostStatusError", Json.ofString e.Message ]
+        let dialogs =
+            match self.Dialogs() with
+            | [] -> []
+            | ds -> [ "dialogs", Json.arr (ds |> List.map HostDialog.toJson) :> JsonNode ]
         Json.obj (
             [
                 "name", Json.ofString "Caddis"
@@ -240,5 +246,6 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
                 "outputFolder", Json.ofString runs.RootDir
             ]
             @ extra
+            @ dialogs
             @ hostStatus
         )

@@ -160,7 +160,7 @@ type CaddisPanel() as this =
         r.Commands
         |> Option.iter (fun c ->
             add "commands" (CommandReport.stepLines c |> String.concat Environment.NewLine)
-            let ids (name: string) (a: Guid[]) = if a.Length = 0 then "" else $"{name} ({a.Length}): " + (a |> Seq.map string |> String.concat ", ")
+            let ids (name: string) (a: string[]) = if a.Length = 0 then "" else $"{name} ({a.Length}): " + String.concat ", " a
             [ ids "created" c.created; ids "changed" c.changed; ids "deleted" c.deleted; c.selected |> Option.map (ids "selected") |> Option.defaultValue "" ]
             |> List.filter ((<>) "")
             |> String.concat Environment.NewLine

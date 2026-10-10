@@ -32,7 +32,7 @@ module FsiState =
 exception BusyException of runId: string
 
 
-/// With --multiemit+ FSI loads one assembly per evaluation, all named 'FSI-ASSEMBLY', with versions that start again in each session.
+/// With --multiemit+ FSI loads one assembly per evaluation, all named 'FSI-ASSEMBLY' ('FSI-ASSEMBLY-MULTI' since FCS 43.12), with versions that start again in each session.
 /// Later evaluations reference the earlier ones by that name. FSI resolves them in its own AssemblyResolve handler,
 /// but a handler of the host app that comes first and matches only the simple name returns the wrong assembly:
 /// Rhino's returns the first FSI-ASSEMBLY of the process. Then a value of an earlier run fails with a TypeLoadException,
@@ -43,7 +43,8 @@ module FsiAssemblyResolver =
     let private sessions = ResizeArray<FsiEvaluationSession>()
 
     let private resolve (args: ResolveEventArgs) : Assembly =
-        if not (args.Name.StartsWith("FSI-ASSEMBLY,", StringComparison.Ordinal)) then
+        // 'FSI-ASSEMBLY,' or 'FSI-ASSEMBLY-MULTI,', the full name is compared below
+        if not (args.Name.StartsWith("FSI-ASSEMBLY", StringComparison.Ordinal)) then
             null
         else
             let live = lock sessions (fun () -> sessions.ToArray())
@@ -345,11 +346,14 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
 
     /// Called on the evaluation thread: the UI thread or the background worker.
     let evaluateOnThisThread (s: FsiEvaluationSession) (run: Run) : unit =
+        run.Started <- true
         let outcome =
             match (try host.CannotRunReason() with e -> Some e.Message) with
             | Some reason -> RunOutcome.withMessage Rejected reason
             | None ->
                 let mutable beforeRunDone = false
+                // a RuntimeError until the evaluation returns, e.g. if a ThreadInterruptedException ends it
+                let mutable outcome = RunOutcome.ofStatus RuntimeError
                 try
                     try
                         if File.Exists run.ScriptPath then includeScriptFolder s run.ScriptPath
@@ -357,14 +361,15 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                         host.BeforeRun run
                         beforeRunDone <- true
                         let result, diagnostics = s.EvalInteractionNonThrowing(run.Code, run.ScriptPath)
-                        outcomeOf run result diagnostics
+                        outcome <- outcomeOf run result diagnostics
                     with e ->
-                        { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn run.ScriptPath e) }
+                        outcome <- { RunOutcome.ofStatus RuntimeError with exn = Some(ExceptionInfo.ofExn run.ScriptPath e) }
                 finally
                     endCapture run
                     if beforeRunDone then
-                        try host.AfterRun run
+                        try host.AfterRun(run, outcome.status)
                         with e -> host.Log $"Caddis: cleaning up after run {run.Id} failed: {e.Message}"
+                outcome
         finishRun run outcome
 
     do
@@ -450,30 +455,31 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             return run
         }
 
-    /// Starts a run of host commands, e.g. Rhino command macros, on the UI thread, in any mode and also while the session is not ready.
+    /// Starts a run of the host app on the UI thread, in any mode and also while the session is not ready, e.g. of commands or an export.
     /// It is the current run like an F# run, so the two never overlap. Raises a BusyException if another run is in progress.
-    member _.StartCommands(req: CommandRequest) : Run =
+    /// work: called on the UI thread with the run and its output folder, returns the outcome.
+    member private _.StartHostRun(kind: RunKind, idPrefix: string, code: string, work: Run -> RunOutcome) : Run =
         let run =
             lock sync (fun () ->
                 match current with
                 | Some r -> raise (BusyException r.Id)
                 | None -> ()
-                let id = runs.NextId "c"
-                let code = String.concat "\n" req.macros
-                let run = Run(id, HostCommands, UiThread, code, "", runs.CreateFolder id, (getSettings ()).maxOutputChars, true)
+                let id = runs.NextId idPrefix
+                let run = Run(id, kind, UiThread, code, "", runs.CreateFolder id, (getSettings ()).maxOutputChars, true)
                 runs.Add run
                 current <- Some run
                 run)
-        let work () =
+        let onUi () =
+            run.Started <- true
             let outcome =
                 match (try host.CannotRunReason() with e -> Some e.Message) with
                 | Some reason -> RunOutcome.withMessage Rejected reason
                 | None ->
                     // e.g. objects to select not found, the stack trace would only show Caddis code
-                    try host.RunCommands(run, req)
+                    try work run
                     with e -> RunOutcome.withMessage RuntimeError e.Message
             finishRun run outcome
-        (host.InvokeOnUi work)
+        (host.InvokeOnUi onUi)
             .ContinueWith(
                 Action<Task<unit>>(fun t ->
                     if t.IsFaulted then
@@ -481,6 +487,28 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             )
         |> ignore
         run
+
+    /// Starts a run of host commands, e.g. Rhino command macros. Raises a BusyException if another run is in progress.
+    member this.StartCommands(req: CommandRequest) : Run =
+        this.StartHostRun(HostCommands, "c", String.concat "\n" req.macros, fun run -> host.RunCommands(run, req))
+
+    /// Starts an export to a file with the given extension, e.g. "stl", in the output folder of the run.
+    /// Raises a BusyException if another run is in progress.
+    member this.StartExport(ext: string, baseName: string, selection: ExportSelection) : Run =
+        let what =
+            match selection with
+            | AllObjects -> "all"
+            | SelectedObjects -> "selected"
+            | ObjectIds ids -> $"{ids.Length} objects"
+        this.StartHostRun(
+            HostExport,
+            "x",
+            $"export {what} to {baseName}.{ext}",
+            fun run ->
+                host.Export(selection, Path.Combine(run.OutDir, baseName + "." + ext))
+                if FileItem.listFolder run.OutDir |> Array.isEmpty then RunOutcome.withMessage RuntimeError $"Nothing was exported to '.{ext}'."
+                else RunOutcome.ofStatus Succeeded
+        )
 
     /// Parses and type-checks code against the current session, so definitions of earlier runs are known, without running it.
     /// Runs on the evaluation thread, so it never overlaps with a run. Raises a BusyException if a run is in progress.
@@ -560,10 +588,11 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
         match lock sync (fun () -> current) with
         | None -> Error "No run is in progress."
         | Some r when runId.IsSome && runId.Value <> r.Id -> Error $"Run '{runId.Value}' is not in progress, the current run is '{r.Id}'."
+        | Some r when r.Kind = HostExport -> Error $"Run '{r.Id}' is an export, it can't be cancelled."
         | Some r when r.Kind = HostCommands ->
             // the host cancels the command when it waits for input
             r.MarkCancelRequested()
-            Ok $"Cancellation of run '{r.Id}' was requested. A command that waits in a dialog can only be stopped in Rhino."
+            Ok $"Cancellation of run '{r.Id}' was requested. A command that waits in a dialog can only be stopped in {host.Info.appName}."
         | Some r when r.Mode = UiThread -> Error "Runs on the UI thread can't be cancelled, only runs in background mode."
         | Some r ->
             this.CancelRun r |> ignore

@@ -73,9 +73,8 @@ module CaddisSettings =
             "extraFsiArgs", Json.ofStrings s.extraFsiArgs
         ]
 
-    /// Missing or invalid values fall back to the defaults.
-    let ofJson (n: JsonNode) : CaddisSettings =
-        let d = defaults
+    /// Missing or invalid values fall back to the given defaults.
+    let ofJson (d: CaddisSettings) (n: JsonNode) : CaddisSettings =
         {
             port = Json.tryInt "port" n |> Option.filter (fun p -> p > 0 && p < 65536) |> Option.defaultValue d.port
             listenOnLan = Json.tryBool "listenOnLan" n |> Option.defaultValue d.listenOnLan
@@ -89,9 +88,10 @@ module CaddisSettings =
 
 
 /// Reads and writes the settings, the auth token and the discovery files, all in one folder.
-type SettingsStore(folder: string) =
+/// Each host app has its own settings file and defaults, e.g. its own port, the token is shared.
+type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSettings) =
 
-    let settingsPath = Path.Combine(folder, "settings.json")
+    let settingsPath = Path.Combine(folder, settingsFileName)
     let tokenPath = Path.Combine(folder, "token.txt")
     let instancesFolder = Path.Combine(folder, "instances")
 
@@ -104,7 +104,10 @@ type SettingsStore(folder: string) =
     static member DefaultFolder =
         Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Caddis")
 
-    new() = SettingsStore(SettingsStore.DefaultFolder)
+    /// settings.json with the default settings, used by Rhino.
+    new(folder: string) = SettingsStore(folder, "settings.json", CaddisSettings.defaults)
+
+    new() = SettingsStore(SettingsStore.DefaultFolder, "settings.json", CaddisSettings.defaults)
 
     member _.Folder = folder
 
@@ -120,12 +123,12 @@ type SettingsStore(folder: string) =
     member this.Load() : CaddisSettings =
         try
             if File.Exists settingsPath then
-                File.ReadAllText settingsPath |> Json.parse |> CaddisSettings.ofJson
+                File.ReadAllText settingsPath |> Json.parse |> CaddisSettings.ofJson defaults
             else
-                this.Save CaddisSettings.defaults
-                CaddisSettings.defaults
+                this.Save defaults
+                defaults
         with _ ->
-            CaddisSettings.defaults
+            defaults
 
     member _.Save(s: CaddisSettings) =
         Directory.CreateDirectory folder |> ignore

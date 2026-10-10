@@ -275,7 +275,7 @@ type RhinoHost() =
                     match selection with
                     | AllObjects -> selectOnly (doc.Objects.GetObjectList(DocObjects.ObjectEnumeratorSettings()) |> Seq.map _.Id)
                     | SelectedObjects -> previous.Length
-                    | ObjectIds ids -> selectOnly ids
+                    | ObjectIds ids -> selectOnly (ids |> Array.map (fun (s: string) -> Guid.Parse s)) // validated by RhinoInfo.info.isObjectId
                 if count = 0 then failwith "There are no objects to export."
                 if is3dm then
                     use options =
@@ -427,7 +427,7 @@ type RhinoHost() =
         run.DocSerial <- docSerial
         let selection () = doc.Objects.GetSelectedObjects(false, false) |> Seq.map _.Id |> Array.ofSeq
         let idList (ids: Guid seq) = ids |> Seq.map string |> String.concat ", "
-        match req.select with
+        match req.select |> Option.map (Array.map (fun (s: string) -> Guid.Parse s)) with // validated by RhinoInfo.info.isObjectId
         | None -> ()
         | Some ids ->
             let missing = ids |> Array.filter (fun id -> isNull (doc.Objects.FindId id))
@@ -470,7 +470,7 @@ type RhinoHost() =
 
         let exists (id: Guid) = not (isNull (doc.Objects.FindId id))
         let pick (wasAdded: bool) (stillExists: bool) =
-            touchedObjects |> Seq.filter (fun id -> addedFirst[id] = wasAdded && exists id = stillExists) |> Array.ofSeq
+            touchedObjects |> Seq.filter (fun id -> addedFirst[id] = wasAdded && exists id = stillExists) |> Seq.map string |> Array.ofSeq
         let selectedAfter = selection ()
         run.Commands <-
             Some {
@@ -478,8 +478,9 @@ type RhinoHost() =
                 notRun = req.macros |> Array.skip steps.Count |> List.ofArray
                 created = pick true true
                 changed = pick false true
+                changedGroups = []
                 deleted = pick false false
-                selected = if set selectedBefore = set selectedAfter then None else Some selectedAfter
+                selected = if set selectedBefore = set selectedAfter then None else Some(Array.map string selectedAfter)
             }
         if commandUndoRecords.Count > 0 then
             run.UndoSerial <- Some(Seq.last commandUndoRecords)
@@ -488,6 +489,8 @@ type RhinoHost() =
         failure |> Option.defaultValue { RunOutcome.ofStatus Succeeded with message = note }
 
     interface ICaddisHost with
+
+        member _.Info = RhinoInfo.info
 
         member _.Description = description
 
@@ -521,7 +524,7 @@ type RhinoHost() =
                 | Some _, doc when not (isNull doc) -> stopWatchingScript <- startWatching run run.InputTimeout doc.RuntimeSerialNumber
                 | _ -> ())
 
-        member _.AfterRun(run: Run) =
+        member _.AfterRun(run: Run, _status: RunStatus) =
             flushEcho true
             onUi (fun () ->
                 stopWatchingScript ()
@@ -586,5 +589,9 @@ type RhinoHost() =
         member _.Export(selection, path) = export (selection, path)
 
         member _.Undo(run) = undo run
+
+        member _.Dialogs() = [] // not implemented for Rhino yet
+
+        member _.PressDialogButton(_, _) = Error "Caddis can't press buttons of dialogs in Rhino."
 
         member _.RunCommands(run, request) = runCommands run request

@@ -32,22 +32,6 @@ type McpEndpoint(svc: CaddisService) =
     /// below the 60 s request timeout that MCP clients commonly use.
     static let defaultWaitMs = 50_000
 
-    static let instructions =
-        String.concat "\n" [
-            "Caddis runs F# code inside a running Rhino 8 in a persistent F# Interactive session. A person is usually working in the same Rhino window."
-            "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
-            "RhinoCommon is referenced, e.g. use Rhino.RhinoDoc.ActiveDoc for the current document. caddis_status shows its units and tolerance, check them before creating geometry."
-            "The result shows F# Interactive's output, with the types of new definitions and the value of the last expression, printfn output as stdout, and what was printed to the Rhino command line, e.g. by RhinoApp.WriteLine or commands run via RhinoApp.RunScript. Long output is shortened and saved to a file."
-            "Each run is one undo step in Rhino, the views are redrawn after it. Files saved to the folder Caddis.Script.OutDir are returned with the result, images inline."
-            "On the 'ui' thread (the default) Rhino is blocked while code runs and a run can't be cancelled: an endless loop freezes Rhino until it is killed."
-            "For long or risky code switch to 'background' mode with caddis_set_mode, there timeoutMs and caddis_cancel stop a run."
-            "caddis_eval returns after waitMs (default 50 s) with status 'running' if the run has not finished. It keeps running, wait for the result with caddis_get_run."
-            "Don't show modal dialogs or wait for user input in scripts."
-            "Look up RhinoCommon types and members you are not sure about with caddis_describe instead of guessing their names, overloads or parameter types."
-            "caddis_command runs Rhino commands like typed at the command line, for what commands do well, e.g. _Zoom, _SetDisplayMode, _Make2D, or to read what _What, _Length or _Area print. Use caddis_eval for logic, loops and geometry math. A command run in caddis_eval via RhinoApp.RunScript must get all its inputs in the macro, otherwise it waits until someone gives them in Rhino, or Caddis cancels it if the person turned that on."
-            "Use caddis_check to type-check code against the session without running it, and caddis_capture_viewport to see the result."
-        ]
-
     static let strProp (description: string) : JsonNode =
         Json.obj [ "type", Json.ofString "string"; "description", Json.ofString description ]
 
@@ -65,19 +49,15 @@ type McpEndpoint(svc: CaddisService) =
         "path", strProp "Full path of an .fsx file. If 'code' is given too, the code is evaluated as if it were in that file, so __SOURCE_DIRECTORY__ and relative #load and #r paths work."
     ]
 
-    static let tools: McpTool list = [
+    static let idArray (description: string) : JsonNode =
+        Json.obj [ "type", Json.ofString "array"; "items", Json.obj [ "type", Json.ofString "string" ]; "description", Json.ofString description ]
+
+    /// The tools, with the texts that depend on the host app from HostInfo.mcp.
+    static let toolsOf (t: McpTexts) : McpTool list = [
         {
             name = "caddis_eval"
             title = "Evaluate F#"
-            description =
-                String.concat " " [
-                    "Evaluates F# code in the persistent F# Interactive session inside Rhino and returns the result:"
-                    "status ('ok', 'compileError', 'runtimeError', 'cancelled', 'timeout', 'rejected' or 'running'),"
-                    "F# Interactive's output with the types of new definitions and the value of the last expression,"
-                    "stdout, what was printed to the Rhino command line, stderr, compiler errors and warnings, the exception with the script line, and files saved to Caddis.Script.OutDir, images inline."
-                    "Definitions stay available for later calls. RhinoCommon is referenced. NuGet packages can be used via #r \"nuget: Name\"."
-                    "Each run is one undo step in Rhino. In background mode code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
-                ]
+            description = t.eval
             properties =
                 codeAndPath
                 @ [
@@ -85,54 +65,33 @@ type McpEndpoint(svc: CaddisService) =
                     intProp
                         $"Return after this time with status 'running' if the run has not finished. It keeps running, get the result with caddis_get_run. 0 returns at once. Default: {defaultWaitMs}."
                     "timeoutMs", intProp "Background mode only: cancel the run after this time. Runs on the UI thread can't be cancelled."
-                    "recordUndo", boolProp "Wrap the run in a Rhino undo record so that caddis_undo can revert it. Default: true."
+                    "recordUndo", boolProp t.recordUndo
                 ]
             required = []
             readOnly = false
             destructive = true
             idempotent = false
         }
-        {
-            name = "caddis_command"
-            title = "Run Rhino commands"
-            description =
-                String.concat " " [
-                    "Runs Rhino commands as if typed at the Rhino command line, like a button macro."
-                    "Each item of 'commands' is one command with its inputs, they run one after the other until one does not succeed."
-                    "Use the scripted version of a command, with '-', where there is one: without it many commands open a dialog, which blocks Rhino until someone clicks."
-                    "Prefix command and option names with '_' for their English names. Commands work on the selected objects, see 'select'."
-                    "Returns the result of each command, the ids of the objects they created, changed and deleted, the selection if it changed,"
-                    "and what they printed to the command line, e.g. the results of _What, _Length or _Area."
-                    "A command that waits for input which the macro does not give is cancelled, the result shows the prompt with its options."
-                    "Each command that changes the document is one undo step in Rhino, caddis_undo undoes all of a call. Not possible while a run is in progress."
+        match t.command with
+        | None -> ()
+        | Some c ->
+            {
+                name = "caddis_command"
+                title = "Run commands"
+                description = c.description
+                properties = [
+                    "commands", idArray c.commands
+                    "select", idArray c.select
+                    "inputTimeoutMs", intProp c.inputTimeoutMs
+                    "waitMs",
+                    intProp
+                        $"Return after this time with status 'running' if the commands have not finished. They keep running, get the result with caddis_get_run. Default: {defaultWaitMs}."
                 ]
-            properties = [
-                "commands",
-                Json.obj [
-                    "type", Json.ofString "array"
-                    "items", Json.obj [ "type", Json.ofString "string" ]
-                    "description",
-                    Json.ofString
-                        "The command macros, e.g. [\"-_Line 0,0,0 10,0,0\", \"_Zoom _All _Extents\"]. Inputs are separated by spaces: points as x,y,z, numbers, options with their value like '_Cap=_Yes', and '_Enter' to end a prompt."
-                ]
-                "select",
-                Json.obj [
-                    "type", Json.ofString "array"
-                    "items", Json.obj [ "type", Json.ofString "string" ]
-                    "description", Json.ofString "Ids (GUIDs) of objects to select before the first command, replacing the selection."
-                ]
-                "inputTimeoutMs",
-                intProp
-                    $"Cancel a command that waits this long for input. 0 waits until the person in Rhino gives it, e.g. picks points for '_Pause'. Default: {CaddisService.DefaultInputTimeoutMs}."
-                "waitMs",
-                intProp
-                    $"Return after this time with status 'running' if the commands have not finished. They keep running, get the result with caddis_get_run. Default: {defaultWaitMs}."
-            ]
-            required = [ "commands" ]
-            readOnly = false
-            destructive = true
-            idempotent = false
-        }
+                required = [ "commands" ]
+                readOnly = false
+                destructive = true
+                idempotent = false
+            }
         {
             name = "caddis_get_run"
             title = "Get a run"
@@ -161,16 +120,9 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_describe"
             title = "Describe API"
-            description =
-                String.concat " " [
-                    "Looks up the types and members of the loaded assemblies, e.g. RhinoCommon, Eto or a NuGet package loaded via #r,"
-                    "and returns their signatures in F# syntax with their XML doc summaries. Use it instead of guessing names, overloads or parameter types."
-                    "Works while a run is in progress."
-                ]
+            description = t.describe
             properties = [
-                "name",
-                strProp
-                    "A namespace ('Rhino.Geometry': its types), a type ('Brep' or 'Rhino.Geometry.Brep': its members) or a member ('Brep.CreateFromBox': all overloads with docs)."
+                "name", strProp t.describeName
                 "filter", strProp "For a type: only the members whose name contains this text, e.g. 'Offset'."
                 "search", strProp "If no name is given: find types and members whose name contains this text, e.g. 'fillet'."
             ]
@@ -182,8 +134,7 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_status"
             title = "Status"
-            description =
-                "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of Rhino, F# and .NET, and the active document with its units, tolerance and layers."
+            description = t.status
             properties = []
             required = []
             readOnly = true
@@ -193,7 +144,7 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_cancel"
             title = "Cancel run"
-            description = "Cancels the current run. Only runs in background mode can be cancelled, and Rhino commands while they wait for input. If an F# run does not stop within a few seconds the session is reset."
+            description = t.cancel
             properties = [ "runId", strProp "Only cancel if this run is the current one." ]
             required = []
             readOnly = false
@@ -213,8 +164,7 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_set_mode"
             title = "Set thread mode"
-            description =
-                "Sets on which thread code runs. 'ui': the Rhino UI thread, safest for RhinoCommon, but Rhino is blocked while code runs and runs can't be cancelled. 'background': a separate thread, runs can be cancelled and time out, Rhino stays responsive, UI calls must be wrapped in Caddis.Script.OnUi. Changing the mode resets the session."
+            description = t.setMode
             properties = [ "mode", enumOf [ "ui"; "background" ] "The thread mode." ]
             required = [ "mode" ]
             readOnly = false
@@ -224,7 +174,7 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_undo"
             title = "Undo run"
-            description = "Undoes the changes a run made to the Rhino document. Only works if no other changes were made in Rhino after the run."
+            description = t.undo
             properties = [ "runId", strProp "The run to undo. Default: the latest run that made changes." ]
             required = []
             readOnly = false
@@ -234,14 +184,14 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_capture_viewport"
             title = "Capture viewport"
-            description = "Returns a PNG image of a Rhino viewport, to see the result of a script. Not possible while a run on the UI thread is in progress."
+            description = t.capture
             properties = [
-                "view", strProp "Name of the view, e.g. 'Perspective' or 'Top'. Default: the active view."
+                "view", strProp t.captureView
                 "width",
                 intProp
                     $"Width in pixels. Default: follows the aspect ratio of the view if 'height' is given, otherwise the size of the view, scaled down to at most {CaptureSize.defaultMaxEdge} pixels on the long edge."
                 "height", intProp "Height in pixels. Default: follows the aspect ratio of the view if 'width' is given, otherwise like 'width'."
-                "displayMode", strProp "Name of a display mode, e.g. 'Shaded', 'Rendered', 'Wireframe'. Default: the mode of the view."
+                "displayMode", strProp t.captureDisplayMode
             ]
             required = []
             readOnly = true
@@ -251,24 +201,37 @@ type McpEndpoint(svc: CaddisService) =
         {
             name = "caddis_export"
             title = "Export"
-            description =
-                "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension, except PDF: it opens Rhino's print dialog. Returns the paths of the written files."
+            description = t.export
             properties = [
-                "format", strProp "File extension of the format, e.g. '3dm', 'stl', 'obj', 'step', 'iges', 'dwg', 'dxf', '3mf', 'fbx', 'gltf', 'svg'."
+                "format", strProp t.exportFormat
                 "name", strProp "File name without extension. Default: 'export'."
-                "objects", enumOf [ "all"; "selected" ] "Which objects to export. Default: 'all'."
-                "objectIds",
-                Json.obj [
-                    "type", Json.ofString "array"
-                    "items", Json.obj [ "type", Json.ofString "string" ]
-                    "description", Json.ofString "Ids (GUIDs) of the objects to export. Overrides 'objects'."
-                ]
+                "objects", enumOf [ "all"; "selected" ] t.exportObjects
+                "objectIds", idArray t.exportObjectIds
+                "waitMs",
+                intProp
+                    $"Return after this time with status 'running' if the export has not finished. It keeps running, get the files with caddis_get_run. Default: {defaultWaitMs}."
             ]
             required = [ "format" ]
             readOnly = false
             destructive = false
             idempotent = true
         }
+        match t.dialog with
+        | None -> ()
+        | Some description ->
+            {
+                name = "caddis_dialog"
+                title = "Dialogs"
+                description = description
+                properties = [
+                    "button", strProp "The name of the button to press, as listed. Without it the open dialogs are returned."
+                    "dialog", strProp "The id of the dialog, as listed. Default: the only open dialog."
+                ]
+                required = []
+                readOnly = false
+                destructive = true
+                idempotent = false
+            }
     ]
 
     static let toolJson (t: McpTool) : JsonNode =
@@ -304,6 +267,10 @@ type McpEndpoint(svc: CaddisService) =
     static let newSessionId () =
         Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
 
+    let info = svc.Host.Info
+
+    let tools = toolsOf info.mcp
+
     /// Runs started by a tools/call, by session id and the JSON text of the request id, so that notifications/cancelled can cancel them.
     let runsByRequest = ConcurrentDictionary<string, string>()
 
@@ -318,8 +285,8 @@ type McpEndpoint(svc: CaddisService) =
         Json.obj [
             "protocolVersion", Json.ofString version
             "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ] ]
-            "serverInfo", Json.obj [ "name", Json.ofString "caddis"; "title", Json.ofString "Caddis"; "version", Json.ofString svc.Version ]
-            "instructions", Json.ofString instructions
+            "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString "Caddis"; "version", Json.ofString svc.Version ]
+            "instructions", Json.ofString info.mcp.instructions
         ]
 
     /// Results have no structuredContent, see McpView.
@@ -336,7 +303,16 @@ type McpEndpoint(svc: CaddisService) =
             | Cancelled
             | TimedOut
             | Rejected -> true
-        let summary, images = McpView.run svc.Runs req.baseUrl notes stdoutFrom run
+        // a dialog blocks calls into the host app, so a run waiting for one would never start or finish
+        let dialogNotes =
+            if run.IsFinished then
+                []
+            else
+                svc.Dialogs()
+                |> List.map (fun d ->
+                    let how = if info.mcp.dialog.IsSome then "Press a button with caddis_dialog, or ask the person" else "Ask the person"
+                    $"{info.appName} shows a dialog, which blocks it until it is closed: {HostDialog.describe d} {how} to close it in {info.appName}.")
+        let summary, images = McpView.run info.appName svc.Runs req.baseUrl (notes @ dialogNotes) stdoutFrom run
         toolResult isError (text summary :: images)
 
     static let messageResult (result: Result<string, string>) : JsonNode =
@@ -365,7 +341,7 @@ type McpEndpoint(svc: CaddisService) =
                     return runResult req notes 0L run
 
                 | "caddis_command" ->
-                    let a = Args.commands args
+                    let a = Args.commands info args
                     let run = svc.StartCommands a
                     let key = requestKey req requestId
                     runsByRequest[key] <- run.Id
@@ -422,8 +398,17 @@ type McpEndpoint(svc: CaddisService) =
 
                 | "caddis_export" ->
                     let format = Json.tryString "format" args |> Option.toObj
-                    let! id, files = svc.Export(format, Json.tryString "name" args, Args.exportSelection args)
-                    return toolResult false [ text (McpView.files req.baseUrl id "Exported to:" files) ]
+                    let run = svc.StartExport(format, Json.tryString "name" args, Args.exportSelection info args)
+                    do! svc.WaitFor(run, Some(Json.tryInt "waitMs" args |> Option.defaultValue defaultWaitMs))
+                    return runResult req [] 0L run
+
+                | "caddis_dialog" ->
+                    match Json.tryString "button" args with
+                    | None ->
+                        match svc.Dialogs() with
+                        | [] -> return toolResult false [ text $"{info.appName} shows no dialog." ]
+                        | ds -> return toolResult false [ text (ds |> List.map HostDialog.describe |> String.concat "\n") ]
+                    | Some button -> return messageResult (svc.PressDialogButton(Json.tryString "dialog" args, button))
 
                 | _ -> return toolResult true [ text $"Unknown tool '{name}'." ]
             with

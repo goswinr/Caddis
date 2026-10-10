@@ -123,7 +123,10 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                         if not (isNull r.Headers["Origin"]) then
                             return Response.error 403 "Requests from web pages (with an Origin header) are not allowed."
                         elif not (isAuthorized r) then
-                            return Response.error 401 $"Missing or wrong token. Send the header 'Authorization: Bearer <token>'. The token is in {store.TokenPath}, the Rhino command 'Caddis' shows it too."
+                            return
+                                Response.error
+                                    401
+                                    $"Missing or wrong token. Send the header 'Authorization: Bearer <token>'. The token is in {store.TokenPath}, {host.Info.copyMcpCommandUi} copies the MCP command with it."
                         elif r.ContentLength64 > maxBodyBytes then
                             return tooLarge
                         else
@@ -189,6 +192,8 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     "url", Json.ofString (url ())
                     "mcpUrl", Json.ofString (url () + "/mcp")
                     "listenOnLan", Json.ofBool listenOnLan
+                    "app", Json.ofString host.Info.appName
+                    "mcpServerName", Json.ofString host.Info.mcpServerName
                     "host", Json.ofString host.Description
                     "startedAt", Json.ofString (DateTime.UtcNow.ToString "o")
                     "tokenFile", Json.ofString store.TokenPath
@@ -240,7 +245,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     /// The command line to add this server to Claude Code for all projects of the current user.
     member this.ClaudeMcpCommand =
-        $"claude mcp add --transport http --scope user caddis {this.McpUrl} --header \"Authorization: Bearer {token}\""
+        $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl} --header \"Authorization: Bearer {token}\""
 
     /// Starts listening and creating the F# session. Returns the URL, or an error message.
     member this.Start() : Result<string, string> =
@@ -260,7 +265,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     if p <> s.port then
                         // MCP clients are configured with a fixed URL, they would silently fail to connect
                         host.Log
-                            $"Caddis: port {s.port} is in use, so Caddis listens on port {p}. MCP clients configured for port {s.port} won't reach this Rhino, copy the new command with 'Caddis CopyMcpCommand'."
+                            $"Caddis: port {s.port} is in use, so Caddis listens on port {p}. MCP clients configured for port {s.port} won't reach this {host.Info.appName}, copy the new command via {host.Info.copyMcpCommandUi}."
                     svc.Fsi.Initialize() |> ignore
                     Ok(url ()))
 

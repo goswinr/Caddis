@@ -1,6 +1,5 @@
 namespace Caddis.Http
 
-open System
 open System.Collections.Specialized
 open System.Text.Json.Nodes
 open Caddis
@@ -51,28 +50,28 @@ module Args =
             | Some m -> m
             | None -> invalidArg "mode" $"Unknown mode '{s}', use 'ui' or 'background'."
 
-    let private guids (name: string) (ids: string[]) : Guid[] =
+    /// The ids, trimmed, if all are object ids of the host.
+    let private objectIds (info: HostInfo) (name: string) (ids: string[]) : string[] =
         ids
         |> Array.map (fun s ->
-            match Guid.TryParse s with
-            | true, g -> g
-            | _ -> invalidArg name $"'{s}' in '{name}' is not an object id (a GUID).")
+            let id = if isNull s then "" else s.Trim()
+            if info.isObjectId id then id else invalidArg name $"'{s}' in '{name}' is not {info.objectIdKind}.")
 
     /// 'commands' is an array of macros, or a single macro as string.
-    let commands (n: JsonNode) : CommandArgs = {
+    let commands (info: HostInfo) (n: JsonNode) : CommandArgs = {
         commands =
             match Json.tryStringArray "commands" n with
             | Some a -> a
             | None -> Json.tryString "commands" n |> Option.toArray
-        select = Json.tryStringArray "select" n |> Option.map (guids "select")
+        select = Json.tryStringArray "select" n |> Option.map (objectIds info "select")
         inputTimeoutMs = Json.tryInt "inputTimeoutMs" n
         waitMs = Json.tryInt "waitMs" n
         }
 
-    /// 'objectIds' (array of GUIDs) wins over 'objects' ("all" or "selected", the default is "all").
-    let exportSelection (n: JsonNode) : ExportSelection =
+    /// 'objectIds' (array of ids of the host) wins over 'objects' ("all" or "selected", the default is "all").
+    let exportSelection (info: HostInfo) (n: JsonNode) : ExportSelection =
         match Json.tryStringArray "objectIds" n with
-        | Some ids when ids.Length > 0 -> ObjectIds(guids "objectIds" ids)
+        | Some ids when ids.Length > 0 -> ObjectIds(objectIds info "objectIds" ids)
         | _ ->
             match Json.tryString "objects" n |> Option.map _.Trim().ToLowerInvariant() with
             | None

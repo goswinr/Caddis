@@ -23,7 +23,7 @@ let private help () : JsonNode =
             "Evaluate F#. Body: {code?, path?, waitMs?, timeoutMs?, recordUndo?}. Returns the run, with status 202 if it is still running after waitMs (default: wait until it finished). timeoutMs cancels background runs."
         "POST /command",
         Json.ofString
-            "Run Rhino commands like typed at the command line. Body: {commands: ['-_Line 0,0,0 10,0,0'], select?: [guid], inputTimeoutMs?, waitMs?}. Returns the run like /eval."
+            "Run commands of the host app like typed at its command line, e.g. Rhino. Body: {commands: ['-_Line 0,0,0 10,0,0'], select?: [id], inputTimeoutMs?, waitMs?}. Returns the run like /eval."
         "GET /runs", Json.ofString "The recent runs."
         "GET /runs/{id}", Json.ofString "One run. Query: waitMs, to wait for a run that is still running (default 0)."
         "POST /cancel", Json.ofString "Cancel the current run (background mode only). Body: {runId?}"
@@ -32,9 +32,13 @@ let private help () : JsonNode =
         "POST /check", Json.ofString "Type-check against the current session without running. Body: {code?, path?}"
         "GET /describe",
         Json.ofString "Signatures and docs of a namespace, type or member, e.g. 'Brep.CreateFromBox'. Query: name, filter, or search to find names."
-        "POST /undo", Json.ofString "Undo a run in Rhino. Body: {runId?}, default is the latest run with changes."
+        "POST /undo", Json.ofString "Undo a run in the host app. Body: {runId?}, default is the latest run with changes."
         "GET /viewport", Json.ofString "PNG of a viewport. Query: view, width, height, displayMode."
-        "POST /export", Json.ofString "Export to a file. Body: {format, name?, objects?: 'all'|'selected', objectIds?: [guid]}"
+        "POST /export",
+        Json.ofString
+            "Export to a file, as a run. Body: {format, name?, objects?: 'all'|'selected', objectIds?: [id], waitMs?}. Returns the run with its files like /eval."
+        "GET /dialogs", Json.ofString "The modal dialogs of the host app, which block calls into it until they are closed."
+        "POST /dialog", Json.ofString "Press a button of a dialog of the host app. Body: {button, dialog?: id from /dialogs, default the only dialog}"
         "GET /files/{id}/{name}", Json.ofString "Download a file of a run, capture or export."
         "POST /mcp", Json.ofString "MCP endpoint (Streamable HTTP, JSON-RPC)."
     ]
@@ -54,7 +58,7 @@ let handle (svc: CaddisService) (serverInfo: unit -> (string * JsonNode) list) (
             return JsonResponse((if run.IsFinished then 200 else 202), run.ToJson req.baseUrl)
 
         | "POST", [ "command" ] ->
-            let a = Args.commands (body ())
+            let a = Args.commands svc.Host.Info (body ())
             let run = svc.StartCommands a
             do! svc.WaitFor(run, a.waitMs)
             return JsonResponse((if run.IsFinished then 200 else 202), run.ToJson req.baseUrl)
@@ -105,8 +109,17 @@ let handle (svc: CaddisService) (serverInfo: unit -> (string * JsonNode) list) (
 
         | "POST", [ "export" ] ->
             let b = body ()
-            let! id, files = svc.Export(Json.tryString "format" b |> Option.toObj, Json.tryString "name" b, Args.exportSelection b)
-            return JsonResponse(200, Json.obj [ "id", Json.ofString id; "files", Json.arr (files |> Seq.map (FileItem.toJson req.baseUrl id)) ])
+            let run = svc.StartExport(Json.tryString "format" b |> Option.toObj, Json.tryString "name" b, Args.exportSelection svc.Host.Info b)
+            do! svc.WaitFor(run, Json.tryInt "waitMs" b)
+            return JsonResponse((if run.IsFinished then 200 else 202), run.ToJson req.baseUrl)
+
+        | "GET", [ "dialogs" ] -> return JsonResponse(200, Json.obj [ "dialogs", Json.arr (svc.Dialogs() |> List.map HostDialog.toJson) ])
+
+        | "POST", [ "dialog" ] ->
+            let b = body ()
+            match svc.PressDialogButton(Json.tryString "dialog" b, Json.tryString "button" b |> Option.toObj) with
+            | Ok msg -> return Response.message msg
+            | Error msg -> return Response.error 409 msg
 
         | "GET", "files" :: id :: name when not name.IsEmpty ->
             match svc.Runs.TryGetFile(id, String.concat "/" name) with

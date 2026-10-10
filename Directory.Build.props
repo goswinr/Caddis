@@ -5,7 +5,7 @@
     <Authors>Goswin Rothenthal</Authors>
     <Copyright>Goswin Rothenthal 2026</Copyright>
 
-    <!-- FSharp.Core is referenced explicitly in each project.
+    <!-- FSharp.Core is referenced explicitly in each project, per target framework.
     It must match the version that FSharp.Compiler.Service pins, see Caddis.Core.fsproj -->
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
 

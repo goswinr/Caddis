@@ -10,7 +10,7 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 | Threading | Switchable for the whole session, like Fesh: **UI thread** or **background thread**. Switching resets FSI. Default: UI thread, same as Fesh.Rhino. |
 | Sessions | One shared, persistent FSI session. One run at a time; a request while busy gets `409 Busy`, not a queue. |
 | Security | Bearer token required. Listens on 127.0.0.1 by default; LAN is an opt-in setting. Requests with an `Origin` header are rejected. |
-| Fesh coexistence | Independent, pinned to FCS 43.8.403 and FSharp.Core 8.0.403 (the same versions as Fesh 0.33.5-net8), so both plugins load together. Each has its own FSI session. |
+| Fesh coexistence | Independent, pinned to FCS 43.8.403 and FSharp.Core 8.0.403 (the same versions as Fesh 0.33.5-net8), so both plugins load together. Each has its own FSI session. The `net10.0` build of Caddis.Core, for Revit, uses FCS 43.12.401 and FSharp.Core 10.1.401, like Fesh 0.34.0-net10. |
 | Lifecycle | `Caddis` command to start and stop, an opt-in autostart setting, and one discovery file per Rhino instance |
 | v1 extras | Cancel + timeout, viewport capture, type-check only, undo last eval, returning exported/saved files |
 | Platform / UI | Plain `net8.0` running on Rhino 8 for Windows and Mac, with an Eto dockable panel |
@@ -48,6 +48,7 @@ Tests/         Expecto or xUnit tests for Caddis.Core (MCP routing, auth, eval, 
 ```
 
 `Caddis.Core` declares interfaces for the Rhino hooks (`beforeEval`, `afterEval`, `capture`, `export`), and `Caddis.Rhino` implements them.
+Since 2026-10-10 `Caddis.Revit/` (net10.0-windows) implements them for Revit 2026, see [Revit](#revit).
 
 Like Fesh.Rhino, use `DisableImplicitFSharpCoreReference` and reference `FSharp.Core` 8.0.403 and `FSharp.Compiler.Service` 43.8.403 explicitly. RhinoCommon 8.x is referenced with `PrivateAssets="all" ExcludeAssets="runtime"`.
 
@@ -84,7 +85,9 @@ POST /check   {code|path}     → diagnostics against the current session, no ru
 GET  /describe?name=&filter=&search=  signatures and docs from the loaded assemblies     [caddis_describe]
 POST /undo                    undo the last eval if its record is still on top           [caddis_undo]
 GET  /viewport?view=&w=&h=&displayMode=  → PNG (MCP: inline image content)               [caddis_capture_viewport]
-POST /export  {ext, objects: all|selected|[ids]}  → files                                [caddis_export]
+POST /export  {format, objects: all|selected, objectIds?, waitMs?}  → RunResult with files (a run of kind export)  [caddis_export]
+GET  /dialogs                 the host app's open modal dialogs (Revit only)            [caddis_dialog]
+POST /dialog  {button, dialog?}  press a button of a dialog (Revit only)                [caddis_dialog]
 GET  /files/{runId}/{name}    download any returned file
 POST /mcp                     JSON-RPC; replies with application/json (no SSE in v1)
 ```
@@ -117,6 +120,86 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
 - Redraw is re-enabled and forced after every run, including failed ones.
 - An eval is refused while `Command.InCommand()`.
 - On Rhino close, the running eval is cancelled, the server stops and the discovery file is deleted.
+
+## Revit
+
+`Caddis.Revit` is an add-in for Revit 2026.5 on .NET 10, implemented on 2026-10-10, tested headless and live in Revit 2026.5, see [Revit live test](#revit-live-test-2026-10-10).
+Revit 2026.5 (26.5.0.55) is installed on the development machine, its RevitAPI targets net10.0.
+
+| Topic | Decision |
+|---|---|
+| Versions | Only Revit 2026 on .NET 10 for now (2026.5 moved from .NET 8 to .NET 10): `net10.0-windows`, built against `Nice3point.Revit.Api.RevitAPI`/`RevitAPIUI` 2026.4.10, since there is no 2026.5 package and the API is the same within 2026. Caddis.Core targets `net8.0` for Rhino 8 (FCS 43.8.403, FSharp.Core 8.0.403) and `net10.0` for Revit (FCS 43.12.401, FSharp.Core 10.1.401). FCS pins the exact FSharp.Core, so each project that references Caddis.Core uses the FSharp.Core of its framework. The Core tests run on both. |
+| API context | `InvokeOnUi` is one `ExternalEvent` with a queue (`ApiContext.fs`), inline when already in it. A run on the `ui` thread runs entirely inside the event's `Execute`, so `Script.OnUi` runs inline and can't deadlock. |
+| Transactions | Each `ui`-thread run with `recordUndo` is wrapped in a `TransactionGroup`. Scripts open their own transactions or use `Caddis.Revit.Script.Transact`. Success: `Assimilate`, one undo step. Error or cancel: `RollBack` of all changes. Background mode: no group, each transaction is an undo step. |
+| Commands | No `caddis_command`: Revit has no command line. `McpTexts.command = None` leaves the tool out, `/command` returns 400. |
+| Coexistence | Own `settings-revit.json`, default port 7820, MCP name `caddis-revit`. The token and the discovery folder are shared, discovery files have `app`. |
+| UI | Ribbon tab: Start/Stop, Copy MCP, Panel, Mode, Reset F#, Cancel run, Auto start, Info, New token. Messages go to `%AppData%/Caddis/revit.log`. Optional dockable WPF pane `CaddisPanel` (`Panel.fs`, added 2026-10-10), like the Eto panel in Rhino: state, Start/Stop, Copy MCP, Copy token, thread mode, Start with Revit, LAN, Cancel, Reset, the latest message, the run list and the Output and Code of the selected run. Registered in `OnStartup` with `VisibleByDefault = false`, tabbed behind the Project Browser; the ribbon button `Panel` toggles it, Revit remembers its state. Its buttons call the `App` actions outside API context, so `App.show` opens a TaskDialog only in API context and otherwise only logs; the pane shows the latest log line. A 1 s `DispatcherTimer` refreshes it and the ribbon texts (`App.stateChanged`). It must not call `Dialogs()`: UI Automation from the UI thread would wait on itself. |
+| Install | Dev only: `Caddis.Revit/install-dev.ps1` writes `%AppData%/Autodesk/Revit/Addins/2026/Caddis.addin`. Packaging later. |
+| Element ids | `ElementId.Value` numbers as strings. `HostInfo.isObjectId` validates them. |
+| Load context | Revit's default context (no `UseRevitContext=false`), so Caddis.Core is loaded once and scripts share `Caddis.Script`. In that context only one FSharp.Core and one FCS can load: Caddis.Revit can run next to a Fesh.Revit built on Fesh 0.34.0-net10, not next to a .NET 8 build of Fesh.Revit. The add-in that starts first wins. Decision 2026-10-10: Fesh.Revit moves to the same latest net10 versions. |
+
+Changes in Caddis.Core for it: `ICaddisHost.Info` (`HostInfo`: app name, MCP server name, MCP texts, object id format), object ids as strings,
+`AfterRun` gets the run's status, `SettingsStore(folder, fileName, defaults)`.
+The Rhino texts moved unchanged to `Caddis.Rhino/RhinoInfo.fs`.
+
+How `RevitHost` maps the host interface:
+- `BeforeRun` / `AfterRun`: the transaction group, a note if Revit started the run more than 2 s late.
+- `Application.DocumentChanged`: counts the script's commits, collects added, modified and deleted element ids into `run.Commands` (without steps),
+  and tracks whether a run is the latest undo step. Only changes made in API context by Caddis count.
+  Changed elements are also counted per category (`CommandReport.changedGroups`): MCP shows the counts, the ids go to a file.
+- `Application.FailuresProcessing`: during a run, deletes warnings and lists them in the notes, rolls back a transaction with an error instead of Revit's dialog.
+- `Status`: fresh via the external event if Revit answers within 1 s, otherwise the previous one.
+- `CaptureView`: `Document.ExportImage` into a temp folder, display style set in a rolled-back transaction group.
+- `Export`: a run of kind `export` (Core: `FsiHost.StartExport`, the same slot as other runs, `waitMs`). By extension via `Document.Export`, checking its result.
+  Selections are isolated in the view (`IsolateElementsTemporary` + `ConvertTemporaryHideIsolateToPermanent`) in a rolled-back group, not possible on sheets.
+  IFC, DWF and DWFX in a rolled-back transaction, DGN with Revit's V8 seed file from `ACADInterop`, SAT from a 3D view.
+- `Undo`: `UIApplication.PostCommand(PostableCommand.Undo)`, runs after the call.
+- `Dialogs` / `PressDialogButton` (`RevitDialogs.fs`, tool `caddis_dialog`, `GET /dialogs`, `POST /dialog`): Revit's main window (from `UIControlledApplication.MainWindowHandle`) is disabled while a modal dialog shows,
+  and its `GetLastActivePopup` is the dialog on top; neither sends messages to the busy UI thread. Then UI Automation reads the dialog's texts and enabled buttons
+  (not those of title and scroll bars) and presses one via `InvokePattern`, each with a 5 s timeout. Core lists open dialogs in the status and in results of runs still running.
+
+FCS 43.12.401 on .NET 10: all Core tests pass headless on `net10.0`, including cancellation, which uses reflection into FCS.
+FCS 43.12 names the assemblies of runs `FSI-ASSEMBLY-MULTI` instead of `FSI-ASSEMBLY`. The resolver for values of earlier runs matched only the old name, so on .NET 10 the test with a resolver like Rhino's failed with a MissingMethodException. It now matches both. The net10 build of Fesh probably has the same issue.
+On .NET 10 the `DiagnosticSource` limit that pins FCS for Rhino 8 does not apply.
+
+### Revit live test (2026-10-10)
+
+Revit 2026.5 (26.5.0.55) on Windows, with a copy of the sample `Snowdon Towers Sample Architectural.rvt`, via REST and MCP, without Fesh.Revit.
+Session locked for most of the test: external events still ran, about 0.3 s per call (60 ms with the person present).
+
+Confirmed:
+- Loading, `ExternalEvent.Create` in `OnStartup`, auto start, the discovery file (deleted on exit). FSI 43.12.401 with FSharp.Core 10.1.401 on .NET 10.0.12.
+- RevitAPI references, `Caddis.Revit.Script` (`Doc`, `UiDoc`, `UiApp`, `Transact`, `OnUi`) shared between add-in and scripts, values of earlier runs (the `FSI-ASSEMBLY-MULTI` resolver), reset.
+- Transaction group: a wall is one undo step with its id in `created`; a failing run is rolled back with a note and the right script line; `caddis_undo` via the posted Undo command.
+- `FailuresProcessing`: the 'walls overlap' warning deleted and listed in the notes; 'top of the wall lower than its base' rolled back its transaction (`Commit` returns `RolledBack`) with a note, no dialogs.
+- `DocumentChanged` inside the group; deleted ids; changed elements per category, e.g. 'changed (106): 95 <Path of Travel Lines>, 8 without category, 3 Schedules' for one new wall.
+- Capture of a sheet and of `{3D}` with display styles and `width`, unknown view names list the views.
+- Exports: dwg, dxf, dgn, pdf, dwf, dwfx of the active sheet (with its views and images); sat, obj, stl, step, fbx of `{3D}`; ifc of the model; obj of three walls by id with the view restored; nwc reports the missing Navisworks exporter.
+  Large: ifc 159 MB in 47 s, obj 505 MB in 31 s. As a run: `running` after `waitMs`, 409 for other runs, not cancellable, files via `caddis_get_run`. The document stays unmodified.
+- Background mode: `Script.OnUi`, `Script.Transact` (undoable), `Script.Doc` outside API context gives a clear error, cancel of a busy loop.
+- MCP: server name `caddis-revit`, Revit instructions, no `caddis_command`, `caddis_check` with Revit types, `caddis_describe` with RevitAPI.xml.
+- Dialogs: 'Unresolved References' while opening, 'Project Not Saved Recently' after 30 min, Revit's error dialog after a failed command, 'Save File' on exit and Caddis' own dialogs.
+  A run waits ('has not started yet', then the note 'Revit started the run only after 195 s'), its result names the dialog with text and buttons, `caddis_dialog` presses a button, the run continues.
+- Ribbon: the tab with state texts (Stop, Mode: UI, Auto start: on), Info, Copy MCP.
+
+Found and fixed during the test:
+- Scripts didn't get `Caddis.Revit.dll`: `typeof<Script>` in `RevitHost` meant `Caddis.Script` because of `open Caddis`.
+- A transaction the script left open: `Assimilate` failed silently and Revit rolled back everything without a note. Now Caddis rolls the group back on purpose, clears the changes and says why.
+- Exports: dwf and dwfx need an open transaction, sat a 3D view, dgn a seed file; `Export`'s `false` result is now an error; selections on a sheet are refused with a hint.
+- 'Copy MCP' failed while the clipboard can't be opened (locked session): retries, then shows the command in a dialog for Ctrl+C.
+- Dialog titles 'Caddis - Caddis' (Revit prefixes the add-in name), now e.g. 'Caddis - Info'.
+
+Pane (2026-10-10, Revit 2026.5, session locked, so checked by rendering it to a PNG from a script via reflection and with UI Automation): registration, hidden by default, the ribbon button toggles it (`IsShown` true and false), shown again after a restart.
+Run list with export runs, the details of a selected run with value, elements per category, stdout and F# output.
+'Reset session', 'Copy token' (clipboard locked: message in the pane), the thread mode list (saved, and the ribbon text follows within a second). No dialogs from the pane.
+Note: the WPF `IsVisible` of the pane's content stays true when Revit hides the pane.
+
+Not tested: a run that closes its document, runs waiting for a Revit command or edit mode (the same external-event queue as for dialogs), the ribbon buttons 'Mode', 'Reset F#', 'Cancel run', 'Auto start' and 'New token', the pane's Start/Stop, LAN and Cancel, the pane in Revit's dark theme, loading next to a Fesh.Revit on .NET 10.
+
+Scripts can't use WPF types: FCS type-checks against the SDK's reference pack (`packs/Microsoft.NETCore.App.Ref/10.0.x/ref/net10.0`), whose `WindowsBase.dll` 4.0.0.0 is a stub,
+and it wins over `WindowsBase` 10.0.0.0 of Microsoft.WindowsDesktop.App, also with `-r:` and with `--noframework` (tried in a console with FCS 43.12.401). Fesh has the same limitation. Reflection works.
+
+Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.GetTempPath()` in Revit is a folder per Revit session, so `RunRegistry.DeleteStaleFolders` doesn't see the output folders of earlier Revit sessions.
 
 ## Progress (2026-10-10)
 
@@ -152,6 +235,7 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
   - An F# run that calls `RhinoApp.RunScript` with a macro that lacks an input waits for the user, e.g. `-_Length` with nothing selected; Esc in Rhino ends it.
 - **`CancelWaitingCommands` setting (2026-10-10), tested in Rhino 8.35:** opt-in watchdog for F# runs, the same `checkWaiting` loop as for command runs, started in `BeforeRun` when `run.InputTimeout` is set. Only commands the script started are watched: `invokeOnUi` counts its calls in progress on the UI thread (`uiCallDepth`), and `Command.BeginCommand` during an F# run records whether one was in progress. In UI-thread mode the whole run is such a call; in background mode `Caddis.Script.OnUi` is, so commands typed in Rhino during a background run are left alone. Commands that Rhino.Scripting starts in background mode via its own SynchronizationContext are not watched. A cancelled command adds a note to the run and `RunScript` returns false, the script goes on. Tested: UI mode (`-_Length` cancelled after 3.8 s, note), background mode via `OnUi` (cancelled) and via a raw `InvokeOnUiThread` like a typed command (not cancelled), the `Caddis` command option and the panel checkbox.
 - **Open:**
+  - Revit: the untested parts in [Revit live test](#revit-live-test-2026-10-10), packaging, and Rhino with the export run and `caddis_dialog` (not offered in Rhino yet).
   - Test on Mac.
   - Verify the new embedded panel icon in Rhino. `Docs/img/makeAllSizes.ps1` generates the logo variants and `favicon.ico` from `logo.png`; the favicon is embedded in the plugin. Build verified.
   - Not yet tested in Rhino: the port-change warning, `ListenOnLan`.

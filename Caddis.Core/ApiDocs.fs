@@ -646,7 +646,7 @@ type ApiDocs(host: ICaddisHost) =
         // e.g. 'List<T>', 'List`1' or 'Brep.Join(...)'
         let name = Regex.Replace(name.Trim().Replace('+', '.'), @"<.*>|`\d+|\(.*$", "").Trim('.', ' ')
         if name = "" then
-            invalidArg "name" "Provide the name of a namespace, type or member, e.g. 'Rhino.Geometry', 'Brep' or 'Brep.CreateFromBox'."
+            invalidArg "name" "Provide the name of a namespace, type or member, e.g. 'System.IO', 'File' or 'File.ReadAllText'."
         let others (ts: Type[]) =
             if ts.Length > 1 then
                 "\nOther types with this name: " + (ts |> Seq.skip 1 |> Seq.map displayName |> Seq.distinct |> String.concat ", ")

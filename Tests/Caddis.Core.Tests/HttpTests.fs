@@ -107,7 +107,7 @@ let ``returns 400 with a plain message when the host fails`` () =
     use req = new HttpRequestMessage(HttpMethod.Get, "/viewport")
     let status, body = send client.Value req
     Assert.Equal(HttpStatusCode.BadRequest, status)
-    Assert.Equal("Capturing a viewport needs Rhino.", str [ "error" ] (JsonNode.Parse body))
+    Assert.Equal("Capturing a viewport needs a host app like Rhino or Revit.", str [ "error" ] (JsonNode.Parse body))
 
 [<Fact>]
 let ``MCP initialize negotiates the protocol version`` () =
@@ -131,6 +131,7 @@ let ``MCP lists the tools`` () =
     Assert.Contains("caddis_eval", names)
     Assert.Contains("caddis_command", names)
     Assert.Contains("caddis_capture_viewport", names)
+    Assert.DoesNotContain("caddis_dialog", names) // the headless host has no dialogs
 
 [<Fact>]
 let ``MCP commands without Rhino are a tool error`` () =
@@ -138,7 +139,7 @@ let ``MCP commands without Rhino are a tool error`` () =
     Assert.True(flag [ "isError" ] result)
     let text = resultText result
     Assert.Matches(@"^Run c\d+: runtimeError", text)
-    Assert.Contains("Running commands needs Rhino.", text)
+    Assert.Contains("Running commands needs a host app like Rhino.", text)
 
 [<Fact>]
 let ``REST runs a single command given as string`` () =
@@ -146,7 +147,7 @@ let ``REST runs a single command given as string`` () =
     Assert.Equal(HttpStatusCode.OK, status)
     let run = JsonNode.Parse body
     Assert.Equal("commands", str [ "kind" ] run)
-    Assert.Equal("Running commands needs Rhino.", str [ "message" ] run)
+    Assert.Equal("Running commands needs a host app like Rhino.", str [ "message" ] run)
     Assert.Equal("_Zoom _All _Extents", server.Value.Service.Runs.TryGet(str [ "id" ] run).Value.Code)
 
 [<Fact>]

@@ -1,17 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- plain net8.0, no WPF, so that it runs in Rhino 8 on Windows and Mac -->
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- plain net8.0, no WPF, so that it runs in Rhino 8 on Windows and Mac. net10.0 for Revit 2026.5. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RootNamespace>Caddis</RootNamespace>
     <AssemblyName>Caddis.Core</AssemblyName>
     <Description>Hosts F# Interactive in a .NET app and controls it via HTTP and MCP.</Description>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Pinned to the same versions as the net8 build of Fesh (and so Fesh.Rhino), so that both can be loaded in the same Rhino process.
-    Newer FCS versions depend on System.Diagnostics.DiagnosticSource 9+, which does not load in Rhino 8. See https://github.com/dotnet/fsharp/issues/19174 -->
+  <!-- FSharp.Compiler.Service pins the exact version of FSharp.Core. Projects that reference Caddis.Core must use the same FSharp.Core.
+  Each pair is the same as in the build of Fesh for that framework, so that Caddis and Fesh can be loaded in the same process. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <!-- Like Fesh 0.34.0-net8 and Fesh.Rhino. Newer FCS versions depend on System.Diagnostics.DiagnosticSource 9+,
+    which does not load in Rhino 8. See https://github.com/dotnet/fsharp/issues/19174 -->
     <PackageReference Include="FSharp.Compiler.Service" Version="43.8.403" />
-    <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- FSharp.Compiler.Service pins this exact version -->
+    <PackageReference Include="FSharp.Core" Version="8.0.403" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- Like Fesh 0.34.0-net10 -->
+    <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
   </ItemGroup>
 
   <ItemGroup>
