@@ -195,7 +195,7 @@ Found and fixed during the test:
 
 Pane (2026-10-10, Revit 2026.5, session locked, so checked by rendering it to a PNG from a script via reflection and with UI Automation): registration, hidden by default, the ribbon button toggles it (`IsShown` true and false), shown again after a restart.
 Run list with export runs, the details of a selected run with value, elements per category, stdout and F# output.
-'Reset session', 'Copy token' (clipboard locked: message in the pane), the thread mode list (saved, and the ribbon text follows within a second). No dialogs from the pane.
+'Reset FSI session', 'Copy token' (clipboard locked: message in the pane), the thread mode list (saved, and the ribbon text follows within a second). No dialogs from the pane.
 Note: the WPF `IsVisible` of the pane's content stays true when Revit hides the pane.
 
 Not tested: a run that closes its document, runs waiting for a Revit command or edit mode (the same external-event queue as for dialogs), the ribbon buttons 'Mode', 'Reset F#', 'Cancel run', 'Auto start' and 'New token', the pane's Start/Stop, LAN and Cancel, the pane in Revit's dark theme, loading next to a Fesh.Revit on .NET 10.

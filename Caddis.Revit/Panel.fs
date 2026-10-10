@@ -111,7 +111,7 @@ type CaddisPanel() as this =
             ])
 
     let reset =
-        button "Reset session" (tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ])
+        button "Reset FSI session" (tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ])
 
     let autoStart = checkBox "Start with Revit" "Start the server when Revit starts."
 

@@ -81,7 +81,7 @@
           </StackPanel>
           <StackPanel Classes="row">
             <Button x:Name="Cancel" Content="Cancel run" />
-            <Button x:Name="Reset" Content="Reset session" />
+            <Button x:Name="Reset" Content="Reset FSI session" />
             <ToggleButton x:Name="SettingsToggle">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <TextBlock Text="Settings" />

@@ -153,7 +153,7 @@ type McpEndpoint(svc: CaddisService) =
         }
         {
             name = "caddis_reset"
-            title = "Reset session"
+            title = "Reset FSI session"
             description = "Starts a new F# Interactive session. All values, functions and types defined so far are lost. Use it if the session is in a bad state."
             properties = []
             required = []
