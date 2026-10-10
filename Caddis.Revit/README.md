@@ -3,6 +3,13 @@
 An F# interactive host for Revit 2026.5, controlled through HTTP and MCP.
 See the [main README](../README.md#revit) for installation and usage.
 
+## Ribbon settings
+
+The Caddis ribbon includes native checkboxes for **Start with Revit** and
+**Listen on the network (LAN)**. They share the panel's settings and stay in sync
+even while the panel is hidden. Changing the LAN setting takes effect after
+stopping and starting the server.
+
 ## Dockable panel
 
 Open the panel with **Caddis → Panel** on Revit's ribbon. It shows the server

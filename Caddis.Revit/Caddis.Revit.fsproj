@@ -17,6 +17,7 @@
     <!-- Revit provides its API at runtime. There is no package for 2026.5 yet, the API of 2026 updates is the same. -->
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="2026.4.10" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="2026.4.10" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.AdWindows" Version="2026.4.10" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="FSharp.Core" Version="10.1.401" /> <!-- the version that FCS pins in the net10.0 build of Caddis.Core -->
   </ItemGroup>
 
@@ -40,6 +41,7 @@
     <Compile Include="App.fs" />
     <Compile Include="PanelTheme.fs" />
     <Compile Include="Panel.fs" />
+    <Compile Include="RibbonSettings.fs" />
     <Compile Include="Addin.fs" />
   </ItemGroup>
 </Project>

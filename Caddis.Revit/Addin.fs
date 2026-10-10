@@ -12,16 +12,15 @@ module internal Ribbon =
 
     let mutable private startStop: PushButton = null
     let mutable private mode: PushButton = null
-    let mutable private autoStart: PushButton = null
 
-    /// Sets the texts of the buttons to the current state, if they changed. On the main thread, also from the panel.
+    /// Synchronizes button labels and checkboxes. Called on the UI thread from the panel and Revit's Idling event.
     let update () =
         let set (b: PushButton) (text: string) = if not (isNull b) && b.ItemText <> text then b.ItemText <- text
         match App.server with
         | Some s ->
             set startStop (if s.IsRunning then "Stop" else "Start")
             set mode (if s.Service.Fsi.Mode = UiThread then "Mode: UI" else "Mode: Background")
-            set autoStart (if s.Service.Settings.autoStart then "Auto start: on" else "Auto start: off")
+            RibbonSettings.update ()
         | None -> ()
 
     let create (uiApp: UIControlledApplication) =
@@ -59,13 +58,13 @@ module internal Ribbon =
                 button "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode."
             )
         mode <- stacked1[0] :?> PushButton
-        let stacked2 =
-            panel.AddStackedItems(
-                button "AutoStart" "Auto start: off" "AutoStartCommand" "Starts the server when Revit starts.",
-                button "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis.",
-                button "NewToken" "New token" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working."
-            )
-        autoStart <- stacked2[0] :?> PushButton
+        panel.AddStackedItems(
+            button "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis.",
+            button "NewToken" "New token" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working."
+        )
+        |> ignore
+        panel.AddSeparator()
+        RibbonSettings.create tab "Caddis"
 
 
 /// The commands of the ribbon buttons. Revit runs them in API context.
@@ -151,6 +150,8 @@ type PanelCommand() =
 type CaddisApplication() =
 
     let themeChanged = EventHandler<Autodesk.Revit.UI.Events.ThemeChangedEventArgs>(fun _ _ -> PanelTheme.refresh ())
+    // Panel timers stop when hidden; idling also catches settings and mode changes made over HTTP.
+    let idling = EventHandler<Autodesk.Revit.UI.Events.IdlingEventArgs>(fun _ _ -> Ribbon.update ())
 
     interface IExternalApplication with
 
@@ -166,6 +167,7 @@ type CaddisApplication() =
                 Ribbon.create uiApp
                 App.stateChanged <- Ribbon.update
                 uiApp.ThemeChanged.AddHandler themeChanged
+                uiApp.Idling.AddHandler idling
                 try uiApp.RegisterDockablePane(CaddisPanel.PaneId, "Caddis", CaddisPaneProvider())
                 with e -> RevitLog.write $"Caddis: registering the panel failed: {e.Message}"
                 if server.Service.Settings.autoStart then App.start true
@@ -178,6 +180,7 @@ type CaddisApplication() =
 
         member _.OnShutdown(uiApp: UIControlledApplication) : Result =
             uiApp.ThemeChanged.RemoveHandler themeChanged
+            uiApp.Idling.RemoveHandler idling
             App.shutdown ()
             ApiContext.shutdown ()
             Result.Succeeded

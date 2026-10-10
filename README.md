@@ -150,7 +150,8 @@ On its first start, and after every rebuild, Revit asks whether to load the unsi
 Revit locks the dll while it runs, close Revit before building again. `install-dev.ps1 -Uninstall` removes the add-in.
 
 ### Usage in Revit
-The `Caddis` ribbon tab has the buttons `Start` / `Stop`, `Copy MCP`, `Panel`, `Mode`, `Reset F#`, `Cancel run`, `Auto start`, `Info` and `New token`.
+The `Caddis` ribbon tab has the buttons `Start` / `Stop`, `Copy MCP`, `Panel`, `Mode`, `Reset F#`, `Cancel run`, `Info` and `New token`,
+plus native checkboxes for `Start with Revit` and `Listen on the network (LAN)`, synchronized with the panel even when it is hidden.
 Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest ones.
 
 `Panel` shows or hides the optional Caddis pane, like the panel in Rhino: the server state and settings,

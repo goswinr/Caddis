@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Revit: native ribbon checkboxes for starting with Revit and listening on the network, synchronized with the panel's settings even when the panel is hidden.
 - Caddis logo in the Eto control panel header.
 - Draggable divider between the panel run list and details tabs to resize their heights.
 - `waitMs` for `caddis_eval`, `caddis_get_run`, `POST /eval` and `GET /runs/{id}`: return a still running run after this time. MCP calls return after 50 s by default.
