@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runs have `started`: a run still waiting for the host app says in MCP that it has not started yet.
 
 ### Changed
+- Revit: ribbon icons use custom vector artwork in Revit's style, with gray surfaces, blue accents and colored action markers, instead of Windows font glyphs. Both 16 and 32 pixel icons follow the screen's scale and Revit's light or dark theme; the Panel button shows a docked pane.
 - Rhino: the panel is drawn with Avalonia 12 inside Rhino's dockable Eto panel, instead of Eto controls. It takes its colors from Rhino's theme, light, dark or custom, and follows a change immediately, including dropdowns, tooltips, menus, scrollbars and the run selection.
 - Rhino: the panel shows the code of a run read-only in an AvaloniaEdit editor, with F# syntax highlighting in light and dark colors, line numbers, and search with Ctrl+F.
 - Rhino: the panel's code view formats F# code with Fantomas 7 off the UI thread. Its `Format` button switches back to the code as it was run, whose line numbers match the diagnostics.

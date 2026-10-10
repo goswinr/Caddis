@@ -28,10 +28,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.Revit.Resources.Caddis.png" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="Log.fs" />
     <Compile Include="ApiContext.fs" />
     <Compile Include="Script.fs" />
