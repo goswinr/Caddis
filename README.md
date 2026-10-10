@@ -64,6 +64,8 @@ Run the command `Caddis`. Its options:
 While a run is in progress, all viewports have a dark yellow border: in UI-thread mode it shows why Rhino is blocked,
 in background mode that a script may change the document while you work. Viewport captures don't include it.
 
+See [Caddis for Rhino](Caddis.Rhino/README.md) for screenshots of the panel in both themes and of the border.
+
 It is scriptable, e.g. `-Caddis Start`.
 
 ## Connect an AI agent
