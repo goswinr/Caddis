@@ -154,12 +154,15 @@
         <TabItem Header="Output">
           <TextBox x:Name="Output" Theme="{StaticResource Caddis.OutputTextBox}" />
         </TabItem>
-        <TabItem Header="Code">
+        <TabItem x:Name="CodeTab" Header="Code">
           <!-- Read-only: the code of a run can be selected, copied and searched with Ctrl+F, not changed. -->
           <ae:TextEditor x:Name="CodeView" Theme="{StaticResource Caddis.CodeEditor}" IsReadOnly="True" ShowLineNumbers="True"
                          LineNumbersMargin="4,0,6,0" FontFamily="Consolas, Menlo, Courier New" />
         </TabItem>
       </TabControl>
+      <!-- At the right end of the tab headers, while the code is shown. -->
+      <ToggleButton x:Name="FormatToggle" Grid.Row="4" Content="Format" IsChecked="True" IsVisible="{Binding #CodeTab.IsSelected}"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" MinHeight="22" Margin="0,1,0,0" />
     </Grid>
   </ThemeVariantScope>
 </UserControl>

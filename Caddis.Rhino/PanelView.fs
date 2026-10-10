@@ -1,13 +1,17 @@
 namespace Caddis.Rhino
 
 open System
+open System.Runtime.CompilerServices
 open System.Text
+open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Input
 open Avalonia.Markup.Xaml
 open Avalonia.Media.Imaging
 open Avalonia.Themes.Fluent
+open Avalonia.Threading
 open AvaloniaEdit
+open Fantomas.Core
 open Caddis
 
 /// A row in the list of runs. The list's item template binds to its properties.
@@ -76,9 +80,13 @@ type PanelView() as this =
     let runs: ListBox = find "Runs"
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
+    let formatToggle: Primitives.ToggleButton = find "FormatToggle"
 
     /// The ids and states of the shown runs, to only update the list when something changed.
     let mutable shownRuns = ""
+
+    /// The code of F# runs formatted by Fantomas, None if Fantomas can't parse it. Kept as long as the run.
+    let formattedCode = ConditionalWeakTable<Run, Task<string option>>()
 
     /// True while the controls are updated from the settings, so that their change events are ignored.
     let mutable updating = false
@@ -126,23 +134,48 @@ type PanelView() as this =
         r.Files |> Array.map _.path |> String.concat Environment.NewLine |> add "files"
         sb.ToString()
 
-    let showDetails () =
-        let selectedRun =
-            match runs.SelectedItem, App.server with
-            | (:? RunRow as row), Some s -> s.Service.Runs.TryGet row.Id
-            | _ -> None
+    let selectedRun () =
+        match runs.SelectedItem, App.server with
+        | (:? RunRow as row), Some s -> s.Service.Runs.TryGet row.Id
+        | _ -> None
+
+    /// Formats the code of a run with Fantomas on the thread pool. The first one loads Fantomas and takes up to a second, later ones milliseconds.
+    /// When it is done, the code view is updated, in case the run is still selected.
+    let rec formatted (r: Run) : Task<string option> =
+        formattedCode.GetValue(
+            r,
+            fun r ->
+                let task =
+                    async {
+                        try
+                            let! result = CodeFormatter.FormatDocumentAsync(false, r.Code)
+                            return Some result.Code
+                        with _ ->
+                            return None
+                    }
+                    |> Async.StartAsTask
+                task.ContinueWith(fun (_: Task<string option>) -> Dispatcher.UIThread.Post(fun () -> showCode ())) |> ignore
+                task
+        )
+
+    /// Shows the code of the selected run, formatted if the Format button is checked.
+    /// As it was run until Fantomas is done, or if Fantomas can't parse it.
+    and showCode () =
         let code =
-            match selectedRun with
-            | Some r ->
-                output.Text <- runText r
-                r.Code
-            | None ->
-                output.Text <- ""
-                ""
-        // Setting the text of the editor moves the caret to the start, so only when another run's code is shown.
+            match selectedRun () with
+            | Some r when r.Kind = FSharpCode && formatToggle.IsChecked.GetValueOrDefault() ->
+                let task = formatted r
+                if task.IsCompleted then task.Result |> Option.defaultValue r.Code else r.Code
+            | Some r -> r.Code
+            | None -> ""
+        // Setting the text of the editor moves the caret to the start, so only when other code is shown.
         if codeView.Text <> code then
             codeView.Text <- code
             codeView.ScrollToHome()
+
+    let showDetails () =
+        output.Text <- selectedRun () |> Option.map runText |> Option.defaultValue ""
+        showCode ()
 
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
@@ -265,6 +298,14 @@ type PanelView() as this =
                 "caddis_command are cancelled in any case, unless the agent asks to wait for you."
             ]
         )
+        ToolTip.SetTip(
+            formatToggle,
+            tip [
+                "Show the code formatted with Fantomas."
+                "Off: the code as it was run, so that the line numbers match those of the diagnostics"
+                "and stack traces in the output. Code that Fantomas can't parse is always shown as it was run."
+            ]
+        )
         textMenu output output.Copy output.SelectAll
         textMenu codeView codeView.Copy codeView.SelectAll
 
@@ -288,6 +329,7 @@ type PanelView() as this =
         cancel.Click.Add(fun _ -> App.cancel ())
         reset.Click.Add(fun _ -> App.reset ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
+        formatToggle.Click.Add(fun _ -> showCode ())
 
     /// Updates the panel from the server's state. Called every second while the panel is shown.
     member _.Refresh() = refresh ()

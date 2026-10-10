@@ -44,7 +44,8 @@ Caddis.Rhino/  net8.0, TargetExt .rhp
   AvaloniaHost.fs  starts Avalonia in Rhino's process, hosts its embeddable top level in an Eto NativeControlHost
   PanelTheme.fs    the panel's brushes from Rhino.UI.ThemeSettings, follows ThemeChanged
   FSharpHighlighting.fs  light and dark colors for FSharp.xshd, the F# highlighting of the read-only AvaloniaEdit code view
-  PanelView.fs     Avalonia view (PanelView.axaml, PanelStyles.axaml): server toggle, URL/token copy, mode, run log, cancel button
+  PanelView.fs     Avalonia view (PanelView.axaml, PanelStyles.axaml): server toggle, URL/token copy, mode, run log, cancel button,
+                   the code of runs formatted with Fantomas on the thread pool
   Panel.fs         the Eto panel Rhino docks, its content is the PanelView
   Commands.fs      Caddis command: Start / Stop, Panel, CopyMcpCommand, Mode, Cancel, Reset, AutoStart, EchoOutput, ListenOnLan, NewToken
   yak.yml
