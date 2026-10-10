@@ -269,6 +269,7 @@ type RhinoHost() =
         let selectOnly (ids: Guid seq) =
             doc.Objects.UnselectAll() |> ignore
             ids |> Seq.filter (fun id -> doc.Objects.Select(id, true, true)) |> Seq.length
+        RunBorder.show true
         let ok =
             try
                 let count =
@@ -292,6 +293,7 @@ type RhinoHost() =
                 doc.Objects.UnselectAll() |> ignore
                 for id in previous do
                     doc.Objects.Select(id, true, true) |> ignore
+                RunBorder.show false
         if not ok || not (File.Exists path) then failwith $"Rhino could not export to '{ext}'."
         // for an extension without exporter Rhino writes a 3dm file
         if not is3dm && isRhinoFile path then
@@ -437,6 +439,7 @@ type RhinoHost() =
             if notSelected.Length > 0 then failwith $"Objects that can't be selected, e.g. because they are hidden or locked: {idList notSelected}"
         let selectedBefore = selection ()
 
+        RunBorder.show true
         beginCapture ()
         commandUndoRecords.Clear()
         touchedObjects.Clear()
@@ -467,6 +470,7 @@ type RhinoHost() =
             stopWatching ()
             commandRunActive <- false
             endCapture ()
+            RunBorder.show false // redraws the views
 
         let exists (id: Guid) = not (isNull (doc.Objects.FindId id))
         let pick (wasAdded: bool) (stillExists: bool) =
@@ -485,7 +489,6 @@ type RhinoHost() =
         if commandUndoRecords.Count > 0 then
             run.UndoSerial <- Some(Seq.last commandUndoRecords)
             run.UndoSteps <- commandUndoRecords.Count
-        doc.Views.Redraw()
         failure |> Option.defaultValue { RunOutcome.ofStatus Succeeded with message = note }
 
     interface ICaddisHost with
@@ -522,7 +525,8 @@ type RhinoHost() =
                 resetWaiting ()
                 match run.InputTimeout, RhinoDoc.ActiveDoc with
                 | Some _, doc when not (isNull doc) -> stopWatchingScript <- startWatching run run.InputTimeout doc.RuntimeSerialNumber
-                | _ -> ())
+                | _ -> ()
+                RunBorder.show true)
 
         member _.AfterRun(run: Run, _status: RunStatus) =
             flushEcho true
@@ -543,10 +547,8 @@ type RhinoHost() =
                 | None -> ()
                 match RhinoDoc.ActiveDoc with
                 | null -> ()
-                | doc ->
-                    // a script might have disabled redraw, e.g. for speed
-                    doc.Views.RedrawEnabled <- true
-                    doc.Views.Redraw())
+                | doc -> doc.Views.RedrawEnabled <- true // a script might have disabled redraw, e.g. for speed
+                RunBorder.show false) // redraws the views
             Ok ()
 
         member _.Echo(_, text) =

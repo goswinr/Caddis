@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Rhino: a dark yellow border around all viewports while a run is in progress, an F# run, a command run or an export, so that the person in Rhino sees that a script is running. It is not drawn in view captures, prints or the details of layouts.
 - Revit: native ribbon checkboxes for starting with Revit and listening on the network, synchronized with the panel's settings even when the panel is hidden.
 - Caddis logo in the panel header.
 - Draggable divider between the panel run list and details tabs to resize their heights.

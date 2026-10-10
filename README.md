@@ -61,6 +61,9 @@ Run the command `Caddis`. Its options:
 - `ListenOnLan` makes the server reachable from other machines.
 - `NewToken` replaces the token.
 
+While a run is in progress, all viewports have a dark yellow border: in UI-thread mode it shows why Rhino is blocked,
+in background mode that a script may change the document while you work. Viewport captures don't include it.
+
 It is scriptable, e.g. `-Caddis Start`.
 
 ## Connect an AI agent
