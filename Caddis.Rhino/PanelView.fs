@@ -7,6 +7,7 @@ open Avalonia.Input
 open Avalonia.Markup.Xaml
 open Avalonia.Media.Imaging
 open Avalonia.Themes.Fluent
+open AvaloniaEdit
 open Caddis
 
 /// A row in the list of runs. The list's item template binds to its properties.
@@ -46,7 +47,12 @@ type PanelView() as this =
             "Changing it starts a new F# session, values defined by earlier runs are lost."
         ]
 
-    do AvaloniaXamlLoader.Load this
+    do
+        // Another plugin started Avalonia with its own application, see AvaloniaSetup.
+        // Added before loading the XAML, AvaloniaEdit's styles in it take resources from the Fluent theme.
+        if not (Avalonia.Application.Current :? PanelApp) then
+            this.Styles.Add(FluentTheme())
+        AvaloniaXamlLoader.Load this
 
     let find name : 'T = this.FindControl<'T> name
 
@@ -67,7 +73,7 @@ type PanelView() as this =
     let cancelWaiting: CheckBox = find "CancelWaiting"
     let runs: ListBox = find "Runs"
     let output: TextBox = find "Output"
-    let codeView: TextBox = find "CodeView"
+    let codeView: TextEditor = find "CodeView"
 
     /// The ids and states of the shown runs, to only update the list when something changed.
     let mutable shownRuns = ""
@@ -78,7 +84,9 @@ type PanelView() as this =
     /// While attached: the subscription to changes of Rhino's theme.
     let mutable themeChanges: IDisposable option = None
 
-    let applyTheme () = PanelTheme.apply this.Resources scope
+    let applyTheme () =
+        PanelTheme.apply this.Resources scope
+        codeView.SyntaxHighlighting <- FSharpHighlighting.get (PanelTheme.isDark ())
 
     let firstCodeLine (code: string) =
         code.Split('\n')
@@ -121,13 +129,18 @@ type PanelView() as this =
             match runs.SelectedItem, App.server with
             | (:? RunRow as row), Some s -> s.Service.Runs.TryGet row.Id
             | _ -> None
-        match selectedRun with
-        | Some r ->
-            output.Text <- runText r
-            codeView.Text <- r.Code
-        | None ->
-            output.Text <- ""
-            codeView.Text <- ""
+        let code =
+            match selectedRun with
+            | Some r ->
+                output.Text <- runText r
+                r.Code
+            | None ->
+                output.Text <- ""
+                ""
+        // Setting the text of the editor moves the caret to the start, so only when another run's code is shown.
+        if codeView.Text <> code then
+            codeView.Text <- code
+            codeView.ScrollToHome()
 
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
@@ -178,17 +191,14 @@ type PanelView() as this =
                 updating <- false
 
     /// Copy and Select all, the read-only text has no Cut and Paste.
-    let textMenu (box: TextBox) =
+    let textMenu (control: Control) (copy: unit -> unit) (selectAll: unit -> unit) =
         let item (header: string) (action: unit -> unit) =
             let m = MenuItem(Header = header)
             m.Click.Add(fun _ -> action ())
             m
-        box.ContextMenu <- ContextMenu(ItemsSource = [ item "Copy" box.Copy; item "Select all" box.SelectAll ])
+        control.ContextMenu <- ContextMenu(ItemsSource = [ item "Copy" copy; item "Select all" selectAll ])
 
     do
-        // Another plugin started Avalonia with its own application, see AvaloniaSetup.
-        if not (Avalonia.Application.Current :? PanelApp) then
-            this.Styles.Insert(0, FluentTheme())
         applyTheme ()
 
         use stream = typeof<PanelView>.Assembly.GetManifestResourceStream "Caddis.Rhino.Resources.Caddis.png"
@@ -246,8 +256,8 @@ type PanelView() as this =
                 "caddis_command are cancelled in any case, unless the agent asks to wait for you."
             ]
         )
-        textMenu output
-        textMenu codeView
+        textMenu output output.Copy output.SelectAll
+        textMenu codeView codeView.Copy codeView.SelectAll
 
         startStop.Click.Add(fun _ ->
             match App.server with

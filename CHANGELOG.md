@@ -32,7 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Rhino: the panel is drawn with Avalonia 12 inside Rhino's dockable Eto panel, instead of Eto controls. It takes its colors from Rhino's theme, light, dark or custom, and follows a change immediately, including dropdowns, tooltips, menus, scrollbars and the run selection. On a narrow panel the checkboxes wrap below the buttons.
-- Rhino: the Yak package includes Avalonia, SkiaSharp and HarfBuzz with their native libraries for 64 bit Windows (x64, Arm64) and Mac, about 20 MB more. The panel renders in software, so ANGLE isn't included.
+- Rhino: the panel shows the code of a run read-only in an AvaloniaEdit editor, with F# syntax highlighting in light and dark colors, line numbers, and search with Ctrl+F.
+- Rhino: the Yak package includes Avalonia, AvaloniaEdit, SkiaSharp and HarfBuzz with their native libraries for 64 bit Windows (x64, Arm64) and Mac, about 20 MB more. The panel renders in software, so ANGLE isn't included.
 - Revit: the dockable pane follows Revit's light and dark themes, with native-style compact controls, readable run details, themed dropdowns and scrollbars, and visible selection and keyboard focus.
 - Caddis.Core is independent of the host app: `ICaddisHost.Info` gives the app name, the MCP server name, the texts of the MCP tools and the format of object ids. Object ids are strings, `AfterRun` gets the status of the run, `SettingsStore` takes a settings file name and defaults per host.
 - Caddis.Core targets net8.0 for Rhino 8 (FSharp.Compiler.Service 43.8.403, FSharp.Core 8.0.403) and net10.0 for Revit (FSharp.Compiler.Service 43.12.401, FSharp.Core 10.1.401). The resolver for values of earlier runs also matches the `FSI-ASSEMBLY-MULTI` assemblies of FCS 43.12.

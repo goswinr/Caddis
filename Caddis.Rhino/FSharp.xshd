@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- F# syntax highlighting for the code view of the panel, adapted from Fesh's SyntaxHighlightingFSharp.xshd.
+     The foreground colors are set in FSharpHighlighting.fs, in a light and a dark variant.
+     Regexes in element text ignore white space, and '#' starts a comment there, so it is escaped.
+     A span that starts earlier wins over a rule, and of spans or rules that start at the same position the first one wins. -->
+<SyntaxDefinition name="F#" extensions=".fs;.fsi;.fsx" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+  <Color name="Comment" fontStyle="italic" />
+  <Color name="DocComment" fontStyle="italic" />
+  <Color name="CommentMarker" fontWeight="Bold" />
+  <Color name="String" />
+  <Color name="StringEscape" />
+  <Color name="Interpolation" />
+  <Color name="Keyword" />
+  <Color name="Boolean" />
+  <Color name="Number" />
+  <Color name="Directive" />
+  <Color name="Attribute" />
+  <Color name="Punctuation" />
+
+  <RuleSet name="CommentMarkers">
+    <Keywords color="CommentMarker">
+      <Word>TODO</Word>
+      <Word>FIXME</Word>
+      <Word>HACK</Word>
+    </Keywords>
+  </RuleSet>
+
+  <RuleSet name="Comments">
+    <Span color="DocComment" ruleSet="CommentMarkers">
+      <Begin>///(?!/)</Begin>
+    </Span>
+    <Span color="Comment" ruleSet="CommentMarkers">
+      <Begin>//</Begin>
+    </Span>
+    <!-- not (*), the multiplication operator -->
+    <Span color="Comment" ruleSet="CommentMarkers" multiline="true">
+      <Begin>\(\*(?!\))</Begin>
+      <End>\*\)</End>
+    </Span>
+  </RuleSet>
+
+  <!-- A span, not a rule, so that the escaped quote in "a\"b" doesn't end the string. -->
+  <RuleSet name="Escapes">
+    <Span color="StringEscape" begin="\\" end="." />
+  </RuleSet>
+
+  <!-- printf format specifiers like %d, %.2f and %A -->
+  <RuleSet name="Formats">
+    <Rule color="StringEscape">%[-+0]*(\d+|\*)?(\.\d+)?[bscdiuxXoBeEfFgGMOAat%]</Rule>
+  </RuleSet>
+
+  <!-- {expr} in $"..." strings, {{ and }} are braces -->
+  <RuleSet name="Interpolations">
+    <Span color="StringEscape" begin="\{\{" end="" />
+    <Span color="StringEscape" begin="\}\}" end="" />
+    <Span color="Interpolation">
+      <Begin color="Punctuation">\{</Begin>
+      <End color="Punctuation">\}</End>
+    </Span>
+    <Import ruleSet="Formats" />
+  </RuleSet>
+
+  <RuleSet name="Strings">
+    <!-- $$"""...{{expr}}...""" -->
+    <Span color="String" multiline="true">
+      <Begin>\$\$"""</Begin>
+      <End>"""</End>
+      <RuleSet>
+        <Span color="Interpolation">
+          <Begin color="Punctuation">\{\{</Begin>
+          <End color="Punctuation">\}\}</End>
+        </Span>
+        <Import ruleSet="Formats" />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>\$"""</Begin>
+      <End>"""</End>
+      <RuleSet>
+        <Import ruleSet="Interpolations" />
+      </RuleSet>
+    </Span>
+    <!-- verbatim and interpolated, "" is a quote -->
+    <Span color="String" multiline="true">
+      <Begin>(\$@|@\$)"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Span begin='""' end="" />
+        <Import ruleSet="Interpolations" />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>\$"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Import ruleSet="Escapes" />
+        <Import ruleSet="Interpolations" />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>"""</Begin>
+      <End>"""</End>
+      <RuleSet>
+        <Import ruleSet="Formats" />
+      </RuleSet>
+    </Span>
+    <!-- verbatim, "" is a quote -->
+    <Span color="String" multiline="true">
+      <Begin>@"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Span begin='""' end="" />
+        <Import ruleSet="Formats" />
+      </RuleSet>
+    </Span>
+    <Span color="String" multiline="true">
+      <Begin>"</Begin>
+      <End>"</End>
+      <RuleSet>
+        <Import ruleSet="Escapes" />
+        <Import ruleSet="Formats" />
+      </RuleSet>
+    </Span>
+    <!-- 'a' and '\n', but not the ' of type parameters like 'T or of names like x' -->
+    <Span color="String">
+      <Begin>'(?=\\)|'.(?=')</Begin>
+      <End>'</End>
+      <RuleSet>
+        <Import ruleSet="Escapes" />
+      </RuleSet>
+    </Span>
+  </RuleSet>
+
+  <!-- The main rule set has no name. -->
+  <RuleSet>
+    <Import ruleSet="Comments" />
+    <Import ruleSet="Strings" />
+
+    <Span color="Attribute">
+      <Begin color="Punctuation">\[&lt;</Begin>
+      <End color="Punctuation">&gt;\]</End>
+      <RuleSet>
+        <Import ruleSet="Strings" />
+      </RuleSet>
+    </Span>
+
+    <Rule color="Directive">\#(r|I|load|nowarn|warnon|time|help|quit|if|elif|else|endif|light|indent|line)\b</Rule>
+
+    <!-- before the keywords, so that let! isn't let and ! -->
+    <Rule color="Keyword">\b(let|use|do|match|yield|return|and)!</Rule>
+
+    <Keywords color="Boolean">
+      <Word>true</Word>
+      <Word>false</Word>
+    </Keywords>
+
+    <Keywords color="Keyword">
+      <Word>abstract</Word>
+      <Word>and</Word>
+      <Word>as</Word>
+      <Word>assert</Word>
+      <Word>base</Word>
+      <Word>begin</Word>
+      <Word>class</Word>
+      <Word>const</Word>
+      <Word>default</Word>
+      <Word>delegate</Word>
+      <Word>do</Word>
+      <Word>done</Word>
+      <Word>downcast</Word>
+      <Word>downto</Word>
+      <Word>elif</Word>
+      <Word>else</Word>
+      <Word>end</Word>
+      <Word>exception</Word>
+      <Word>extern</Word>
+      <Word>finally</Word>
+      <Word>fixed</Word>
+      <Word>for</Word>
+      <Word>fun</Word>
+      <Word>function</Word>
+      <Word>global</Word>
+      <Word>if</Word>
+      <Word>in</Word>
+      <Word>inherit</Word>
+      <Word>inline</Word>
+      <Word>interface</Word>
+      <Word>internal</Word>
+      <Word>lazy</Word>
+      <Word>let</Word>
+      <Word>match</Word>
+      <Word>member</Word>
+      <Word>module</Word>
+      <Word>mutable</Word>
+      <Word>namespace</Word>
+      <Word>new</Word>
+      <Word>not</Word>
+      <Word>null</Word>
+      <Word>of</Word>
+      <Word>open</Word>
+      <Word>or</Word>
+      <Word>override</Word>
+      <Word>private</Word>
+      <Word>public</Word>
+      <Word>rec</Word>
+      <Word>return</Word>
+      <Word>sig</Word>
+      <Word>static</Word>
+      <Word>struct</Word>
+      <Word>then</Word>
+      <Word>to</Word>
+      <Word>try</Word>
+      <Word>type</Word>
+      <Word>upcast</Word>
+      <Word>use</Word>
+      <Word>val</Word>
+      <Word>void</Word>
+      <Word>when</Word>
+      <Word>while</Word>
+      <Word>with</Word>
+      <Word>yield</Word>
+      <Word>__LINE__</Word>
+      <Word>__SOURCE_DIRECTORY__</Word>
+      <Word>__SOURCE_FILE__</Word>
+    </Keywords>
+
+    <!-- hex, octal and binary numbers, decimals with fraction and exponent, and suffixes like 1.0f, 10uy and 5L.
+         In 1..10 the first dot is not part of the number. -->
+    <Rule color="Number">\b(0[xX][0-9a-fA-F_]+|0[oObB][0-9_]+|\d[\d_]*(\.(?!\.)[\d_]*)?([eE][+-]?\d+)?)[a-zA-Z]*</Rule>
+
+    <!-- like Fesh, not the math operators + - * / -->
+    <Rule color="Punctuation">-&gt;|&lt;-|[.,:;=&lt;&gt;|&amp;!?^~@$%(){}\[\]\\]</Rule>
+  </RuleSet>
+
+</SyntaxDefinition>

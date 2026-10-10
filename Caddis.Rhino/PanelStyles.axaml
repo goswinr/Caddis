@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ae="https://github.com/avaloniaui/avaloniaedit">
   <!-- Compact control themes like Rhino's own panels. The Caddis.* brushes come from Rhino's theme, see PanelTheme.fs.
        They are dynamic resources, so an open panel and its popups follow a change of Rhino's theme.
        Controls not themed here, e.g. scroll bars and menus, use the Fluent theme in the same light or dark variant. -->
@@ -165,8 +166,13 @@
     </Style>
   </ControlTheme>
 
-  <!-- For the read-only output and code. Scroll bars come from the Fluent theme. -->
-  <ControlTheme x:Key="{x:Type TextBox}" TargetType="TextBox">
+  <!-- For the read-only output. Scroll bars come from the Fluent theme.
+       Not the default theme of TextBox: the search box of the code view needs the Fluent one, for its option buttons. -->
+  <ControlTheme x:Key="Caddis.OutputTextBox" TargetType="TextBox">
+    <Setter Property="IsReadOnly" Value="True" />
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="FontFamily" Value="Consolas, Menlo, Courier New" />
     <Setter Property="Foreground" Value="{DynamicResource Caddis.Text}" />
     <Setter Property="Background" Value="{DynamicResource Caddis.Surface}" />
     <Setter Property="BorderBrush" Value="{DynamicResource Caddis.Border}" />
@@ -196,6 +202,39 @@
                            SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
                            CaretBrush="{TemplateBinding CaretBrush}" />
           </ScrollViewer>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:focus-within /template/ Border#PART_BorderElement">
+      <Setter Property="BorderBrush" Value="{DynamicResource Caddis.Accent}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- For the code, like the output above. AvaloniaEdit's own themes style its text area and search panel.
+       Set by key: the default theme of TextEditor from AvaloniaEdit's styles is nearer to the editor than this dictionary.
+       The TextEditor puts its TextArea into PART_ScrollViewer. -->
+  <ControlTheme x:Key="Caddis.CodeEditor" TargetType="ae:TextEditor">
+    <Setter Property="Foreground" Value="{DynamicResource Caddis.Text}" />
+    <Setter Property="Background" Value="{DynamicResource Caddis.Surface}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Caddis.Border}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="2,2,0,2" />
+    <Setter Property="LineNumbersForeground" Value="{DynamicResource Caddis.Disabled}" />
+    <!-- translucent amber, readable on light and dark backgrounds -->
+    <Setter Property="SearchResultsBrush" Value="#60F0A000" />
+    <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_BorderElement" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}">
+          <ScrollViewer x:Name="PART_ScrollViewer"
+                        Focusable="False"
+                        HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}"
+                        VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"
+                        HorizontalContentAlignment="Left"
+                        VerticalContentAlignment="Top"
+                        Padding="{TemplateBinding Padding}" />
         </Border>
       </ControlTemplate>
     </Setter>

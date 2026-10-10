@@ -36,7 +36,7 @@ module internal PanelTheme =
         ]
 
     /// Rhino has a dark mode setting on Windows and follows the system on Mac. A custom theme can be dark too, so decide by the panel's color.
-    let private isDark () =
+    let isDark () =
         let c = ThemeSettings.Content.Background
         0.2126 * float c.Rb + 0.7152 * float c.Gb + 0.0722 * float c.Bb < 128.0
 
