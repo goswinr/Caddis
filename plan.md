@@ -13,7 +13,7 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 | Fesh coexistence | Independent, pinned to FCS 43.8.403 and FSharp.Core 8.0.403 (the same versions as Fesh 0.33.5-net8), so both plugins load together. Each has its own FSI session. The `net10.0` build of Caddis.Core, for Revit, uses FCS 43.12.401 and FSharp.Core 10.1.401, like Fesh 0.34.0-net10. |
 | Lifecycle | `Caddis` command to start and stop, an opt-in autostart setting, and one discovery file per Rhino instance |
 | v1 extras | Cancel + timeout, viewport capture, type-check only, undo last eval, returning exported/saved files |
-| Platform / UI | Plain `net8.0` running on Rhino 8 for Windows and Mac, with an Eto dockable panel |
+| Platform / UI | Plain `net8.0` running on Rhino 8 for Windows and Mac, with a dockable Eto panel whose content is Avalonia (changed 2026-10-10), so that it follows Rhino's light and dark themes |
 
 ## Constraints
 
@@ -41,7 +41,10 @@ Caddis.Rhino/  net8.0, TargetExt .rhp
   AssemblyInfo.fs  new plugin GUID (not Fesh's)
   PlugIn.fs        load, UI SynchronizationContext, autostart, Rhino.Scripting hookup
   RhinoOps.fs      undo record wrapping, redraw, InCommand guard, viewport capture, export, undo
-  Panel.fs         Eto panel: server toggle, URL/token copy, mode, run log, cancel button
+  AvaloniaHost.fs  starts Avalonia in Rhino's process, hosts its embeddable top level in an Eto NativeControlHost
+  PanelTheme.fs    the panel's brushes from Rhino.UI.ThemeSettings, follows ThemeChanged
+  PanelView.fs     Avalonia view (PanelView.axaml, PanelStyles.axaml): server toggle, URL/token copy, mode, run log, cancel button
+  Panel.fs         the Eto panel Rhino docks, its content is the PanelView
   Commands.fs      Caddis command: Start / Stop, Panel, CopyMcpCommand, Mode, Cancel, Reset, AutoStart, EchoOutput, ListenOnLan, NewToken
   yak.yml
 Tests/         Expecto or xUnit tests for Caddis.Core (MCP routing, auth, eval, cancel)
@@ -263,7 +266,7 @@ Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.Get
 2. **HTTP**: server, auth, REST, settings, token, discovery file, and the `Caddis` command, with tests on the core.
 3. **MCP endpoint**, verified against Claude Code and MCP Inspector.
 4. **Rhino operations**: viewport capture, export and files, undo, type-check.
-5. **Eto panel.**
+5. **Panel**, first in Eto, since 2026-10-10 Avalonia inside the Eto panel.
 6. **Packaging**: a yak package for Rhino 8 (Windows and Mac), GitHub Actions modelled on Fesh.Rhino, README, and a CHANGELOG versioned by Ionide.KeepAChangelog.
 
 ## Risks
@@ -271,7 +274,7 @@ Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.Get
 - **FCS internals:** the cancel hack and the script folder of `caddis_check` reach into private FCS fields by reflection. This is safe only because the version is pinned; any FCS upgrade needs a re-test.
 - **Assembly resolution:** Caddis puts its resolver for `FSI-ASSEMBLY` first by setting the private `AssemblyLoadContext.AssemblyResolve` field. If a .NET update renames it, Caddis logs that and values of earlier runs fail again in Rhino. A plugin that inserts its own handler at the front later would break it too.
 - **Modal dialogs:** a script, or an export format, that opens a modal dialog blocks Rhino until someone clicks. PDF export is refused for this reason; the other formats are only known to be fine from the test above.
-- **Mac is unverified:** ControlledExecution, `System.Drawing` for viewport capture (the fallback is `-_ViewCaptureToFile`), and whether a UI `SynchronizationContext` exists (the fallback is `RhinoApp.InvokeOnUiThread`).
+- **Mac is unverified:** ControlledExecution, `System.Drawing` for viewport capture (the fallback is `-_ViewCaptureToFile`), and whether a UI `SynchronizationContext` exists (the fallback is `RhinoApp.InvokeOnUiThread`). The panel too: Avalonia.Native as an NSView in Eto's `NativeControlHost`, with Avalonia's app delegate, menus and process name disabled. If Avalonia fails to start, the panel shows the error and the `Caddis` command still works.
 - **Background thread:** raw RhinoCommon UI calls from that thread can crash Rhino. That is why the default is the UI thread.
 - **Memory:** FSI's emitted assemblies are never unloaded, so memory grows over a long Rhino session and a reset does not free it. `/status` reports it.
 - **LAN:** the token travels in plain text over HTTP. TLS is out of scope for v1.

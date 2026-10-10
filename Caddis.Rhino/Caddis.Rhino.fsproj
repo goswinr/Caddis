@@ -19,6 +19,14 @@
     <!-- a dependency of RhinoCommon, provided by .NET (Windows) or Rhino (Mac) at runtime -->
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- the version that FCS pins in the net8.0 build of Caddis.Core -->
+    <!-- The panel's content is Avalonia, hosted in Rhino's Eto panel: Win32 on Windows, Avalonia.Native on Mac.
+    Not Avalonia.Desktop, it would add the Linux backend. -->
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Win32" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Native" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.HarfBuzz" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,10 +43,23 @@
     <Compile Include="RhinoInfo.fs" />
     <Compile Include="RhinoHost.fs" />
     <Compile Include="App.fs" />
+    <Compile Include="AvaloniaHost.fs" />
+    <Compile Include="PanelTheme.fs" />
+    <Compile Include="PanelView.fs" />
     <Compile Include="Panel.fs" />
     <Compile Include="PlugIn.fs" />
     <Compile Include="Commands.fs" />
   </ItemGroup>
+
+  <!-- Rhino 8 runs on 64 bit Windows and Mac only. The panel renders in software, so ANGLE's libraries aren't needed either.
+  This keeps the native libraries of x86, Linux and WebAssembly, and the 210 MB of SkiaSharp's native debug symbols,
+  out of the build and the Yak package. -->
+  <Target Name="RemoveUnusedNativeLibraries" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(RuntimeIdentifier)' != 'win-x64' and '%(RuntimeIdentifier)' != 'win-arm64' and '%(RuntimeIdentifier)' != 'osx'" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(NuGetPackageId)' == 'Avalonia.Angle.Windows.Natives' or '%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="WriteChangelogVersion" AfterTargets="AfterBuild" DependsOnTargets="SetVersionFromChangelog">
     <Error Condition="'@(CurrentReleaseChangelog)' == ''" Text="CHANGELOG.md must contain a versioned release for Yak packaging." />

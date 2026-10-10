@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:Caddis.Rhino"
+             x:Class="Caddis.Rhino.PanelView"
+             Background="{DynamicResource Caddis.Panel}"
+             Foreground="{DynamicResource Caddis.Text}"
+             FontSize="12">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/PanelStyles.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <!-- Button rows and check boxes have the same height, so that the check boxes line up with the button rows beside them. -->
+    <Style Selector="StackPanel.row">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="4" />
+      <Setter Property="Height" Value="28" />
+    </Style>
+    <Style Selector="CheckBox">
+      <Setter Property="Height" Value="28" />
+    </Style>
+    <Style Selector="Grid.runColumns > TextBlock">
+      <Setter Property="Margin" Value="6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="FontFamily" Value="Consolas, Menlo, Courier New" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- The light or dark variant of the Fluent theme, for scroll bars and menus, set by PanelTheme. -->
+  <ThemeVariantScope x:Name="Scope">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" MinHeight="48" />
+        <RowDefinition Height="6" />
+        <RowDefinition Height="*" MinHeight="60" />
+      </Grid.RowDefinitions>
+
+      <DockPanel Margin="0,0,0,4">
+        <Border x:Name="Logo" DockPanel.Dock="Left" Background="Transparent" Cursor="Hand" Margin="0,0,8,0">
+          <Image x:Name="LogoImage" Width="40" Height="40" />
+        </Border>
+        <TextBlock x:Name="Status" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+
+      <!-- The check boxes are beside the buttons, or below them when the panel is narrow. -->
+      <WrapPanel Grid.Row="1" Margin="0,0,0,4">
+        <StackPanel Margin="0,0,12,0">
+          <StackPanel Classes="row">
+            <Button x:Name="StartStop" Content="Start" MinWidth="56" />
+            <Button x:Name="CopyMcp" Content="Copy MCP command" />
+            <Button x:Name="CopyToken" Content="Copy token" />
+          </StackPanel>
+          <StackPanel Classes="row">
+            <TextBlock x:Name="ModeLabel" Text="Run scripts on:" VerticalAlignment="Center" />
+            <ComboBox x:Name="Mode" MinWidth="130">
+              <ComboBoxItem Content="UI thread" />
+              <ComboBoxItem Content="Background thread" />
+            </ComboBox>
+          </StackPanel>
+          <StackPanel Classes="row">
+            <Button x:Name="Cancel" Content="Cancel run" />
+            <Button x:Name="Reset" Content="Reset session" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel>
+          <CheckBox x:Name="AutoStart" Content="Start with Rhino" />
+          <CheckBox x:Name="Echo" Content="Echo output to the command line" />
+          <CheckBox x:Name="Lan" Content="Listen on the network (LAN)" />
+          <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
+        </StackPanel>
+      </WrapPanel>
+
+      <!-- The recent runs, newest first. The columns share their widths with the header. -->
+      <Border Grid.Row="2" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
+        <Grid RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
+          <Border BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="0,0,0,1" Padding="0,3">
+            <Grid Classes="runColumns">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" SharedSizeGroup="Run" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="Status" />
+                <ColumnDefinition Width="Auto" SharedSizeGroup="Time" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBlock Text="Run" />
+              <TextBlock Grid.Column="1" Text="Status" />
+              <TextBlock Grid.Column="2" Text="Time" HorizontalAlignment="Right" />
+              <TextBlock Grid.Column="3" Text="Code" />
+            </Grid>
+          </Border>
+          <ListBox x:Name="Runs" Grid.Row="1" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="local:RunRow">
+                <Grid Classes="runColumns">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Run" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Status" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="Time" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Id}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Status}" />
+                  <TextBlock Grid.Column="2" Text="{Binding Time}" HorizontalAlignment="Right" />
+                  <TextBlock Grid.Column="3" Text="{Binding Code}" TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+
+      <GridSplitter Grid.Row="3" ResizeDirection="Rows" Cursor="SizeNorthSouth" />
+
+      <TabControl Grid.Row="4">
+        <TabItem Header="Output">
+          <TextBox x:Name="Output" />
+        </TabItem>
+        <TabItem Header="Code">
+          <TextBox x:Name="CodeView" />
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </ThemeVariantScope>
+</UserControl>

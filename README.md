@@ -46,7 +46,8 @@ both use the same versions of FSharp.Core and FSharp.Compiler.Service.
 ## Usage in Rhino
 Run the command `Caddis`. Its options:
 - `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port.
-- `Panel` opens a panel with the recent runs and their output.
+- `Panel` opens a panel with the server state and settings, the recent runs, and the output and code of the selected run.
+  It follows Rhino's light, dark or custom theme colors.
 - `CopyMcpCommand` copies the command to add Caddis to Claude Code, including the token.
 - `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.
 - `Cancel` the current run, `Reset` the F# session.
