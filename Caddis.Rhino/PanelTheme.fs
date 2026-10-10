@@ -1,11 +1,9 @@
 namespace Caddis.Rhino
 
 open System
-open Avalonia.Controls
 open Avalonia.Media
-open Avalonia.Styling
-open Avalonia.Threading
 open Rhino.UI
+open Caddis.UI
 
 /// The colors of the panel, taken from Rhino's theme: its light or dark default colors, or the user's own.
 /// PanelStyles.axaml uses them as dynamic resources, so an open panel follows a change of the theme.
@@ -40,16 +38,16 @@ module internal PanelTheme =
         let c = ThemeSettings.Content.Background
         0.2126 * float c.Rb + 0.7152 * float c.Gb + 0.0722 * float c.Bb < 128.0
 
-    /// Sets the panel's brushes, and the theme variant of the Fluent styles, e.g. for scroll bars and menus.
-    let apply (resources: IResourceDictionary) (scope: ThemeVariantScope) =
-        for key, color in colors () do
-            resources["Caddis." + key] <- SolidColorBrush(toAvalonia color)
-        scope.RequestedThemeVariant <- if isDark () then ThemeVariant.Dark else ThemeVariant.Light
+    /// The shared view applies these brushes within its own resource scope.
+    let palette () : PanelPalette = {
+        IsDark = isDark ()
+        Colors = colors () |> List.map (fun (key, color) -> key, toAvalonia color)
+        }
 
     /// Calls the function on the UI thread whenever Rhino's theme changes, until disposed.
     /// ThemeChanged is a field, not an event, in RhinoCommon 8.
     let subscribe (onChange: unit -> unit) : IDisposable =
-        let handler = EventHandler(fun _ _ -> Dispatcher.UIThread.Post onChange)
+        let handler = EventHandler(fun _ _ -> onChange ())
         ThemeSettings.ThemeChanged <- Delegate.Combine(ThemeSettings.ThemeChanged, handler) :?> EventHandler
         { new IDisposable with
             member _.Dispose() = ThemeSettings.ThemeChanged <- Delegate.Remove(ThemeSettings.ThemeChanged, handler) :?> EventHandler

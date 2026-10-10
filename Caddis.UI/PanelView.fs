@@ -1,12 +1,13 @@
-namespace Caddis.Rhino
+namespace Caddis.UI
 
 open System
 open System.Runtime.CompilerServices
-open System.Text
 open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Input
 open Avalonia.Markup.Xaml
+open Avalonia.Media
+open Avalonia.Styling
 open Avalonia.Media.Imaging
 open Avalonia.Themes.Fluent
 open Avalonia.Threading
@@ -23,8 +24,8 @@ type RunRow = {
     }
 
 /// The content of the Caddis panel: the server state and settings, the recent runs, and the output and code of the selected run.
-/// The layout is in PanelView.axaml and the control themes in PanelStyles.axaml, the colors come from Rhino's theme.
-type PanelView() as this =
+/// The layout is in PanelView.axaml and the control themes in PanelStyles.axaml, the colors and actions come from the host.
+type PanelView(host: PanelHost) as this =
     inherit UserControl()
 
     static let repoUrl = "https://github.com/goswinr/Caddis"
@@ -32,24 +33,14 @@ type PanelView() as this =
     /// Tooltips don't wrap, so they are given line by line.
     static let tip (lines: string list) = String.concat "\n" lines
 
-    static let startTip =
+    let startTip =
         tip [
-            "Start the server, so that AI agents and scripts can run F# code and Rhino commands in this Rhino."
+            $"Start the server, so that AI agents and scripts can run F# code in this {host.Name}."
             "It listens on localhost only, unless 'Listen on the network' is on."
         ]
 
-    static let stopTip = tip [ "Stop the server. Connected AI agents can't reach Rhino until it is started again." ]
-
-    static let modeTip =
-        tip [
-            "UI thread: scripts run on Rhino's UI thread. Safest for RhinoCommon,"
-            "but Rhino is blocked while a script runs, and a run can't be cancelled."
-            ""
-            "Background thread: Rhino stays usable, runs can be cancelled and time out."
-            "Code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
-            ""
-            "Changing it starts a new F# session, values defined by earlier runs are lost."
-        ]
+    let stopTip = tip [ $"Stop the server. Connected AI agents can't reach {host.Name} until it is started again." ]
+    let modeTip = host.ModeTip
 
     do
         // Another plugin started Avalonia with its own application, see AvaloniaSetup.
@@ -65,6 +56,7 @@ type PanelView() as this =
     let logoImage: Image = find "LogoImage"
     let serverStatus: TextBlock = find "ServerStatus"
     let fsiStatus: TextBlock = find "FsiStatus"
+    let message: TextBlock = find "Message"
     let startStop: Button = find "StartStop"
     let copyMcp: Button = find "CopyMcp"
     let copyToken: Button = find "CopyToken"
@@ -91,12 +83,15 @@ type PanelView() as this =
     /// True while the controls are updated from the settings, so that their change events are ignored.
     let mutable updating = false
 
-    /// While attached: the subscription to changes of Rhino's theme.
+    /// While attached: the subscription to changes of the host's theme.
     let mutable themeChanges: IDisposable option = None
 
     let applyTheme () =
-        PanelTheme.apply this.Resources scope
-        codeView.SyntaxHighlighting <- FSharpHighlighting.get (PanelTheme.isDark ())
+        let palette = host.Palette ()
+        for key, color in palette.Colors do
+            this.Resources["Caddis." + key] <- SolidColorBrush(color)
+        scope.RequestedThemeVariant <- if palette.IsDark then ThemeVariant.Dark else ThemeVariant.Light
+        codeView.SyntaxHighlighting <- FSharpHighlighting.get palette.IsDark
 
     let firstCodeLine (code: string) =
         code.Split('\n')
@@ -104,38 +99,8 @@ type PanelView() as this =
         |> Array.tryFind (fun l -> l <> "" && not (l.StartsWith "//"))
         |> Option.defaultValue ""
 
-    let runText (r: Run) =
-        let o = r.Outcome
-        let sb = StringBuilder()
-        let add (title: string) (text: string) =
-            if not (String.IsNullOrWhiteSpace text) then
-                sb.AppendLine($"--- {title} ---").AppendLine(text.TrimEnd()) |> ignore
-        sb.AppendLine($"{r.Id}  {RunStatus.toString r.Status}  {int r.Duration.TotalMilliseconds} ms  {r.ScriptPath}") |> ignore
-        o.message |> Option.iter (add "message")
-        add "notes" (r.Notes |> String.concat Environment.NewLine)
-        o.value |> Option.iter (fun (t, v) -> add $"value: {t}" v)
-        r.Commands
-        |> Option.iter (fun c ->
-            add "commands" (CommandReport.stepLines c |> String.concat Environment.NewLine)
-            let ids (name: string) (a: string[]) = if a.Length = 0 then "" else $"{name} ({a.Length}): " + String.concat ", " a
-            [ ids "created" c.created; ids "changed" c.changed; ids "deleted" c.deleted; c.selected |> Option.map (ids "selected") |> Option.defaultValue "" ]
-            |> List.filter ((<>) "")
-            |> String.concat Environment.NewLine
-            |> add "objects")
-        add "stdout" r.StdOut.Text
-        add "Rhino command line" r.CommandLine.Text
-        add "stderr" r.StdErr.Text
-        add "F# Interactive" r.FsiOut.Text
-        o.diagnostics
-        |> Array.map (fun d -> $"{d.severity} FS{d.errorNumber} line {d.startLine}, column {d.startColumn}: {d.message}")
-        |> String.concat Environment.NewLine
-        |> add "diagnostics"
-        o.exn |> Option.iter (fun e -> add "exception" e.text)
-        r.Files |> Array.map _.path |> String.concat Environment.NewLine |> add "files"
-        sb.ToString()
-
     let selectedRun () =
-        match runs.SelectedItem, App.server with
+        match runs.SelectedItem, host.Server () with
         | (:? RunRow as row), Some s -> s.Service.Runs.TryGet row.Id
         | _ -> None
 
@@ -174,7 +139,7 @@ type PanelView() as this =
             codeView.ScrollToHome()
 
     let showDetails () =
-        output.Text <- selectedRun () |> Option.map runText |> Option.defaultValue ""
+        output.Text <- selectedRun () |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
         showCode ()
 
     let refreshRuns (s: CaddisServer) =
@@ -199,7 +164,8 @@ type PanelView() as this =
             showDetails ()
 
     let refresh () =
-        match App.server with
+        message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
+        match host.Server () with
         | None -> serverStatus.Text <- "Caddis is not loaded."
         | Some s ->
             let svc = s.Service
@@ -226,6 +192,7 @@ type PanelView() as this =
                 cancelWaiting.IsChecked <- Nullable svc.Settings.cancelWaitingCommands
                 cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
                 refreshRuns s
+                host.Refreshed ()
             finally
                 updating <- false
 
@@ -239,8 +206,12 @@ type PanelView() as this =
 
     do
         applyTheme ()
+        autoStart.Content <- $"Start with {host.Name}"
+        echo.IsVisible <- host.SetEcho.IsSome
+        cancelWaiting.IsVisible <- host.SetCancelWaitingCommands.IsSome
+        message.IsVisible <- host.Message.IsSome
 
-        use stream = typeof<PanelView>.Assembly.GetManifestResourceStream "Caddis.Rhino.Resources.Caddis.png"
+        use stream = typeof<PanelView>.Assembly.GetManifestResourceStream "Caddis.UI.Resources.Caddis.png"
         logoImage.Source <- Bitmap.DecodeToWidth(stream, 80)
 
         ToolTip.SetTip(logo, $"Caddis on GitHub: {repoUrl}")
@@ -272,7 +243,7 @@ type PanelView() as this =
         )
         ToolTip.SetTip(settingsToggle, "Show or hide the settings.")
         ToolTip.SetTip(fsiStatus, modeTip)
-        ToolTip.SetTip(autoStart, "Start the server when Rhino starts.")
+        ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])
         ToolTip.SetTip(
             lan,
@@ -310,24 +281,24 @@ type PanelView() as this =
         textMenu codeView codeView.Copy codeView.SelectAll
 
         startStop.Click.Add(fun _ ->
-            match App.server with
-            | Some s when s.IsRunning -> App.stop ()
-            | _ -> App.start ()
+            match host.Server () with
+            | Some s when s.IsRunning -> host.Stop ()
+            | _ -> host.Start ()
             refresh ())
         logo.PointerReleased.Add(fun e ->
             if e.InitialPressMouseButton = MouseButton.Left then
                 e.Handled <- true
-                Eto.Forms.Application.Instance.Open repoUrl)
-        copyMcp.Click.Add(fun _ -> App.copyMcpCommand ())
-        copyToken.Click.Add(fun _ -> App.copyToken ())
-        mode.SelectionChanged.Add(fun _ -> if not updating then App.setMode (if mode.SelectedIndex = 1 then Background else UiThread))
+                host.OpenUrl repoUrl)
+        copyMcp.Click.Add(fun _ -> host.CopyMcpCommand (); refresh ())
+        copyToken.Click.Add(fun _ -> host.CopyToken (); refresh ())
+        mode.SelectionChanged.Add(fun _ -> if not updating then host.SetMode (if mode.SelectedIndex = 1 then Background else UiThread))
         // Click is only raised by the user, not when refresh sets IsChecked.
-        autoStart.Click.Add(fun _ -> App.setAutoStart (autoStart.IsChecked.GetValueOrDefault()))
-        echo.Click.Add(fun _ -> App.setEcho (echo.IsChecked.GetValueOrDefault()))
-        lan.Click.Add(fun _ -> App.setListenOnLan (lan.IsChecked.GetValueOrDefault()))
-        cancelWaiting.Click.Add(fun _ -> App.setCancelWaitingCommands (cancelWaiting.IsChecked.GetValueOrDefault()))
-        cancel.Click.Add(fun _ -> App.cancel ())
-        reset.Click.Add(fun _ -> App.reset ())
+        autoStart.Click.Add(fun _ -> host.SetAutoStart (autoStart.IsChecked.GetValueOrDefault()))
+        echo.Click.Add(fun _ -> host.SetEcho |> Option.iter (fun set -> set (echo.IsChecked.GetValueOrDefault())))
+        lan.Click.Add(fun _ -> host.SetListenOnLan (lan.IsChecked.GetValueOrDefault()); refresh ())
+        cancelWaiting.Click.Add(fun _ -> host.SetCancelWaitingCommands |> Option.iter (fun set -> set (cancelWaiting.IsChecked.GetValueOrDefault())))
+        cancel.Click.Add(fun _ -> host.Cancel (); refresh ())
+        reset.Click.Add(fun _ -> host.Reset (); refresh ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
         formatToggle.Click.Add(fun _ -> showCode ())
 
@@ -338,7 +309,7 @@ type PanelView() as this =
         base.OnAttachedToVisualTree e
         applyTheme ()
         if themeChanges.IsNone then
-            themeChanges <- Some(PanelTheme.subscribe applyTheme)
+            themeChanges <- Some(host.SubscribeTheme (fun () -> Dispatcher.UIThread.Post applyTheme))
 
     override _.OnDetachedFromVisualTree(e) =
         themeChanges |> Option.iter _.Dispose()

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>Caddis.UI</RootNamespace>
+    <AssemblyName>Caddis.UI</AssemblyName>
+    <Description>The shared Avalonia panel for Caddis hosts.</Description>
+    <!-- PanelView is constructed with host services, never by a XAML URI loader. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="FSharp.Core" Version="8.0.403" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.HarfBuzz" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <!-- Fantomas 7 works with both hosts' runtimes; its parser is independent of their FCS. -->
+    <PackageReference Include="Fantomas.Core" Version="7.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.UI.Resources.Caddis.png" />
+    <EmbeddedResource Include="FSharp.xshd" LogicalName="Caddis.UI.Resources.FSharp.xshd" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="PanelHost.fs" />
+    <Compile Include="AvaloniaSetup.fs" />
+    <Compile Include="EmbeddedView.fs" />
+    <Compile Include="FSharpHighlighting.fs" />
+    <Compile Include="RunDetails.fs" />
+    <Compile Include="PanelView.fs" />
+  </ItemGroup>
+</Project>

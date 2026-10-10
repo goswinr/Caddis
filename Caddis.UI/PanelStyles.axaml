@@ -1,8 +1,8 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:ae="https://github.com/avaloniaui/avaloniaedit">
-  <!-- Compact control themes like Rhino's own panels. The Caddis.* brushes come from Rhino's theme, see PanelTheme.fs.
-       They are dynamic resources, so an open panel and its popups follow a change of Rhino's theme.
+  <!-- Compact control themes shared by both hosts. The Caddis.* brushes come from the host's PanelPalette.
+       They are dynamic resources, so an open panel and its popups follow a change of the host's theme.
        Controls not themed here, e.g. scroll bars and menus, use the Fluent theme in the same light or dark variant. -->
 
   <ControlTheme x:Key="{x:Type Button}" TargetType="Button">

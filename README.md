@@ -168,8 +168,10 @@ the recent runs, and the output and code of the selected run. It docks next to t
 can be moved like any Revit pane, and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.
 The pane follows Revit's light or dark UI theme immediately, including dropdowns, run selection,
-output, scrollbars and keyboard focus. Its WPF styles are scoped to Caddis, leaving Revit and other add-ins' resources untouched.
-See the [Revit panel previews](Caddis.Revit/README.md#dockable-panel) for both themes.
+output, scrollbars and keyboard focus. Rhino and Revit share the Avalonia panel in `Caddis.UI`,
+with themes scoped to the panel. Revit hosts it inside its WPF docking container.
+The code viewer includes F# highlighting, line numbers, Ctrl+F search and optional Fantomas formatting.
+See the [Revit panel documentation](Caddis.Revit/README.md#dockable-panel).
 
 Revit has its own settings file `settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
 so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time. The token is shared.
@@ -231,6 +233,9 @@ dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
 `Caddis.Core` has no Rhino or Revit dependency and is tested with a headless host. `Caddis.Rhino` is the Rhino plugin, `Caddis.Revit` the Revit add-in.
+`Caddis.UI` contains their shared Avalonia panel, styles, output formatting and code viewer, targeting `net8.0;net10.0` like Core.
+Each plugin supplies actions, theme colors and its docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
+`Tests/Caddis.UI.Tests` checks the shared view with Avalonia's headless platform on both runtimes.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
 See [plan.md](plan.md) for the design and the open tasks.
 

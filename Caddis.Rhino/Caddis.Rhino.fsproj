@@ -19,29 +19,19 @@
     <!-- a dependency of RhinoCommon, provided by .NET (Windows) or Rhino (Mac) at runtime -->
     <PackageReference Include="System.Drawing.Common" Version="7.0.0" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- the version that FCS pins in the net8.0 build of Caddis.Core -->
-    <!-- The panel's content is Avalonia, hosted in Rhino's Eto panel: Win32 on Windows, Avalonia.Native on Mac.
-    Not Avalonia.Desktop, it would add the Linux backend. -->
-    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <!-- Platform backends for the shared Avalonia panel in Rhino's Eto shell. -->
     <PackageReference Include="Avalonia.Win32" Version="12.1.3" />
     <PackageReference Include="Avalonia.Native" Version="12.1.3" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.3" />
-    <PackageReference Include="Avalonia.HarfBuzz" Version="12.1.3" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
-    <!-- the code view, read-only, with F# syntax highlighting -->
-    <PackageReference Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
-    <!-- formats the code in the code view. Fantomas 8 needs FSharp.Core 10 and System.Diagnostics.DiagnosticSource 10, which Rhino 8 can't load.
-    Its parser is Fantomas.FCS, not FSharp.Compiler.Service, so it doesn't clash with the FCS of Caddis.Core. -->
-    <PackageReference Include="Fantomas.Core" Version="7.0.5" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+    <ProjectReference Include="../Caddis.UI/Caddis.UI.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="../Docs/img/favicon.ico" Link="Resources/Caddis.ico" LogicalName="Caddis.Rhino.Resources.Caddis.ico" />
     <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.Rhino.Resources.Caddis.png" />
-    <EmbeddedResource Include="FSharp.xshd" LogicalName="Caddis.Rhino.Resources.FSharp.xshd" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,8 +42,6 @@
     <Compile Include="App.fs" />
     <Compile Include="AvaloniaHost.fs" />
     <Compile Include="PanelTheme.fs" />
-    <Compile Include="FSharpHighlighting.fs" />
-    <Compile Include="PanelView.fs" />
     <Compile Include="Panel.fs" />
     <Compile Include="PlugIn.fs" />
     <Compile Include="Commands.fs" />

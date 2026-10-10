@@ -18,6 +18,8 @@ Captures with `caddis_capture_viewport`, `RhinoView.CaptureToBitmap` or `ViewCap
 ## The Caddis panel
 
 Open it with the command `Caddis` and the option `Panel`, then dock it like any Rhino panel.
+Its content is the Avalonia panel shared with Revit in `Caddis.UI`, hosted in Rhino's Eto docking container.
+Rhino supplies its theme colors and the additional command-line settings.
 
 | Dark theme, during a run | Light theme, with the settings unfolded |
 | --- | --- |

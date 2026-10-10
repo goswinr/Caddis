@@ -13,7 +13,7 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 | Fesh coexistence | Independent, pinned to FCS 43.8.403 and FSharp.Core 8.0.403 (the same versions as Fesh 0.33.5-net8), so both plugins load together. Each has its own FSI session. The `net10.0` build of Caddis.Core, for Revit, uses FCS 43.12.401 and FSharp.Core 10.1.401, like Fesh 0.34.0-net10. |
 | Lifecycle | `Caddis` command to start and stop, an opt-in autostart setting, and one discovery file per Rhino instance |
 | v1 extras | Cancel + timeout, viewport capture, type-check only, undo last eval, returning exported/saved files |
-| Platform / UI | Plain `net8.0` running on Rhino 8 for Windows and Mac, with a dockable Eto panel whose content is Avalonia (changed 2026-10-10), so that it follows Rhino's light and dark themes |
+| Platform / UI | One Avalonia panel in `Caddis.UI` (`net8.0;net10.0`), shared by Rhino and Revit (2026-10-10). Rhino docks it through Eto on Windows and Mac; Revit docks it through a WPF `HwndHost`. Each host supplies actions, capabilities and theme colors. |
 
 ## Constraints
 
@@ -24,10 +24,10 @@ Caddis runs F# Interactive (FSI) inside the Rhino 8 process on .NET 8, and is co
 
 ## Project layout
 
-Two projects keep the core testable without Rhino:
+Four projects keep the core and shared UI independent of the host APIs:
 
 ```
-Caddis.Core/   net8.0, no RhinoCommon dependency
+Caddis.Core/   net8.0;net10.0, no Rhino or Revit dependency
   Settings.fs      port, listenOnLan, autostart, threadMode, token → AppData/Caddis/settings.json
   Output.fs        TextWriter that captures output per run; swaps Console.Out/Err during an eval
   FsiHost.fs       session create/reset, eval, modes, cancel (ported from Fesh Src/Fsi.fs)
@@ -37,19 +37,27 @@ Caddis.Core/   net8.0, no RhinoCommon dependency
   Http/Server.fs   HttpListener loop, auth, Origin check, routing, discovery file
   Http/Rest.fs     REST handlers
   Http/Mcp.fs      initialize, tools/list, tools/call, ping
+Caddis.UI/     net8.0;net10.0, shared Avalonia content, no Rhino or Revit dependency
+  PanelHost.fs     host actions, optional settings, messages and theme palette
+  AvaloniaSetup.fs starts Avalonia without taking over the host's main loop; resolves native libraries
+  EmbeddedView.fs  lifetime and DPI handling for the embedded native view
+  PanelView.fs     shared view (PanelView.axaml, PanelStyles.axaml): state, settings, runs, output and code
+  RunDetails.fs    output formatting, including Rhino commands and Revit grouped element changes
+  FSharpHighlighting.fs  light/dark F# highlighting (FSharp.xshd); code formatting uses Fantomas 7
 Caddis.Rhino/  net8.0, TargetExt .rhp
   AssemblyInfo.fs  new plugin GUID (not Fesh's)
   PlugIn.fs        load, UI SynchronizationContext, autostart, Rhino.Scripting hookup
   RhinoOps.fs      undo record wrapping, redraw, InCommand guard, viewport capture, export, undo
   AvaloniaHost.fs  starts Avalonia in Rhino's process, hosts its embeddable top level in an Eto NativeControlHost
   PanelTheme.fs    the panel's brushes from Rhino.UI.ThemeSettings, follows ThemeChanged
-  FSharpHighlighting.fs  light and dark colors for FSharp.xshd, the F# highlighting of the read-only AvaloniaEdit code view
-  PanelView.fs     Avalonia view (PanelView.axaml, PanelStyles.axaml): server toggle, URL/token copy, mode, run log, cancel button,
-                   the code of runs formatted with Fantomas on the thread pool
-  Panel.fs         the Eto panel Rhino docks, its content is the PanelView
+  Panel.fs         the Eto docking shell and Rhino services for the shared PanelView
   Commands.fs      Caddis command: Start / Stop, Panel, CopyMcpCommand, Mode, Cancel, Reset, AutoStart, EchoOutput, ListenOnLan, NewToken
   yak.yml
-Tests/         Expecto or xUnit tests for Caddis.Core (MCP routing, auth, eval, cancel)
+Caddis.Revit/  net10.0-windows
+  AvaloniaHost.fs  WPF HwndHost, native parenting, keyboard input and DPI changes
+  PanelTheme.fs    Revit light/dark colors and ThemeChanged subscription
+  Panel.fs         pane registration (unchanged ID), WPF shell and Revit services for PanelView
+Tests/         xUnit tests for Core and the shared UI, both on net8.0 and net10.0
 ```
 
 `Caddis.Core` declares interfaces for the Rhino hooks (`beforeEval`, `afterEval`, `capture`, `export`), and `Caddis.Rhino` implements them.
@@ -138,7 +146,7 @@ Revit 2026.5 (26.5.0.55) is installed on the development machine, its RevitAPI t
 | Transactions | Each `ui`-thread run with `recordUndo` is wrapped in a `TransactionGroup`. Scripts open their own transactions or use `Caddis.Revit.Script.Transact`. Success: `Assimilate`, one undo step. Error or cancel: `RollBack` of all changes. Background mode: no group, each transaction is an undo step. |
 | Commands | No `caddis_command`: Revit has no command line. `McpTexts.command = None` leaves the tool out, `/command` returns 400. |
 | Coexistence | Own `settings-revit.json`, default port 7820, MCP name `caddis-revit`. The token and the discovery folder are shared, discovery files have `app`. |
-| UI | Ribbon tab: Start/Stop, Copy MCP, Panel, Mode, Reset F#, Cancel run, Auto start, Info, New token. Messages go to `%AppData%/Caddis/revit.log`. Optional dockable WPF pane `CaddisPanel` (`Panel.fs`, added 2026-10-10), like the Eto panel in Rhino: state, Start/Stop, Copy MCP, Copy token, thread mode, Start with Revit, LAN, Cancel, Reset, the latest message, the run list and the Output and Code of the selected run. Registered in `OnStartup` with `VisibleByDefault = false`, tabbed behind the Project Browser; the ribbon button `Panel` toggles it, Revit remembers its state. Its buttons call the `App` actions outside API context, so `App.show` opens a TaskDialog only in API context and otherwise only logs; the pane shows the latest log line. A 1 s `DispatcherTimer` refreshes it and the ribbon texts (`App.stateChanged`). It must not call `Dialogs()`: UI Automation from the UI thread would wait on itself. |
+| UI | Ribbon tab: Start/Stop, Copy MCP, Panel, Mode, Reset F#, Cancel run, Auto start, Info, New token. Messages go to `%AppData%/Caddis/revit.log`. Optional dockable pane `CaddisPanel` (`Panel.fs`, added 2026-10-10); since 2026-10-10 a WPF shell embeds the same Avalonia `Caddis.UI.PanelView` used in Rhino: state, Start/Stop, Copy MCP, Copy token, thread mode, Start with Revit, LAN, Cancel, Reset, the latest message, the run list and the Output and Code of the selected run. Registered in `OnStartup` with `VisibleByDefault = false`, tabbed behind the Project Browser; the ribbon button `Panel` toggles it, Revit remembers its state. Its buttons call the `App` actions outside API context, so `App.show` opens a TaskDialog only in API context and otherwise only logs; the pane shows the latest log line. A 1 s `DispatcherTimer` refreshes it and the ribbon texts (`App.stateChanged`). It must not call `Dialogs()`: UI Automation from the UI thread would wait on itself. |
 | Install | Dev only: `Caddis.Revit/install-dev.ps1` writes `%AppData%/Autodesk/Revit/Addins/2026/Caddis.addin`. Packaging later. |
 | Element ids | `ElementId.Value` numbers as strings. `HostInfo.isObjectId` validates them. |
 | Load context | Revit's default context (no `UseRevitContext=false`), so Caddis.Core is loaded once and scripts share `Caddis.Script`. In that context only one FSharp.Core and one FCS can load: Caddis.Revit can run next to a Fesh.Revit built on Fesh 0.34.0-net10, not next to a .NET 8 build of Fesh.Revit. The add-in that starts first wins. Decision 2026-10-10: Fesh.Revit moves to the same latest net10 versions. |
@@ -268,7 +276,7 @@ Notes: Revit asks again about the unsigned add-in after every rebuild. `Path.Get
 2. **HTTP**: server, auth, REST, settings, token, discovery file, and the `Caddis` command, with tests on the core.
 3. **MCP endpoint**, verified against Claude Code and MCP Inspector.
 4. **Rhino operations**: viewport capture, export and files, undo, type-check.
-5. **Panel**, first in Eto, since 2026-10-10 Avalonia inside the Eto panel.
+5. **Panel**, first in Eto, since 2026-10-10 shared Avalonia content in `Caddis.UI`, embedded by Eto in Rhino and WPF in Revit. Shared UI tests cover host options, theme lifetimes, code formatting and output on .NET 8 and .NET 10. An isolated WPF smoke check covers native embedding, keyboard input, tab focus, resizing, reparenting and root recreation. Live checks through Caddis in Revit 2026.5 verified script execution, run selection/output, highlighting, formatting/original code, search event handling, theme changes, autostart and hide/reopen without changing the model. Keep the Revit `AvaloniaHost` internal: its public F# signature otherwise makes `Script.Doc` and `Script.OnUi` depend on Avalonia/WPF types unavailable to FSI. The WPF shell has no outer margin, which otherwise exposes black strips from its native container. Manual mouse/keyboard and multi-monitor checks remain.
 6. **Packaging**: a yak package for Rhino 8 (Windows and Mac), GitHub Actions modelled on Fesh.Rhino, README, and a CHANGELOG versioned by Ionide.KeepAChangelog.
 
 ## Risks

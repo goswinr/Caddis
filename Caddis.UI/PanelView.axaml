@@ -1,8 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:Caddis.Rhino"
+             xmlns:local="using:Caddis.UI"
              xmlns:ae="https://github.com/avaloniaui/avaloniaedit"
-             x:Class="Caddis.Rhino.PanelView"
+             x:Class="Caddis.UI.PanelView"
              Background="{DynamicResource Caddis.Panel}"
              Foreground="{DynamicResource Caddis.Text}"
              FontSize="12">
@@ -47,7 +47,7 @@
     </Style>
   </UserControl.Styles>
 
-  <!-- The light or dark variant of the Fluent theme, for scroll bars and menus, set by PanelTheme. -->
+  <!-- The light or dark variant of the Fluent theme, for scroll bars and menus, supplied by the host. -->
   <ThemeVariantScope x:Name="Scope">
     <ThemeVariantScope.Styles>
       <!-- The themes of AvaloniaEdit's text area and search panel. They take resources from the Fluent theme,
@@ -65,7 +65,7 @@
       </Grid.RowDefinitions>
 
       <!-- The logo beside the status line and the buttons. Their groups wrap below each other when the panel is narrow. -->
-      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" Margin="0,0,0,4">
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Margin="0,0,0,4">
         <Border x:Name="Logo" Grid.RowSpan="2" VerticalAlignment="Top" Background="Transparent" Cursor="Hand" Margin="0,2,8,0">
           <Image x:Name="LogoImage" Width="40" Height="40" />
         </Border>
@@ -90,6 +90,7 @@
             </ToggleButton>
           </StackPanel>
         </WrapPanel>
+        <TextBlock x:Name="Message" Grid.Row="2" Grid.ColumnSpan="2" TextWrapping="Wrap" Margin="0,2,0,2" />
       </Grid>
 
       <!-- Folded until the Settings button is checked. -->
@@ -103,7 +104,7 @@
               <ComboBoxItem Content="Background thread" />
             </ComboBox>
           </StackPanel>
-          <CheckBox x:Name="AutoStart" Content="Start with Rhino" />
+          <CheckBox x:Name="AutoStart" Content="Start with host" />
           <CheckBox x:Name="Echo" Content="Echo output to the command line" />
           <CheckBox x:Name="Lan" Content="Listen on the network (LAN)" />
           <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />

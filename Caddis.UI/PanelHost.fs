@@ -1,0 +1,37 @@
+namespace Caddis.UI
+
+open System
+open Avalonia.Media
+open Caddis
+
+/// Colors supplied by the application that hosts the panel.
+type PanelPalette = {
+    IsDark: bool
+    Colors: (string * Color) list
+    }
+
+/// Host services used by the shared view. Callbacks run on the host UI thread;
+/// Revit document operations still go through its existing external-event service.
+type PanelHost = {
+    Name: string
+    ModeTip: string
+    CommandLineTitle: string option
+    ChangeNoun: string
+    Server: unit -> CaddisServer option
+    Start: unit -> unit
+    Stop: unit -> unit
+    CopyMcpCommand: unit -> unit
+    CopyToken: unit -> unit
+    SetMode: ThreadMode -> unit
+    SetAutoStart: bool -> unit
+    SetListenOnLan: bool -> unit
+    SetEcho: (bool -> unit) option
+    SetCancelWaitingCommands: (bool -> unit) option
+    Cancel: unit -> unit
+    Reset: unit -> unit
+    OpenUrl: string -> unit
+    Message: (unit -> string) option
+    Refreshed: unit -> unit
+    Palette: unit -> PanelPalette
+    SubscribeTheme: (unit -> unit) -> IDisposable
+    }

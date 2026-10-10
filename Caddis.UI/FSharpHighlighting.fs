@@ -1,4 +1,4 @@
-namespace Caddis.Rhino
+namespace Caddis.UI
 
 open System.Reflection
 open System.Xml
@@ -7,7 +7,7 @@ open AvaloniaEdit.Highlighting
 open AvaloniaEdit.Highlighting.Xshd
 
 /// F# syntax highlighting for the code view of the panel. The rules are in FSharp.xshd, the colors here,
-/// one variant for a light and one for a dark background, so that the code is readable in Rhino's light and dark themes.
+/// one variant for a light and one for a dark background, so that the code is readable in the host's light and dark themes.
 module internal FSharpHighlighting =
 
     /// The named colors of FSharp.xshd, on a light and on a dark background.
@@ -28,7 +28,7 @@ module internal FSharpHighlighting =
         ]
 
     let private load (dark: bool) =
-        use stream = Assembly.GetExecutingAssembly().GetManifestResourceStream "Caddis.Rhino.Resources.FSharp.xshd"
+        use stream = Assembly.GetExecutingAssembly().GetManifestResourceStream "Caddis.UI.Resources.FSharp.xshd"
         use reader = XmlReader.Create stream
         let xshd = HighlightingLoader.LoadXshd reader
         for c in xshd.Elements |> Seq.choose (function :? XshdColor as c -> Some c | _ -> None) do

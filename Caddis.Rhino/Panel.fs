@@ -3,6 +3,41 @@ namespace Caddis.Rhino
 open System
 open System.Runtime.InteropServices
 open Eto.Forms
+open Caddis.UI
+
+/// Rhino actions and presentation settings for the shared panel.
+module private PanelServices =
+    let host: PanelHost = {
+        Name = "Rhino"
+        ModeTip = String.concat "\n" [
+            "UI thread: scripts run on Rhino's UI thread. Safest for RhinoCommon,"
+            "but Rhino is blocked while a script runs, and a run can't be cancelled."
+            ""
+            "Background thread: Rhino stays usable, runs can be cancelled and time out."
+            "Code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
+            ""
+            "Changing it starts a new F# session, values defined by earlier runs are lost."
+        ]
+        CommandLineTitle = Some "Rhino command line"
+        ChangeNoun = "objects"
+        Server = fun () -> App.server
+        Start = App.start
+        Stop = App.stop
+        CopyMcpCommand = App.copyMcpCommand
+        CopyToken = App.copyToken
+        SetMode = App.setMode
+        SetAutoStart = App.setAutoStart
+        SetListenOnLan = App.setListenOnLan
+        SetEcho = Some App.setEcho
+        SetCancelWaitingCommands = Some App.setCancelWaitingCommands
+        Cancel = App.cancel
+        Reset = App.reset
+        OpenUrl = fun url -> Application.Instance.Open url
+        Message = None
+        Refreshed = ignore
+        Palette = PanelTheme.palette
+        SubscribeTheme = PanelTheme.subscribe
+    }
 
 /// A dockable panel to control the Caddis server and see the recent runs and their output.
 /// Rhino docks Eto panels, its content is the Avalonia PanelView, which follows Rhino's light, dark or custom theme.
@@ -14,8 +49,8 @@ type CaddisPanel() as this =
 
     do
         try
-            AvaloniaSetup.ensure ()
-            let view = PanelView()
+            RhinoAvaloniaSetup.ensure ()
+            let view = PanelView(PanelServices.host)
             let host = new AvaloniaHost(view)
             this.Content <- host
             host.SizeChanged.Add(fun _ -> host.SyncDpi())
