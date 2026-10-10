@@ -22,6 +22,8 @@ type Response =
     | JsonResponse of status: int * body: JsonNode
     | FileResponse of path: string * mime: string
     | EmptyResponse of status: int
+    /// A response with additional headers, e.g. Mcp-Session-Id.
+    | WithHeaders of Response * headers: (string * string) list
 
 module Response =
 
@@ -37,6 +39,7 @@ module Args =
         code = Json.tryString "code" n
         path = Json.tryString "path" n
         timeoutMs = Json.tryInt "timeoutMs" n
+        waitMs = Json.tryInt "waitMs" n
         recordUndo = Json.tryBool "recordUndo" n |> Option.defaultValue true
         }
 
@@ -51,7 +54,13 @@ module Args =
     /// 'objectIds' (array of GUIDs) wins over 'objects' ("all" or "selected", the default is "all").
     let exportSelection (n: JsonNode) : ExportSelection =
         match Json.tryStringArray "objectIds" n with
-        | Some ids when ids.Length > 0 -> ObjectIds(ids |> Array.map Guid.Parse)
+        | Some ids when ids.Length > 0 ->
+            ids
+            |> Array.map (fun s ->
+                match Guid.TryParse s with
+                | true, g -> g
+                | _ -> invalidArg "objectIds" $"'{s}' in 'objectIds' is not an object id (a GUID).")
+            |> ObjectIds
         | _ ->
             match Json.tryString "objects" n |> Option.map _.Trim().ToLowerInvariant() with
             | None

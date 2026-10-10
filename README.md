@@ -22,7 +22,8 @@ Controlled via http, for AI agents and remote script execution and automation wi
   Values, functions and types defined in one run stay available in the next.
 - Serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`, so AI agents like Claude Code can run F# in Rhino,
   and plain REST endpoints for curl and scripts.
-- Returns structured results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, and files.
+- Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, and files.
+  Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
 - Runs scripts either on the Rhino UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
 - Wraps every run in one Rhino undo record, captures viewports as PNG, and exports to any file format Rhino can write.
 
@@ -61,8 +62,20 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:7810/mcp --
 
 `--scope user` makes Caddis available across your Claude Code projects.
 
-The MCP tools are `caddis_eval`, `caddis_get_run`, `caddis_check`, `caddis_status`, `caddis_cancel`, `caddis_reset`,
+The MCP tools are `caddis_eval`, `caddis_get_run`, `caddis_check`, `caddis_describe`, `caddis_status`, `caddis_cancel`, `caddis_reset`,
 `caddis_set_mode`, `caddis_undo`, `caddis_capture_viewport` and `caddis_export`.
+
+`caddis_describe` looks up types and members of the loaded assemblies, e.g. RhinoCommon, and returns their signatures in F# syntax
+with the summaries from their XML doc files, so agents don't have to guess API names and overloads:
+a namespace (`Rhino.Geometry`) lists its types, a type (`Brep`) its members, a member (`Brep.CreateFromBox`) all overloads with docs.
+`search` finds names, e.g. `fillet`. Misspelled names get suggestions.
+
+`caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
+`caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
+`caddis_check` type-checks against the current session, so definitions from earlier runs are known.
+
+MCP results are text written for the model, without `structuredContent`:
+Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
 
 ## REST
 Every request needs the header `Authorization: Bearer <token>`.
@@ -74,12 +87,13 @@ curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\"
 | Endpoint | |
 |---|---|
 | `GET /status` | State of the server and the F# session |
-| `POST /eval` | `{code?, path?, timeoutMs?, recordUndo?}`, returns the run |
-| `GET /runs`, `GET /runs/{id}` | Recent runs, one run |
+| `POST /eval` | `{code?, path?, waitMs?, timeoutMs?, recordUndo?}`, returns the run, status 202 if still running after `waitMs` |
+| `GET /runs`, `GET /runs/{id}?waitMs=` | Recent runs, one run, optionally waiting for it |
 | `POST /cancel` | `{runId?}`, background mode only |
 | `POST /reset` | New F# session |
 | `POST /mode` | `{mode: "ui" \| "background"}` |
-| `POST /check` | `{code?, path?}`, type-check without running |
+| `POST /check` | `{code?, path?}`, type-check against the current session without running |
+| `GET /describe?name=&filter=&search=` | Signatures and docs of a namespace, type or member, or a search of names |
 | `POST /undo` | `{runId?}`, undo a run in Rhino |
 | `GET /viewport?view=&width=&height=&displayMode=` | PNG of a viewport |
 | `POST /export` | `{format, name?, objects?: "all" \| "selected", objectIds?}` |

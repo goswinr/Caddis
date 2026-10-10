@@ -28,6 +28,8 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     let maxBodyBytes = 20L * 1024L * 1024L
 
+    let tooLarge = Response.error 413 $"The request body is larger than {maxBodyBytes / 1024L / 1024L} MB."
+
     let discoveryPath () =
         Path.Combine(store.InstancesFolder, $"{Environment.ProcessId}.json")
 
@@ -54,29 +56,62 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
             CryptographicOperations.FixedTimeEquals(ReadOnlySpan<byte>(given), ReadOnlySpan<byte>(expected))
         | _ -> false
 
+    let rec write (r: HttpListenerResponse) (resp: Response) : Task =
+        task {
+            match resp with
+            | JsonResponse(status, body) ->
+                let bytes = Encoding.UTF8.GetBytes(Json.toText body)
+                r.StatusCode <- status
+                r.ContentType <- "application/json; charset=utf-8"
+                r.ContentLength64 <- int64 bytes.Length
+                do! r.OutputStream.WriteAsync(bytes, 0, bytes.Length)
+            | FileResponse(path, mime) ->
+                use fs = File.OpenRead path
+                r.StatusCode <- 200
+                r.ContentType <- mime
+                r.ContentLength64 <- fs.Length
+                r.AddHeader("Content-Disposition", $"inline; filename*=UTF-8''{Uri.EscapeDataString(Path.GetFileName path)}")
+                do! fs.CopyToAsync r.OutputStream
+            | EmptyResponse status ->
+                r.StatusCode <- status
+                r.ContentLength64 <- 0L
+            | WithHeaders(inner, headers) ->
+                for name, value in headers do
+                    r.AddHeader(name, value)
+                do! write r inner
+        }
+
     let respond (ctx: HttpListenerContext) (resp: Response) : Task =
         task {
-            let r = ctx.Response
             try
-                match resp with
-                | JsonResponse(status, body) ->
-                    let bytes = Encoding.UTF8.GetBytes(Json.toText body)
-                    r.StatusCode <- status
-                    r.ContentType <- "application/json; charset=utf-8"
-                    r.ContentLength64 <- int64 bytes.Length
-                    do! r.OutputStream.WriteAsync(bytes, 0, bytes.Length)
-                | FileResponse(path, mime) ->
-                    use fs = File.OpenRead path
-                    r.StatusCode <- 200
-                    r.ContentType <- mime
-                    r.ContentLength64 <- fs.Length
-                    r.AddHeader("Content-Disposition", $"inline; filename*=UTF-8''{Uri.EscapeDataString(Path.GetFileName path)}")
-                    do! fs.CopyToAsync r.OutputStream
-                | EmptyResponse status ->
-                    r.StatusCode <- status
-                    r.ContentLength64 <- 0L
+                do! write ctx.Response resp
             finally
-                r.Close()
+                ctx.Response.Close()
+        }
+
+    /// The body as UTF-8 text, or None if it is larger than maxBodyBytes.
+    /// Reads at most that much, also for chunked requests that don't say their length up front.
+    let readBody (r: HttpListenerRequest) : Task<string option> =
+        task {
+            use ms = new MemoryStream()
+            let buffer = Array.zeroCreate<byte> 81920
+            let mutable reading = true
+            let mutable tooLarge = false
+            while reading do
+                let! n = r.InputStream.ReadAsync(buffer, 0, buffer.Length)
+                if n = 0 then
+                    reading <- false
+                elif ms.Length + int64 n > maxBodyBytes then
+                    tooLarge <- true
+                    reading <- false
+                else
+                    ms.Write(buffer, 0, n)
+            if tooLarge then
+                return None
+            else
+                let bytes = ms.GetBuffer()
+                let bom = if ms.Length >= 3L && bytes[0] = 0xEFuy && bytes[1] = 0xBBuy && bytes[2] = 0xBFuy then 3 else 0
+                return Some(Encoding.UTF8.GetString(bytes, bom, int ms.Length - bom))
         }
 
     let handle (ctx: HttpListenerContext) : Task =
@@ -90,20 +125,21 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                         elif not (isAuthorized r) then
                             return Response.error 401 $"Missing or wrong token. Send the header 'Authorization: Bearer <token>'. The token is in {store.TokenPath}, the Rhino command 'Caddis' shows it too."
                         elif r.ContentLength64 > maxBodyBytes then
-                            return Response.error 413 "The request body is too large."
+                            return tooLarge
                         else
-                            use reader = new StreamReader(r.InputStream, Encoding.UTF8)
-                            let! body = reader.ReadToEndAsync()
-                            let req = {
-                                method = r.HttpMethod.ToUpperInvariant()
-                                path = r.Url.AbsolutePath
-                                query = r.QueryString
-                                headers = r.Headers
-                                body = body
-                                baseUrl = r.Url.GetLeftPart(UriPartial.Authority)
-                            }
-                            if req.path.TrimEnd('/') = "/mcp" then return! mcp.Handle req
-                            else return! Rest.handle svc serverInfo req
+                            match! readBody r with
+                            | None -> return tooLarge
+                            | Some body ->
+                                let req = {
+                                    method = r.HttpMethod.ToUpperInvariant()
+                                    path = r.Url.AbsolutePath
+                                    query = r.QueryString
+                                    headers = r.Headers
+                                    body = body
+                                    baseUrl = r.Url.GetLeftPart(UriPartial.Authority)
+                                }
+                                if req.path.TrimEnd('/') = "/mcp" then return! mcp.Handle req
+                                else return! Rest.handle svc serverInfo req
                     with
                     | BusyException runId ->
                         return
@@ -219,6 +255,10 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     listenOnLan <- s.listenOnLan
                     acceptLoop l
                     writeDiscoveryFile ()
+                    if p <> s.port then
+                        // MCP clients are configured with a fixed URL, they would silently fail to connect
+                        host.Log
+                            $"Caddis: port {s.port} is in use, so Caddis listens on port {p}. MCP clients configured for port {s.port} won't reach this Rhino, copy the new command with 'Caddis CopyMcpCommand'."
                     svc.Fsi.Initialize() |> ignore
                     Ok(url ()))
 

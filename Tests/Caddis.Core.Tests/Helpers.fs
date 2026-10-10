@@ -23,6 +23,7 @@ let evalArgs code = {
     code = Some code
     path = None
     timeoutMs = None
+    waitMs = None
     recordUndo = false
     }
 

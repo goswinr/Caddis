@@ -2,7 +2,7 @@ namespace Caddis.Http
 
 open System
 open System.Collections.Concurrent
-open System.IO
+open System.Security.Cryptography
 open System.Threading.Tasks
 open System.Text.Json.Nodes
 open Caddis
@@ -16,27 +16,35 @@ type private McpTool = {
     required: string list
     readOnly: bool
     destructive: bool
+    idempotent: bool
     }
 
 /// The MCP endpoint: JSON-RPC over Streamable HTTP, answering every request with a single JSON response, no SSE.
 /// Only tools are offered, no resources or prompts.
+/// A session id is handed out on initialize, it is only used to tell apart the request ids of different clients.
 /// see https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http
 type McpEndpoint(svc: CaddisService) =
 
     /// Newest first. The client's version is used if it is in this list, otherwise the newest one.
     static let supportedVersions = [| "2025-11-25"; "2025-06-18"; "2025-03-26"; "2024-11-05" |]
 
-    /// Clients from this version on understand structuredContent and resource_link content.
-    static let structuredContentSince = "2025-06-18"
+    /// caddis_eval and caddis_get_run return after this time if the run has not finished,
+    /// below the 60 s request timeout that MCP clients commonly use.
+    static let defaultWaitMs = 50_000
 
     static let instructions =
         String.concat "\n" [
-            "Caddis runs F# code inside a running Rhino 8 (or another host app) in a persistent F# Interactive session."
+            "Caddis runs F# code inside a running Rhino 8 in a persistent F# Interactive session. A person is usually working in the same Rhino window."
             "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
-            "RhinoCommon is referenced, e.g. use Rhino.RhinoDoc.ActiveDoc for the current document."
-            "printfn output is returned as stdout, the value of the last expression as value."
-            "Files saved to the folder Caddis.Script.OutDir are returned with the result."
-            "Use caddis_check to find compile errors without running the code, and caddis_capture_viewport to see the result."
+            "RhinoCommon is referenced, e.g. use Rhino.RhinoDoc.ActiveDoc for the current document. caddis_status shows its units and tolerance, check them before creating geometry."
+            "The result shows F# Interactive's output, with the types of new definitions and the value of the last expression, and printfn output as stdout. Long output is shortened and saved to a file."
+            "Each run is one undo step in Rhino, the views are redrawn after it. Files saved to the folder Caddis.Script.OutDir are returned with the result, images inline."
+            "On the 'ui' thread (the default) Rhino is blocked while code runs and a run can't be cancelled: an endless loop freezes Rhino until it is killed."
+            "For long or risky code switch to 'background' mode with caddis_set_mode, there timeoutMs and caddis_cancel stop a run."
+            "caddis_eval returns after waitMs (default 50 s) with status 'running' if the run has not finished. It keeps running, wait for the result with caddis_get_run."
+            "Don't show modal dialogs or wait for user input in scripts."
+            "Look up RhinoCommon types and members you are not sure about with caddis_describe instead of guessing their names, overloads or parameter types."
+            "Use caddis_check to type-check code against the session without running it, and caddis_capture_viewport to see the result."
         ]
 
     static let strProp (description: string) : JsonNode =
@@ -63,47 +71,82 @@ type McpEndpoint(svc: CaddisService) =
             description =
                 String.concat " " [
                     "Evaluates F# code in the persistent F# Interactive session inside Rhino and returns the result:"
-                    "status ('ok', 'compileError', 'runtimeError', 'cancelled', 'timeout', 'rejected' or 'running'), the value of the last expression,"
-                    "stdout, stderr, compiler diagnostics, exception details with the script line, and files saved to Caddis.Script.OutDir."
+                    "status ('ok', 'compileError', 'runtimeError', 'cancelled', 'timeout', 'rejected' or 'running'),"
+                    "F# Interactive's output with the types of new definitions and the value of the last expression,"
+                    "stdout, stderr, compiler errors and warnings, the exception with the script line, and files saved to Caddis.Script.OutDir, images inline."
                     "Definitions stay available for later calls. RhinoCommon is referenced. NuGet packages can be used via #r \"nuget: Name\"."
                     "Each run is one undo step in Rhino. In background mode code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
                 ]
             properties =
                 codeAndPath
                 @ [
-                    "timeoutMs", intProp "Background mode: the run is cancelled after this time. UI-thread mode: runs can't be cancelled, the result is returned with status 'running' after this time, use caddis_get_run later."
+                    "waitMs",
+                    intProp
+                        $"Return after this time with status 'running' if the run has not finished. It keeps running, get the result with caddis_get_run. 0 returns at once. Default: {defaultWaitMs}."
+                    "timeoutMs", intProp "Background mode only: cancel the run after this time. Runs on the UI thread can't be cancelled."
                     "recordUndo", boolProp "Wrap the run in a Rhino undo record so that caddis_undo can revert it. Default: true."
                 ]
             required = []
             readOnly = false
             destructive = true
+            idempotent = false
         }
         {
             name = "caddis_get_run"
             title = "Get a run"
-            description = "Returns the result of a run, e.g. of one that was still running when caddis_eval returned."
-            properties = [ "runId", strProp "The id of the run, e.g. 'r12'." ]
+            description = "Returns a run, waiting up to waitMs for it to finish. Use it for a run that was still running when caddis_eval returned."
+            properties = [
+                "runId", strProp "The id of the run, e.g. 'r12'."
+                "waitMs", intProp $"Wait at most this long for the run to finish. 0 returns at once. Default: {defaultWaitMs}."
+                "stdoutOffset", intProp "Only return stdout from this character offset on, e.g. the stdoutLength of the previous call, to get only new output of a running run."
+            ]
             required = [ "runId" ]
             readOnly = true
             destructive = false
+            idempotent = true
         }
         {
             name = "caddis_check"
             title = "Type-check F#"
-            description = "Parses and type-checks F# code without running it. Returns the compiler errors and warnings. Lines and columns are 1-based."
+            description =
+                "Parses and type-checks F# code against the current session without running it, so definitions from earlier caddis_eval calls are known. Returns the compiler errors and warnings. Lines and columns are 1-based. Not possible while a run is in progress."
             properties = codeAndPath
             required = []
             readOnly = true
             destructive = false
+            idempotent = true
+        }
+        {
+            name = "caddis_describe"
+            title = "Describe API"
+            description =
+                String.concat " " [
+                    "Looks up the types and members of the loaded assemblies, e.g. RhinoCommon, Eto or a NuGet package loaded via #r,"
+                    "and returns their signatures in F# syntax with their XML doc summaries. Use it instead of guessing names, overloads or parameter types."
+                    "Works while a run is in progress."
+                ]
+            properties = [
+                "name",
+                strProp
+                    "A namespace ('Rhino.Geometry': its types), a type ('Brep' or 'Rhino.Geometry.Brep': its members) or a member ('Brep.CreateFromBox': all overloads with docs)."
+                "filter", strProp "For a type: only the members whose name contains this text, e.g. 'Offset'."
+                "search", strProp "If no name is given: find types and members whose name contains this text, e.g. 'fillet'."
+            ]
+            required = []
+            readOnly = true
+            destructive = false
+            idempotent = true
         }
         {
             name = "caddis_status"
             title = "Status"
-            description = "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of Rhino, F# and .NET, and the active document."
+            description =
+                "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of Rhino, F# and .NET, and the active document with its units, tolerance and layers."
             properties = []
             required = []
             readOnly = true
             destructive = false
+            idempotent = true
         }
         {
             name = "caddis_cancel"
@@ -113,6 +156,7 @@ type McpEndpoint(svc: CaddisService) =
             required = []
             readOnly = false
             destructive = true
+            idempotent = true
         }
         {
             name = "caddis_reset"
@@ -122,6 +166,7 @@ type McpEndpoint(svc: CaddisService) =
             required = []
             readOnly = false
             destructive = true
+            idempotent = false
         }
         {
             name = "caddis_set_mode"
@@ -132,6 +177,7 @@ type McpEndpoint(svc: CaddisService) =
             required = [ "mode" ]
             readOnly = false
             destructive = true
+            idempotent = true
         }
         {
             name = "caddis_undo"
@@ -141,34 +187,45 @@ type McpEndpoint(svc: CaddisService) =
             required = []
             readOnly = false
             destructive = true
+            idempotent = false
         }
         {
             name = "caddis_capture_viewport"
             title = "Capture viewport"
-            description = "Returns a PNG image of a Rhino viewport, to see the result of a script."
+            description = "Returns a PNG image of a Rhino viewport, to see the result of a script. Not possible while a run on the UI thread is in progress."
             properties = [
                 "view", strProp "Name of the view, e.g. 'Perspective' or 'Top'. Default: the active view."
-                "width", intProp "Width in pixels. Default: the current width of the view."
-                "height", intProp "Height in pixels. Default: the current height of the view."
+                "width",
+                intProp
+                    $"Width in pixels. Default: follows the aspect ratio of the view if 'height' is given, otherwise the size of the view, scaled down to at most {CaptureSize.defaultMaxEdge} pixels on the long edge."
+                "height", intProp "Height in pixels. Default: like 'width'."
                 "displayMode", strProp "Name of a display mode, e.g. 'Shaded', 'Rendered', 'Wireframe'. Default: the mode of the view."
             ]
             required = []
             readOnly = true
             destructive = false
+            idempotent = true
         }
         {
             name = "caddis_export"
             title = "Export"
-            description = "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension. Returns the local path and download URL of the written files."
+            description =
+                "Exports objects of the Rhino document to a file in any format Rhino can write, picked by file extension. Returns the local path and download URL of the written files."
             properties = [
                 "format", strProp "File extension of the format, e.g. '3dm', 'stl', 'obj', 'step', 'iges', 'dwg', 'dxf', '3mf', 'fbx', 'gltf', 'pdf', 'svg'."
                 "name", strProp "File name without extension. Default: 'export'."
                 "objects", enumOf [ "all"; "selected" ] "Which objects to export. Default: 'all'."
-                "objectIds", Json.obj [ "type", Json.ofString "array"; "items", Json.obj [ "type", Json.ofString "string" ]; "description", Json.ofString "Ids (GUIDs) of the objects to export. Overrides 'objects'." ]
+                "objectIds",
+                Json.obj [
+                    "type", Json.ofString "array"
+                    "items", Json.obj [ "type", Json.ofString "string" ]
+                    "description", Json.ofString "Ids (GUIDs) of the objects to export. Overrides 'objects'."
+                ]
             ]
             required = [ "format" ]
             readOnly = false
             destructive = false
+            idempotent = true
         }
     ]
 
@@ -185,6 +242,7 @@ type McpEndpoint(svc: CaddisService) =
                 "title", Json.ofString t.title
                 "readOnlyHint", Json.ofBool t.readOnly
                 "destructiveHint", Json.ofBool t.destructive
+                "idempotentHint", Json.ofBool t.idempotent
                 "openWorldHint", Json.ofBool false
             ]
         ]
@@ -201,8 +259,16 @@ type McpEndpoint(svc: CaddisService) =
 
     static let text (s: string) : JsonNode = Json.obj [ "type", Json.ofString "text"; "text", Json.ofString s ]
 
-    /// Runs started by a tools/call, by the JSON text of the request id, so that notifications/cancelled can cancel them.
+    static let newSessionId () =
+        Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
+
+    /// Runs started by a tools/call, by session id and the JSON text of the request id, so that notifications/cancelled can cancel them.
     let runsByRequest = ConcurrentDictionary<string, string>()
+
+    let requestKey (req: Request) (requestId: JsonNode) =
+        let session = req.headers["Mcp-Session-Id"] |> Option.ofObj |> Option.defaultValue ""
+        let id = if isNull requestId then "" else requestId.ToJsonString()
+        session + " " + id
 
     let initialize (p: JsonNode) : JsonNode =
         let requested = Json.tryString "protocolVersion" p |> Option.defaultValue supportedVersions[0]
@@ -214,35 +280,11 @@ type McpEndpoint(svc: CaddisService) =
             "instructions", Json.ofString instructions
         ]
 
-    /// Clients send their protocol version in a header after initialization, if it is missing 2025-03-26 is assumed.
-    let isModern (req: Request) =
-        match req.headers["MCP-Protocol-Version"] with
-        | null -> false
-        | v -> String.CompareOrdinal(v, structuredContentSince) >= 0
+    /// Results have no structuredContent, see McpView.
+    static let toolResult (isError: bool) (content: JsonNode list) : JsonNode =
+        Json.obj [ "content", Json.arr content; "isError", Json.ofBool isError ]
 
-    let toolResult (req: Request) (isError: bool) (content: JsonNode list) (structured: JsonObject option) : JsonNode =
-        Json.obj [
-            "content", Json.arr content
-            if structured.IsSome && isModern req then "structuredContent", (structured.Value :> JsonNode)
-            "isError", Json.ofBool isError
-        ]
-
-    let resourceLinks (req: Request) (id: string) (files: FileItem seq) : JsonNode list =
-        if isModern req then
-            [
-                for f in files do
-                    Json.obj [
-                        "type", Json.ofString "resource_link"
-                        "uri", Json.ofString (FileItem.url req.baseUrl id f)
-                        "name", Json.ofString f.name
-                        "mimeType", Json.ofString f.mime
-                        "description", Json.ofString $"Local path: {f.path}"
-                    ]
-            ]
-        else
-            []
-
-    let runResult (req: Request) (run: Run) : JsonNode =
+    let runResult (req: Request) (notes: string list) (stdoutFrom: int64) (run: Run) : JsonNode =
         let isError =
             match run.Status with
             | Running
@@ -252,13 +294,13 @@ type McpEndpoint(svc: CaddisService) =
             | Cancelled
             | TimedOut
             | Rejected -> true
-        let content = text (Json.toText (run.ToJson req.baseUrl)) :: resourceLinks req run.Id run.Files
-        toolResult req isError content (Some(run.ToJson req.baseUrl))
+        let summary, images = McpView.run svc.Runs req.baseUrl notes stdoutFrom run
+        toolResult isError (text summary :: images)
 
-    let messageResult (req: Request) (result: Result<string, string>) : JsonNode =
+    static let messageResult (result: Result<string, string>) : JsonNode =
         match result with
-        | Ok msg -> toolResult req false [ text msg ] None
-        | Error msg -> toolResult req true [ text msg ] None
+        | Ok msg -> toolResult false [ text msg ]
+        | Error msg -> toolResult true [ text msg ]
 
     let callTool (req: Request) (requestId: JsonNode) (name: string) (args: JsonNode) : Task<JsonNode> =
         task {
@@ -266,45 +308,54 @@ type McpEndpoint(svc: CaddisService) =
                 match name with
                 | "caddis_eval" ->
                     let a = Args.eval args
+                    let a = { a with waitMs = a.waitMs |> Option.orElse (Some defaultWaitMs) }
                     let! run = svc.StartEval a
-                    let key = if isNull requestId then "" else requestId.ToJsonString()
+                    let key = requestKey req requestId
                     runsByRequest[key] <- run.Id
                     try
-                        do! svc.WaitFor(run, a.timeoutMs)
+                        do! svc.WaitFor(run, a.waitMs)
                     finally
                         runsByRequest.TryRemove key |> ignore
-                    return runResult req run
+                    let notes = [
+                        if a.timeoutMs.IsSome && run.Mode = UiThread then
+                            "timeoutMs was ignored: runs on the UI thread can't be cancelled. Switch to background mode with caddis_set_mode for runs that can time out."
+                    ]
+                    return runResult req notes 0L run
 
                 | "caddis_get_run" ->
-                    match Json.tryString "runId" args |> Option.bind svc.Runs.TryGet with
-                    | Some run -> return runResult req run
-                    | None -> return toolResult req true [ text "Run not found." ] None
+                    let runId = Json.tryString "runId" args |> Option.defaultValue ""
+                    match svc.Runs.TryGet runId with
+                    | Some run ->
+                        do! svc.WaitFor(run, Some(Json.tryInt "waitMs" args |> Option.defaultValue defaultWaitMs))
+                        let from = Json.tryInt "stdoutOffset" args |> Option.defaultValue 0
+                        return runResult req [] (int64 from) run
+                    | None -> return toolResult true [ text $"Run '{runId}' not found. Only the latest runs are kept." ]
 
                 | "caddis_check" ->
                     let! diagnostics = svc.Check(Json.tryString "code" args, Json.tryString "path" args)
-                    let hasErrors = diagnostics |> Array.exists (fun d -> d.severity = "error")
-                    let result = Json.obj [ "ok", Json.ofBool (not hasErrors); "diagnostics", Json.arr (Seq.map Diagnostic.toJson diagnostics) ]
-                    let summary = if diagnostics.Length = 0 then "No errors or warnings." else Json.toText result
-                    return toolResult req false [ text summary ] (Some result)
+                    return toolResult false [ text (McpView.check diagnostics) ]
+
+                | "caddis_describe" ->
+                    let description = svc.Describe(Json.tryString "name" args, Json.tryString "search" args, Json.tryString "filter" args)
+                    return toolResult false [ text description ]
 
                 | "caddis_status" ->
-                    let status = svc.Status []
-                    return toolResult req false [ text (Json.toText status) ] (Some(svc.Status []))
+                    return toolResult false [ text (Json.toText (svc.Status [])) ]
 
-                | "caddis_cancel" -> return messageResult req (svc.Fsi.Cancel(Json.tryString "runId" args))
+                | "caddis_cancel" -> return messageResult (svc.Fsi.Cancel(Json.tryString "runId" args))
 
                 | "caddis_reset" ->
                     do! svc.Fsi.Reset()
-                    return messageResult req (Ok "A new F# session was started.")
+                    return messageResult (Ok "A new F# session was started.")
 
                 | "caddis_set_mode" ->
                     let m = Args.mode args
                     do! svc.SetMode m
-                    return messageResult req (Ok $"Mode is '{ThreadMode.toString m}', a new F# session was started.")
+                    return messageResult (Ok $"Mode is '{ThreadMode.toString m}', a new F# session was started.")
 
                 | "caddis_undo" ->
                     let! result = svc.Undo(Json.tryString "runId" args)
-                    return messageResult req result
+                    return messageResult result
 
                 | "caddis_capture_viewport" ->
                     let! id, file =
@@ -314,27 +365,19 @@ type McpEndpoint(svc: CaddisService) =
                             Json.tryInt "height" args |> Option.defaultValue 0,
                             Json.tryString "displayMode" args |> Option.toObj
                         )
-                    let image =
-                        Json.obj [
-                            "type", Json.ofString "image"
-                            "data", Json.ofString (Convert.ToBase64String(File.ReadAllBytes file.path))
-                            "mimeType", Json.ofString file.mime
-                        ]
-                    let info = $"Saved to {file.path}\nURL: {FileItem.url req.baseUrl id file}"
-                    return toolResult req false [ image; text info ] None
+                    return toolResult false [ McpView.image file; text (McpView.files req.baseUrl id "Saved to:" [ file ]) ]
 
                 | "caddis_export" ->
                     let format = Json.tryString "format" args |> Option.toObj
                     let! id, files = svc.Export(format, Json.tryString "name" args, Args.exportSelection args)
-                    let result = Json.obj [ "id", Json.ofString id; "files", Json.arr (files |> Seq.map (FileItem.toJson req.baseUrl id)) ]
-                    return toolResult req false (text (Json.toText result) :: resourceLinks req id files) (Some result)
+                    return toolResult false [ text (McpView.files req.baseUrl id "Exported to:" files) ]
 
-                | _ -> return toolResult req true [ text $"Unknown tool '{name}'." ] None
+                | _ -> return toolResult true [ text $"Unknown tool '{name}'." ]
             with
             | BusyException runId ->
-                return toolResult req true [ text $"Run '{runId}' is still in progress. Wait for it with caddis_get_run, or cancel it with caddis_cancel (background mode only)." ] None
+                return toolResult true [ text $"Run '{runId}' is still in progress. Wait for it with caddis_get_run, or cancel it with caddis_cancel (background mode only)." ]
             | e ->
-                return toolResult req true [ text e.Message ] None
+                return toolResult true [ text e.Message ]
         }
 
     let handleMessage (req: Request) (msg: JsonNode) : Task<JsonNode option> =
@@ -350,13 +393,16 @@ type McpEndpoint(svc: CaddisService) =
             | Some "tools/list" -> return Some(response id (Json.obj [ "tools", Json.arr (List.map toolJson tools) ]))
             | Some "tools/call" ->
                 let name = Json.tryString "name" p |> Option.defaultValue ""
-                let args = Json.prop "arguments" p |> Option.defaultWith (fun () -> JsonObject())
-                let! result = callTool req id name args
-                return Some(response id result)
+                if tools |> List.exists (fun t -> t.name = name) then
+                    let args = Json.prop "arguments" p |> Option.defaultWith (fun () -> JsonObject())
+                    let! result = callTool req id name args
+                    return Some(response id result)
+                else
+                    return Some(errorResponse id -32602 $"Unknown tool: '{name}'.")
             | Some "notifications/cancelled" ->
                 match Json.prop "requestId" p with
                 | Some rid ->
-                    match runsByRequest.TryGetValue(rid.ToJsonString()) with
+                    match runsByRequest.TryGetValue(requestKey req rid) with
                     | true, runId -> svc.Fsi.Cancel(Some runId) |> ignore
                     | _ -> ()
                 | None -> ()
@@ -369,22 +415,29 @@ type McpEndpoint(svc: CaddisService) =
         task {
             match req.method with
             | "POST" ->
-                let parsed =
-                    try Ok(Json.parse req.body)
-                    with e -> Error e.Message
-                match parsed with
-                | Error msg -> return JsonResponse(400, errorResponse null -32700 $"Parse error: {msg}")
-                | Ok null -> return JsonResponse(400, errorResponse null -32600 "Invalid request: empty body.")
-                | Ok(:? JsonArray as batch) -> // batches were removed in protocol version 2025-06-18, but are cheap to support
-                    let responses = ResizeArray<JsonNode>()
-                    for m in batch do
-                        let! r = handleMessage req m
-                        r |> Option.iter responses.Add
-                    if responses.Count = 0 then return EmptyResponse 202
-                    else return JsonResponse(200, Json.arr responses)
-                | Ok msg ->
-                    match! handleMessage req msg with
-                    | Some r -> return JsonResponse(200, r)
-                    | None -> return EmptyResponse 202
-            | _ -> return Response.error 405 "Only POST is supported, this server offers no SSE stream and no sessions."
+                let version = req.headers["MCP-Protocol-Version"]
+                if not (isNull version) && not (Array.contains version supportedVersions) then
+                    let supported = String.concat ", " supportedVersions
+                    return JsonResponse(400, errorResponse null -32600 $"Unsupported MCP-Protocol-Version '{version}', supported are {supported}.")
+                else
+                    let parsed =
+                        try Ok(Json.parse req.body)
+                        with e -> Error e.Message
+                    match parsed with
+                    | Error msg -> return JsonResponse(400, errorResponse null -32700 $"Parse error: {msg}")
+                    | Ok null -> return JsonResponse(400, errorResponse null -32600 "Invalid request: empty body.")
+                    | Ok(:? JsonArray as batch) -> // batches were removed in protocol version 2025-06-18, but are cheap to support
+                        let responses = ResizeArray<JsonNode>()
+                        for m in batch do
+                            let! r = handleMessage req m
+                            r |> Option.iter responses.Add
+                        if responses.Count = 0 then return EmptyResponse 202
+                        else return JsonResponse(200, Json.arr responses)
+                    | Ok msg ->
+                        match! handleMessage req msg with
+                        | Some r when Json.tryString "method" msg = Some "initialize" ->
+                            return WithHeaders(JsonResponse(200, r), [ "Mcp-Session-Id", newSessionId () ])
+                        | Some r -> return JsonResponse(200, r)
+                        | None -> return EmptyResponse 202
+            | _ -> return Response.error 405 "Only POST is supported, this server offers no SSE stream."
         }

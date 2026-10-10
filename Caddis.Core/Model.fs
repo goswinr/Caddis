@@ -146,6 +146,7 @@ module FileItem =
         | ".png" -> "image/png"
         | ".jpg" | ".jpeg" -> "image/jpeg"
         | ".gif" -> "image/gif"
+        | ".webp" -> "image/webp"
         | ".bmp" -> "image/bmp"
         | ".tif" | ".tiff" -> "image/tiff"
         | ".svg" -> "image/svg+xml"
@@ -167,6 +168,13 @@ module FileItem =
         | ".zip" -> "application/zip"
         | _ -> "application/octet-stream"
 
+    let ofPath (dir: string) (path: string) : FileItem = {
+        name = Path.GetRelativePath(dir, path).Replace('\\', '/')
+        size = FileInfo(path).Length
+        mime = mimeOf path
+        path = path
+        }
+
     /// All files in a folder and its subfolders.
     let listFolder (dir: string) : FileItem[] =
         if not (Directory.Exists dir) then
@@ -174,13 +182,7 @@ module FileItem =
         else
             Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
             |> Array.sort
-            |> Array.map (fun p ->
-                {
-                    name = Path.GetRelativePath(dir, p).Replace('\\', '/')
-                    size = FileInfo(p).Length
-                    mime = mimeOf p
-                    path = p
-                })
+            |> Array.map (ofPath dir)
 
     /// The download URL of a file, e.g. http://127.0.0.1:7810/files/r3/plot.png
     let url (baseUrl: string) (id: string) (f: FileItem) =
@@ -342,6 +344,18 @@ type RunRegistry(rootDir: string) =
 
     member _.RootDir = rootDir
 
+    /// The id of the folder with saved output, see SaveLog.
+    static member LogsId = "logs"
+
+    /// Saves the output of a run to a text file, e.g. 'logs/r12-stdout.txt', and returns it.
+    /// Its download URL uses the id RunRegistry.LogsId.
+    member _.SaveLog(runId: string, stream: string, text: string) : FileItem =
+        let dir = Path.Combine(rootDir, RunRegistry.LogsId)
+        Directory.CreateDirectory dir |> ignore
+        let path = Path.Combine(dir, $"{runId}-{stream}.txt")
+        File.WriteAllText(path, text)
+        FileItem.ofPath dir path
+
     /// A new unique id with the given prefix, e.g. "r12" for runs, "v13" for viewport captures.
     member _.NextId(prefix: string) = prefix + string (Interlocked.Increment(&counter))
 
@@ -377,6 +391,29 @@ type RunRegistry(rootDir: string) =
             let dir = Path.GetFullPath(Path.Combine(rootDir, id)) + string Path.DirectorySeparatorChar
             let full = Path.GetFullPath(Path.Combine(dir, name))
             if full.StartsWith(dir, StringComparison.OrdinalIgnoreCase) && File.Exists full then Some full else None
+
+
+/// The size of a viewport capture.
+module CaptureSize =
+
+    /// Without a requested size, captures are scaled down to at most this many pixels on the long edge,
+    /// models scale larger images down anyway.
+    let defaultMaxEdge = 1280
+
+    /// The capture size for a view of the given size. A requested width or height of 0 follows the aspect ratio of the view.
+    /// If neither is given the size of the view is used, scaled down to at most defaultMaxEdge.
+    let fit (viewWidth: int, viewHeight: int) (width: int, height: int) : int * int =
+        let vw = max 1 viewWidth
+        let vh = max 1 viewHeight
+        let scaled (a: int) (num: int) (den: int) = max 1 (int (Math.Round(float a * float num / float den)))
+        match width > 0, height > 0 with
+        | true, true -> width, height
+        | true, false -> width, scaled width vh vw
+        | false, true -> scaled height vw vh, height
+        | false, false ->
+            let longEdge = max vw vh
+            if longEdge <= defaultMaxEdge then vw, vh
+            else scaled vw defaultMaxEdge longEdge, scaled vh defaultMaxEdge longEdge
 
 
 /// Which objects to export.
@@ -419,7 +456,7 @@ type ICaddisHost =
     abstract Status: unit -> (string * JsonNode) list
 
     /// Saves a viewport as PNG. Called on the UI thread.
-    /// An empty view name means the active view. Width or height of 0 means the current size of the view.
+    /// An empty view name means the active view. Width and height of 0 are resolved with CaptureSize.fit.
     abstract CaptureView: viewName: string * width: int * height: int * displayMode: string * path: string -> unit
 
     /// Exports objects to a file, the format is picked from the extension of the path. Called on the UI thread.

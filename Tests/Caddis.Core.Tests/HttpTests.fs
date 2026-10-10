@@ -5,6 +5,7 @@ open System.Net
 open System.Net.Http
 open System.Text
 open System.Text.Json.Nodes
+open System.Text.RegularExpressions
 open Xunit
 open Caddis
 open Caddis.Tests.Helpers
@@ -33,17 +34,32 @@ let post (path: string) (json: string) =
     use req = new HttpRequestMessage(HttpMethod.Post, path, Content = new StringContent(json, Encoding.UTF8, "application/json"))
     send client.Value req
 
-let mcp (json: string) =
+/// Sends a JSON-RPC message to /mcp with the given MCP-Protocol-Version header, none if it is null.
+let mcpWithVersion (version: string) (json: string) =
     use req = new HttpRequestMessage(HttpMethod.Post, "/mcp", Content = new StringContent(json, Encoding.UTF8, "application/json"))
-    req.Headers.Add("MCP-Protocol-Version", "2025-06-18")
+    if not (isNull version) then req.Headers.Add("MCP-Protocol-Version", version)
     req.Headers.Accept.ParseAdd "application/json, text/event-stream"
-    send client.Value req
+    let resp = client.Value.Send req
+    resp.StatusCode, resp.Content.ReadAsStringAsync().Result, resp.Headers
+
+let mcp (json: string) =
+    let status, body, _ = mcpWithVersion "2025-06-18" json
+    status, body
 
 /// Follows a path of property names, e.g. at ["result"; "tools"]
 let at (path: string list) (n: JsonNode) = path |> List.fold (fun (n: JsonNode) (k: string) -> n[k]) n
 let str path n = (at path n).GetValue<string>()
 let num path n = (at path n).GetValue<int>()
 let flag path n = (at path n).GetValue<bool>()
+
+/// Calls an MCP tool and returns the result.
+let callTool (name: string) (arguments: string) =
+    let _, body = mcp $"""{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{name}","arguments":{arguments}}}}}"""
+    at [ "result" ] (JsonNode.Parse body)
+
+/// The text items of a tool result.
+let resultText (result: JsonNode) =
+    result["content"].AsArray() |> Seq.filter (fun c -> str [ "type" ] c = "text") |> Seq.map (str [ "text" ]) |> String.concat "\n"
 
 [<Fact>]
 let ``rejects requests without token`` () =
@@ -122,20 +138,122 @@ let ``MCP evaluates code`` () =
     Assert.Equal(7, num [ "id" ] msg)
     let result = at [ "result" ] msg
     Assert.False(flag [ "isError" ] result)
-    Assert.Equal("42", str [ "structuredContent"; "value"; "text" ] result)
-    Assert.Contains("from mcp", str [ "structuredContent"; "stdout" ] result)
+    Assert.Null(result["structuredContent"]) // Claude Code would show the model only that, see McpView
+    let text = resultText result
+    Assert.Contains("val it: int = 42", text)
+    Assert.Contains("--- stdout ---\nfrom mcp", text)
 
 [<Fact>]
 let ``MCP reports failed runs as tool errors`` () =
-    let _, body = mcp """{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"caddis_eval","arguments":{"code":"let x: int = \"no\""}}}"""
-    let result = at [ "result" ] (JsonNode.Parse body)
+    let result = callTool "caddis_eval" """{"code":"let x: int = \"no\""}"""
     Assert.True(flag [ "isError" ] result)
-    Assert.Equal("compileError", str [ "structuredContent"; "status" ] result)
+    Assert.Contains("compileError", resultText result)
 
 [<Fact>]
 let ``MCP unknown method is an error`` () =
     let _, body = mcp """{"jsonrpc":"2.0","id":9,"method":"resources/list"}"""
     Assert.Equal(-32601, num [ "error"; "code" ] (JsonNode.Parse body))
+
+[<Fact>]
+let ``MCP unknown tool is an invalid params error`` () =
+    let _, body = mcp """{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"caddis_nope","arguments":{}}}"""
+    Assert.Equal(-32602, num [ "error"; "code" ] (JsonNode.Parse body))
+
+[<Fact>]
+let ``MCP initialize falls back to the newest version and hands out a session id`` () =
+    let status, body, headers =
+        mcpWithVersion null """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}"""
+    Assert.Equal(HttpStatusCode.OK, status)
+    Assert.Equal("2025-11-25", str [ "result"; "protocolVersion" ] (JsonNode.Parse body))
+    Assert.Matches("^[0-9a-f]{32}$", Assert.Single(headers.GetValues "Mcp-Session-Id"))
+
+[<Fact>]
+let ``MCP rejects an unsupported protocol version header`` () =
+    let status, body, _ = mcpWithVersion "1999-01-01" """{"jsonrpc":"2.0","id":1,"method":"tools/list"}"""
+    Assert.Equal(HttpStatusCode.BadRequest, status)
+    Assert.Contains("Unsupported MCP-Protocol-Version", body)
+
+[<Fact>]
+let ``MCP eval returns a running run and get_run waits for it`` () =
+    let running = callTool "caddis_eval" """{"code":"System.Threading.Thread.Sleep 1500\n5","waitMs":100}"""
+    Assert.False(flag [ "isError" ] running)
+    let runId = Regex.Match(resultText running, @"^Run (r\d+): still running").Groups[1].Value
+    Assert.False(String.IsNullOrEmpty runId, resultText running)
+    // the run blocks the UI thread, so a capture has to wait
+    let capture = callTool "caddis_capture_viewport" "{}"
+    Assert.True(flag [ "isError" ] capture)
+    Assert.Contains($"Run '{runId}' is still in progress", resultText capture)
+    let finished = resultText (callTool "caddis_get_run" $"""{{"runId":"{runId}","waitMs":20000}}""")
+    Assert.Contains($"Run {runId}: ok", finished)
+    Assert.Contains("val it: int = 5", finished)
+
+[<Fact>]
+let ``MCP returns images saved by a run inline`` () =
+    let result = callTool "caddis_eval" """{"code":"System.IO.File.WriteAllBytes(System.IO.Path.Combine(Caddis.Script.OutDir, \"a.png\"), [| 1uy |])"}"""
+    let image = result["content"].AsArray() |> Seq.find (fun c -> str [ "type" ] c = "image")
+    Assert.Equal("image/png", str [ "mimeType" ] image)
+
+[<Fact>]
+let ``MCP describes APIs`` () =
+    let result = callTool "caddis_describe" """{"name":"Caddis.Script.RunId"}"""
+    Assert.False(flag [ "isError" ] result)
+    Assert.Contains("static member RunId: string with get", resultText result)
+    let missing = callTool "caddis_describe" "{}"
+    Assert.True(flag [ "isError" ] missing)
+
+[<Fact>]
+let ``REST searches APIs`` () =
+    use req = new HttpRequestMessage(HttpMethod.Get, "/describe?search=OnUi")
+    let status, body = send client.Value req
+    Assert.Equal(HttpStatusCode.OK, status)
+    Assert.Contains("Caddis.Script.OnUi", str [ "text" ] (JsonNode.Parse body))
+
+/// A second server, in background mode.
+let backgroundServer =
+    lazy
+        (let store = newStore ()
+         store.Save { CaddisSettings.defaults with port = 27830; threadMode = Background }
+         let s = new CaddisServer(new HeadlessHost(ignore), store)
+         match s.Start() with
+         | Ok _ -> s
+         | Error msg -> failwith msg)
+
+[<Fact>]
+let ``MCP cancels a background run on notifications/cancelled`` () =
+    use c = new HttpClient(BaseAddress = Uri backgroundServer.Value.Url)
+    c.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", backgroundServer.Value.Token)
+    let postAsync (json: string) =
+        let req = new HttpRequestMessage(HttpMethod.Post, "/mcp", Content = new StringContent(json, Encoding.UTF8, "application/json"))
+        req.Headers.Add("MCP-Protocol-Version", "2025-06-18")
+        c.SendAsync req
+    let evalCall =
+        postAsync """{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"caddis_eval","arguments":{"code":"while true do System.Threading.Thread.Sleep 10"}}}"""
+    // repeat the notification, the run only starts once the F# session is ready
+    let deadline = DateTime.UtcNow.AddSeconds 30.0
+    while not evalCall.IsCompleted && DateTime.UtcNow < deadline do
+        postAsync("""{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":42}}""").Result |> ignore
+        evalCall.Wait 500 |> ignore
+    Assert.True(evalCall.IsCompleted, "The run was not cancelled.")
+    let result = at [ "result" ] (JsonNode.Parse(evalCall.Result.Content.ReadAsStringAsync().Result))
+    Assert.True(flag [ "isError" ] result)
+    Assert.Matches(@"^Run r\d+: cancelled after", resultText result)
+
+[<Fact>]
+let ``REST eval returns 202 for a running run that can be awaited`` () =
+    let status, body = post "/eval" """{"code": "System.Threading.Thread.Sleep 500\n7", "waitMs": 0}"""
+    Assert.Equal(HttpStatusCode.Accepted, status)
+    use req = new HttpRequestMessage(HttpMethod.Get, $"""/runs/{str [ "id" ] (JsonNode.Parse body)}?waitMs=20000""")
+    let status, body = send client.Value req
+    Assert.Equal(HttpStatusCode.OK, status)
+    Assert.Equal("7", str [ "value"; "text" ] (JsonNode.Parse body))
+
+[<Fact>]
+let ``rejects bodies over the limit also without a length`` () =
+    use content = new StreamContent(new IO.MemoryStream(Array.create (21 * 1024 * 1024) (byte 'a')))
+    use req = new HttpRequestMessage(HttpMethod.Post, "/eval", Content = content)
+    req.Headers.TransferEncodingChunked <- true
+    let status, _ = send client.Value req
+    Assert.Equal(HttpStatusCode.RequestEntityTooLarge, status)
 
 [<Fact>]
 let ``writes a discovery file`` () =

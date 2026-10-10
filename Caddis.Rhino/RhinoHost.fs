@@ -136,8 +136,9 @@ type RhinoHost() =
         if isNull view then
             let names = doc.Views.GetViewList ViewTypeFilter.Model |> Array.map _.MainViewport.Name |> String.concat ", "
             failwith $"View '{viewName}' not found. The views are: {names}"
-        let size = view.ActiveViewport.Size
-        let size = Drawing.Size((if width > 0 then width else size.Width), (if height > 0 then height else size.Height))
+        let viewSize = view.ActiveViewport.Size
+        let w, h = CaptureSize.fit (viewSize.Width, viewSize.Height) (width, height)
+        let size = Drawing.Size(w, h)
         use bitmap =
             if String.IsNullOrWhiteSpace displayMode then
                 view.CaptureToBitmap size
@@ -259,20 +260,31 @@ type RhinoHost() =
         member _.Status() =
             // don't use the UI thread here: it might be blocked by a run
             let doc = RhinoDoc.ActiveDoc
+            let maxLayers = 100
+            let document () : JsonNode =
+                let layers = doc.Layers |> Seq.filter (fun l -> not l.IsDeleted) |> Seq.map _.FullPath |> Array.ofSeq
+                Json.obj [
+                    "name", Json.ofString doc.Name
+                    "path", Json.ofString doc.Path
+                    "units", Json.ofString (string doc.ModelUnitSystem)
+                    "absoluteTolerance", Json.ofFloat doc.ModelAbsoluteTolerance
+                    "angleToleranceDegrees", Json.ofFloat doc.ModelAngleToleranceDegrees
+                    // not Objects.Count, that includes deleted objects kept for undo
+                    "objectCount", Json.ofInt (doc.Objects.ObjectCount(DocObjects.ObjectEnumeratorSettings()))
+                    "selectedObjectCount", Json.ofInt (doc.Objects.GetSelectedObjects(false, false) |> Seq.length)
+                    "currentLayer", Json.ofString doc.Layers.CurrentLayer.FullPath
+                    "layerCount", Json.ofInt layers.Length
+                    "layers", Json.ofStrings (Array.truncate maxLayers layers)
+                ]
             [
                 "rhinoVersion", Json.ofString (string RhinoApp.Version)
                 "rhinoCommandRunning", Json.ofBool (Command.InCommand())
                 "document",
-                (if isNull doc then
-                     null
+                (if isNull doc then null
                  else
-                     Json.obj [
-                         "name", Json.ofString doc.Name
-                         "path", Json.ofString doc.Path
-                         // not Objects.Count, that includes deleted objects kept for undo
-                         "objectCount", Json.ofInt (doc.Objects.ObjectCount(DocObjects.ObjectEnumeratorSettings()))
-                     ]
-                     :> JsonNode)
+                     // the document might be changed by a run at the same time
+                     try document ()
+                     with e -> Json.obj [ "name", Json.ofString doc.Name; "error", Json.ofString e.Message ] :> JsonNode)
             ]
 
         member _.CaptureView(viewName, width, height, displayMode, path) = captureView (viewName, width, height, displayMode, path)

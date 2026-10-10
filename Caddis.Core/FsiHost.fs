@@ -375,6 +375,34 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             return run
         }
 
+    /// Parses and type-checks code against the current session, so definitions of earlier runs are known, without running it.
+    /// Runs on the evaluation thread, so it never overlaps with a run. Raises a BusyException if a run is in progress.
+    member this.Check(code: string, scriptPath: string) : Task<Diagnostic[]> =
+        task {
+            do! this.Initialize()
+            let s, w, m =
+                lock sync (fun () ->
+                    match current with
+                    | Some r -> raise (BusyException r.Id)
+                    | None -> ()
+                    match state, session with
+                    | Ready, Some s -> s, worker, mode
+                    | Failed msg, _ -> failwith $"F# Interactive could not be started: {msg}"
+                    | st, _ -> failwith $"F# Interactive is not ready, its state is '{FsiState.toString st}'.")
+            let work () =
+                if not (String.IsNullOrEmpty scriptPath) && File.Exists scriptPath then includeScriptFolder s scriptPath
+                let parseResults, checkResults, _ = s.ParseAndCheckInteraction code
+                Array.append parseResults.Diagnostics checkResults.Diagnostics
+                |> Array.map (fun d ->
+                    let diag = Diagnostic.ofFcs d
+                    // FCS checks the code as a file 'stdin.fsx' in the current directory
+                    if Path.GetFileName diag.file = "stdin.fsx" then { diag with file = "" } else diag)
+                |> Array.distinct
+            match m, w with
+            | Background, Some w -> return! w.Invoke work
+            | _ -> return! host.InvokeOnUi work
+        }
+
     /// Requests cancellation of a background run.
     /// If it does not stop within a few seconds its thread is abandoned and the session is reset.
     /// Returns false for runs on the UI thread, they can't be cancelled.

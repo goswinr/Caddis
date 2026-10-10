@@ -12,8 +12,10 @@ type EvalArgs = {
     code: string option
     /// Full path of an .fsx file. If code is given too, the code is evaluated as if it were in that file.
     path: string option
-    /// Background mode: cancel the run after this time. UI-thread mode: return the still running run after this time.
+    /// Background mode: cancel the run after this time. Ignored on the UI thread, runs there can't be cancelled.
     timeoutMs: int option
+    /// Return after this time even if the run has not finished, it keeps running. None waits until it finished, 0 returns at once.
+    waitMs: int option
     recordUndo: bool
     }
 
@@ -25,7 +27,13 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
 
     let fsi = FsiHost(host, (fun () -> settings), runs)
 
-    let checker = lazy ScriptChecker(host)
+    let api = ApiDocs(host)
+
+    /// Raises a BusyException if a run is in progress, or only if it runs on the UI thread.
+    let failIfBusy (onlyUiThread: bool) =
+        match fsi.Current with
+        | Some r when not onlyUiThread || r.Mode = UiThread -> raise (BusyException r.Id)
+        | _ -> ()
 
     let versionOf (a: Assembly) =
         match a.GetCustomAttribute<AssemblyInformationalVersionAttribute>() with
@@ -73,24 +81,23 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             timeout = args.timeoutMs |> Option.filter (fun ms -> ms > 0) |> Option.map (float >> TimeSpan.FromMilliseconds)
         }
 
-    /// Waits for a run to finish.
-    /// A run on the UI thread can't be cancelled, so after the timeout it is returned while still running.
-    /// In background mode the timeout cancels the run, so this always waits until it finished.
-    member _.WaitFor(run: Run, timeoutMs: int option) : Task =
+    /// Waits for a run to finish, or at most waitMs. None waits until it finished, 0 or less returns at once.
+    member _.WaitFor(run: Run, waitMs: int option) : Task =
         task {
-            match timeoutMs with
-            | Some ms when ms > 0 && run.Mode = UiThread ->
+            match waitMs with
+            | None -> do! run.Completion
+            | Some ms when ms > 0 && not run.IsFinished ->
                 let! _ = Task.WhenAny(run.Completion, Task.Delay ms)
                 ()
-            | _ -> do! run.Completion
+            | Some _ -> ()
         }
         :> Task
 
-    /// Starts a run and waits for it.
+    /// Starts a run and waits for it, at most args.waitMs.
     member this.Eval(args: EvalArgs) : Task<Run> =
         task {
             let! run = this.StartEval args
-            do! this.WaitFor(run, args.timeoutMs)
+            do! this.WaitFor(run, args.waitMs)
             return run
         }
 
@@ -102,14 +109,25 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
         }
         :> Task
 
+    /// Type-checks code against the current session without running it. Raises a BusyException if a run is in progress.
     member _.Check(code: string option, path: string option) : Task<Diagnostic[]> =
         let code, scriptPath = resolveCode code path
-        let scriptPath = if isNull scriptPath then Path.Combine(runs.RootDir, "check.fsx") else scriptPath
-        checker.Value.Check(code, scriptPath) |> Async.StartAsTask
+        fsi.Check(code, scriptPath)
+
+    /// Describes a namespace, type or member of the loaded assemblies, e.g. 'Brep.CreateFromBox', or searches their names if no name is given.
+    /// filter: for a type, only the members whose name contains it. Uses only reflection, so it works while a run is in progress.
+    member _.Describe(name: string option, search: string option, filter: string option) : string =
+        let given = Option.filter (String.IsNullOrWhiteSpace >> not)
+        match given name, given search with
+        | Some n, _ -> api.Describe(n, given filter |> Option.toObj)
+        | None, Some s -> api.Search s
+        | None, None -> invalidArg "name" "Provide 'name', e.g. 'Rhino.Geometry', 'Brep' or 'Brep.CreateFromBox', or 'search', e.g. 'offset'."
 
     /// Saves a viewport as PNG. Returns the id of the output folder and the file.
+    /// Raises a BusyException if a run is in progress on the UI thread, a background run doesn't block the capture.
     member _.CaptureViewport(view: string, width: int, height: int, displayMode: string) : Task<string * FileItem> =
         task {
+            failIfBusy true
             let id = runs.NextId "v"
             let dir = runs.CreateFolder id
             let name = (if String.IsNullOrWhiteSpace view then "view" else safeFileName view) + ".png"
@@ -121,9 +139,10 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
         }
 
     /// Exports objects to a file of the given format, e.g. "stl". Returns the id of the output folder and the files.
-    /// Some formats write more than one file, e.g. obj and mtl.
+    /// Some formats write more than one file, e.g. obj and mtl. Raises a BusyException if a run is in progress.
     member _.Export(format: string, name: string option, selection: ExportSelection) : Task<string * FileItem[]> =
         task {
+            failIfBusy false
             let ext = if isNull format then "" else format.Trim().TrimStart('.').ToLowerInvariant()
             if ext = "" || ext.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 then
                 invalidArg "format" $"Invalid file format '{format}', use a file extension like 'stl', '3dm' or 'step'."
@@ -137,8 +156,9 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             return id, files
         }
 
-    /// Undoes the given run, or the latest run with an undo record.
+    /// Undoes the given run, or the latest run with an undo record. Raises a BusyException if a run is in progress.
     member _.Undo(runId: string option) : Task<Result<string, string>> =
+        failIfBusy false
         let run =
             match runId with
             | Some id -> runs.TryGet id

@@ -18,13 +18,17 @@ let private queryInt (req: Request) (name: string) =
 let private help () : JsonNode =
     Json.obj [
         "GET /status", Json.ofString "State of the server and the F# session."
-        "POST /eval", Json.ofString "Evaluate F#. Body: {code?, path?, timeoutMs?, recordUndo?}. Returns the run."
+        "POST /eval",
+        Json.ofString
+            "Evaluate F#. Body: {code?, path?, waitMs?, timeoutMs?, recordUndo?}. Returns the run, with status 202 if it is still running after waitMs (default: wait until it finished). timeoutMs cancels background runs."
         "GET /runs", Json.ofString "The recent runs."
-        "GET /runs/{id}", Json.ofString "One run, e.g. to poll a run that was still running."
+        "GET /runs/{id}", Json.ofString "One run. Query: waitMs, to wait for a run that is still running (default 0)."
         "POST /cancel", Json.ofString "Cancel the current run (background mode only). Body: {runId?}"
         "POST /reset", Json.ofString "Start a new F# session, all values are lost."
         "POST /mode", Json.ofString "Body: {mode: 'ui'|'background'}. Resets the session."
-        "POST /check", Json.ofString "Type-check without running. Body: {code?, path?}"
+        "POST /check", Json.ofString "Type-check against the current session without running. Body: {code?, path?}"
+        "GET /describe",
+        Json.ofString "Signatures and docs of a namespace, type or member, e.g. 'Brep.CreateFromBox'. Query: name, filter, or search to find names."
         "POST /undo", Json.ofString "Undo a run in Rhino. Body: {runId?}, default is the latest run with changes."
         "GET /viewport", Json.ofString "PNG of a viewport. Query: view, width, height, displayMode."
         "POST /export", Json.ofString "Export to a file. Body: {format, name?, objects?: 'all'|'selected', objectIds?: [guid]}"
@@ -52,7 +56,9 @@ let handle (svc: CaddisService) (serverInfo: unit -> (string * JsonNode) list) (
 
         | "GET", [ "runs"; id ] ->
             match svc.Runs.TryGet id with
-            | Some r -> return JsonResponse(200, r.ToJson req.baseUrl)
+            | Some r ->
+                do! svc.WaitFor(r, Some(queryInt req "waitMs"))
+                return JsonResponse((if r.IsFinished then 200 else 202), r.ToJson req.baseUrl)
             | None -> return Response.error 404 $"Run '{id}' not found."
 
         | "POST", [ "cancel" ] ->
@@ -74,6 +80,10 @@ let handle (svc: CaddisService) (serverInfo: unit -> (string * JsonNode) list) (
             let! diagnostics = svc.Check(Json.tryString "code" b, Json.tryString "path" b)
             let hasErrors = diagnostics |> Array.exists (fun d -> d.severity = "error")
             return JsonResponse(200, Json.obj [ "ok", Json.ofBool (not hasErrors); "diagnostics", Json.arr (Seq.map Diagnostic.toJson diagnostics) ])
+
+        | "GET", [ "describe" ] ->
+            let q (name: string) = Option.ofObj req.query[name]
+            return JsonResponse(200, Json.obj [ "text", Json.ofString (svc.Describe(q "name", q "search", q "filter")) ])
 
         | "POST", [ "undo" ] ->
             match! svc.Undo(Json.tryString "runId" (body ())) with

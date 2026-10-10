@@ -31,7 +31,7 @@ Caddis.Core/   net8.0, no RhinoCommon dependency
   Settings.fs      port, listenOnLan, autostart, threadMode, token → AppData/Caddis/settings.json
   Output.fs        TextWriter that captures output per run; swaps Console.Out/Err during an eval
   FsiHost.fs       session create/reset, eval, modes, cancel (ported from Fesh Src/Fsi.fs)
-  Checker.fs       FSharpChecker, created lazily on first use; type-check only
+  (type-check)     FsiEvaluationSession.ParseAndCheckInteraction, against the live session
   Runs.fs          run registry: id, state, output, diagnostics, files, timings, per-run out dir
   Json.fs          output types and serialization
   Http/Server.fs   HttpListener loop, auth, Origin check, routing, discovery file
@@ -66,7 +66,7 @@ Like Fesh.Rhino, use `DisableImplicitFSharpCoreReference` and reference `FSharp.
 - **FSI args:** Fesh's defaults (`--langversion:preview --exec --debug+ --debug:full --optimize+ --nologo --multiemit+`), with `--gui+` only on Windows.
 - **Results:** instead of printing to a log, the eval builds a structured `RunResult`.
 - **Script context:** every session references `Caddis.Core.dll` (`-r:`), so scripts can use the static `Caddis.Script.OutDir`, `Caddis.Script.RunId` and `Caddis.Script.OnUi(fun () -> ...)`. Files the script saves to `OutDir` come back in the response. (Not `session.AddBoundValue`: it emits a new FSI fragment on every call.)
-- **References:** the loaded `RhinoCommon.dll` is referenced in every session and in the checker.
+- **References:** the loaded `RhinoCommon.dll` is referenced in every session.
 
 ## API
 
@@ -74,12 +74,13 @@ REST (MCP tool names in brackets):
 
 ```
 GET  /status                  state, mode, versions, Rhino doc, current run, memory     [caddis_status]
-POST /eval    {code|path, timeoutMs?, wait?=true, undo?=true}  → RunResult              [caddis_eval]
-GET  /runs/{id}               poll when wait=false
+POST /eval    {code|path, waitMs?, timeoutMs?, recordUndo?=true}  → RunResult (202 if still running after waitMs)  [caddis_eval]
+GET  /runs/{id}?waitMs=       poll or wait for a running run                             [caddis_get_run]
 POST /cancel  {runId?}        background mode only                                       [caddis_cancel]
 POST /reset                                                                              [caddis_reset]
 POST /mode    {ui|background} resets the session                                         [caddis_set_mode]
-POST /check   {code|path}     → diagnostics only, no run                                 [caddis_check]
+POST /check   {code|path}     → diagnostics against the current session, no run          [caddis_check]
+GET  /describe?name=&filter=&search=  signatures and docs from the loaded assemblies     [caddis_describe]
 POST /undo                    undo the last eval if its record is still on top           [caddis_undo]
 GET  /viewport?view=&w=&h=&displayMode=  → PNG (MCP: inline image content)               [caddis_capture_viewport]
 POST /export  {ext, objects: all|selected|[ids]}  → files                                [caddis_export]
@@ -89,7 +90,7 @@ POST /mcp                     JSON-RPC; replies with application/json (no SSE in
 
 **RunResult fields:** `id`, `status` (ok, compileError, runtimeError, cancelled, timeout), `stdout`, `stderr`, `fsiOutput`, `value{type,text}`, `diagnostics[{severity, message, file, range}]`, `exception{type, message, stackTrace, scriptLine}`, `files[{name, size, mime, path, url}]`, `durationMs`. Output is capped and flagged as truncated when cut.
 
-**Files:** each one is returned as a URL and a local path. An agent on the same machine reads the path; a client on the LAN uses the URL. In MCP, images are returned inline and other files as resource links.
+**Files:** each one is returned as a URL and a local path. An agent on the same machine reads the path; a client on the LAN uses the URL. In MCP, images are returned inline and all files are listed with their local path (and URL for LAN clients).
 
 **Exports:** `RhinoDoc.Export` / `ExportSelected`, which pick the format from the extension, so any format Rhino can write works. `.3dm` uses `WriteFile`.
 
@@ -136,6 +137,16 @@ claude mcp add --transport http --scope user caddis http://127.0.0.1:<port>/mcp 
   - Re-test the fixes above in Rhino. Test the Rhino.Scripting hookup without Fesh.Rhino loaded. Test on Mac.
   - Verify the new embedded panel icon in Rhino. `Docs/img/makeAllSizes.ps1` generates the logo variants and `favicon.ico` from `logo.png`; the favicon is embedded in the plugin. Build verified.
   - Run the first Yak release after configuring the repository's `YAK_TOKEN` secret.
+- **MCP review (2026-10-10), tested outside Rhino** (49 tests):
+  - MCP results are plain text written for the model, plus inline images; no `structuredContent`, because Claude Code then shows the model only that JSON ([claude-code#55677](https://github.com/anthropics/claude-code/issues/55677)). REST keeps the full `RunResult` JSON.
+  - Empty fields are left out; stdout, stderr, FSI output, values and exceptions have size budgets and keep start and end, cut at line ends. Shortened output is saved to `<output folder>/logs/<run>-<stream>.txt`. Stack traces keep only the frames that lead into the script.
+  - The capture buffer keeps the first and the latest half of `maxOutputChars` instead of only the start.
+  - `waitMs` (return with status `running`, default 50 s in MCP) is separate from `timeoutMs` (cancel, background only). `caddis_get_run` waits too and takes `stdoutOffset` to poll only new output.
+  - `caddis_check` uses `ParseAndCheckInteraction`, so definitions of earlier runs are known; the separate `FSharpChecker` is gone.
+  - Capture is refused while a UI-thread run is in progress, export and undo while any run is.
+  - `Mcp-Session-Id` is handed out on initialize and only used to keep request ids of different clients apart for `notifications/cancelled`. Unsupported `MCP-Protocol-Version` gets 400, unknown tools `-32602`.
+  - `caddis_describe` (`ApiDocs.fs`): reflection over the loaded assemblies plus their XML doc files (RhinoCommon.xml is next to RhinoCommon.dll in `System/netcore`), signatures in F# syntax (curried F# functions, `[<Out>]` arguments, `option`/`list`/function types). Large types are shown in less detail until they fit 16k characters. Misspelled names get suggestions by contained words and edit distance. Checked against RhinoCommon 8.35 loaded by reflection outside Rhino, e.g. `Brep` fits with one overload per member including inherited ones.
+  - Not yet tested in Rhino: capture size cap (1280 px long edge by default), document units, tolerance and layers in `caddis_status`, the port-change warning.
 - **Packaging implemented and verified locally** (phase 6): shared build/release packaging action, a `rh8_19-any` Yak package with a `net8.0` folder, tag/changelog consistency checks, versioning via Ionide.KeepAChangelog, and README logo and badges matching Fesh.Rhino. Release build, all 28 tests, workflow linting and the actual Yak package build pass. Publishing to Yak is pending the first release.
 
 ## Phases

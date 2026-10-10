@@ -20,12 +20,13 @@
     <Compile Include="Output.fs" />
     <Compile Include="Model.fs" />
     <Compile Include="Script.fs" />
+    <Compile Include="ApiDocs.fs" />
     <Compile Include="Worker.fs" />
     <Compile Include="FsiHost.fs" />
-    <Compile Include="Checker.fs" />
     <Compile Include="Service.fs" />
     <Compile Include="Http/Types.fs" />
     <Compile Include="Http/Rest.fs" />
+    <Compile Include="Http/McpView.fs" />
     <Compile Include="Http/Mcp.fs" />
     <Compile Include="Server.fs" />
     <Compile Include="HeadlessHost.fs" />

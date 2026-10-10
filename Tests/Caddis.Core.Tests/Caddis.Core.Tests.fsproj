@@ -21,5 +21,7 @@
     <Compile Include="EvalTests.fs" />
     <Compile Include="BackgroundTests.fs" />
     <Compile Include="HttpTests.fs" />
+    <Compile Include="OutputTests.fs" />
+    <Compile Include="ApiDocsTests.fs" />
   </ItemGroup>
 </Project>
