@@ -30,6 +30,8 @@ type PanelHost = {
     Cancel: unit -> unit
     Reset: unit -> unit
     OpenUrl: string -> unit
+    /// Shows the host's dialog to save an F# script, with a title and a suggested file name. The chosen path, None if cancelled.
+    PickScriptPath: string -> string -> string option
     Message: (unit -> string) option
     Refreshed: unit -> unit
     Palette: unit -> PanelPalette

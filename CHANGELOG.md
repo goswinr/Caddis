@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The panel's code view has `Export` to save the code of the selected run as an `.fsx` file, and `Export all` to save all successful F# runs to one `.fsx` file, each after a comment with its id and time.
+
 ## [0.1.0] - 2026-10-11
 
 ### Added

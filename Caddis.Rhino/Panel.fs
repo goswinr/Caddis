@@ -7,6 +7,13 @@ open Caddis.UI
 
 /// Rhino actions and presentation settings for the shared panel.
 module private PanelServices =
+
+    /// Eto's save dialog, native on Windows and Mac, in front of Rhino's main window.
+    let pickScriptPath (title: string) (fileName: string) =
+        use dialog = new SaveFileDialog(Title = title, FileName = fileName)
+        dialog.Filters.Add(FileFilter("F# script", ".fsx"))
+        if dialog.ShowDialog(Rhino.UI.RhinoEtoApp.MainWindow) = DialogResult.Ok then Some dialog.FileName else None
+
     let host: PanelHost = {
         Name = "Rhino"
         ModeTip = String.concat "\n" [
@@ -33,6 +40,7 @@ module private PanelServices =
         Cancel = App.cancel
         Reset = App.reset
         OpenUrl = fun url -> Application.Instance.Open url
+        PickScriptPath = pickScriptPath
         Message = None
         Refreshed = ignore
         Palette = PanelTheme.palette

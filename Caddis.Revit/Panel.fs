@@ -9,6 +9,12 @@ open Caddis.UI
 
 /// Revit actions and presentation settings for the shared panel.
 module private PanelServices =
+
+    /// Windows' save dialog, owned by Revit's active window.
+    let pickScriptPath (title: string) (fileName: string) =
+        let dialog = Microsoft.Win32.SaveFileDialog(Title = title, FileName = fileName, Filter = "F# script (*.fsx)|*.fsx", DefaultExt = ".fsx")
+        if dialog.ShowDialog().GetValueOrDefault() then Some dialog.FileName else None
+
     let host: PanelHost = {
         Name = "Revit"
         ModeTip = String.concat "\n" [
@@ -37,6 +43,7 @@ module private PanelServices =
         Reset = App.reset
         OpenUrl = fun url ->
             try Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore with _ -> ()
+        PickScriptPath = pickScriptPath
         Message = Some(fun () -> RevitLog.recentLines () |> List.tryLast |> Option.defaultValue "")
         Refreshed = fun () -> try App.stateChanged () with _ -> ()
         Palette = PanelTheme.palette

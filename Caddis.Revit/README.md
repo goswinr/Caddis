@@ -90,7 +90,9 @@ output, scrollbars and keyboard focus.
 
 The code viewer is read-only, with F# highlighting, line numbers and Ctrl+F search.
 `Format` switches between Fantomas formatting and the original script, whose line
-numbers match the diagnostics. `Settings` unfolds the thread mode, **Start with Revit**
+numbers match the diagnostics. `Export` saves the code of the run to an `.fsx` file,
+`Export all` saves all successful F# runs to one, oldest first, each after a comment
+with its id and time, both as `Format` shows them. `Settings` unfolds the thread mode, **Start with Revit**
 and **Listen on the network (LAN)**. Revit's latest status message and grouped
 element changes are preserved; Rhino's command-line options are hidden.
 

@@ -1,6 +1,7 @@
 namespace Caddis.UI
 
 open System
+open System.IO
 open System.Runtime.CompilerServices
 open System.Threading.Tasks
 open Avalonia.Controls
@@ -73,6 +74,8 @@ type PanelView(host: PanelHost) as this =
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
     let formatToggle: Primitives.ToggleButton = find "FormatToggle"
+    let exportCode: Button = find "ExportCode"
+    let exportAll: Button = find "ExportAll"
 
     /// The ids and states of the shown runs, to only update the list when something changed.
     let mutable shownRuns = ""
@@ -138,9 +141,46 @@ type PanelView(host: PanelHost) as this =
             codeView.Text <- code
             codeView.ScrollToHome()
 
+    /// The runs that 'Export all' saves, oldest first.
+    let exportableRuns () =
+        match host.Server () with
+        | Some s -> ScriptExport.exportable s.Service.Runs.All
+        | None -> [||]
+
     let showDetails () =
-        output.Text <- selectedRun () |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
+        let selected = selectedRun ()
+        output.Text <- selected |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
+        exportCode.IsEnabled <- selected |> Option.exists (fun r -> r.Kind = FSharpCode)
+        exportAll.IsEnabled <- exportableRuns().Length > 0
         showCode ()
+
+    /// The code of an F# run as the code view shows it with the given state of the Format button.
+    let exportedCode (format: bool) (r: Run) : Task<string> =
+        task {
+            if format then
+                let! f = formatted r
+                return f |> Option.defaultValue r.Code
+            else
+                return r.Code
+        }
+
+    let log (msg: string) = host.Server () |> Option.iter (fun s -> s.Service.Host.Log msg)
+
+    /// Asks the host where to save, then saves the text. It is made after the dialog, so that Fantomas has time to format.
+    let export (title: string) (fileName: string) (text: unit -> Task<string>) (saved: string -> string) =
+        match host.PickScriptPath title fileName with
+        | None -> ()
+        | Some path ->
+            let path = if Path.HasExtension path then path else path + ".fsx"
+            task {
+                try
+                    let! t = text ()
+                    File.WriteAllText(path, t)
+                    log (saved path)
+                with e ->
+                    log $"Caddis: could not save '{path}': {e.Message}"
+            }
+            |> ignore
 
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
@@ -277,6 +317,14 @@ type PanelView(host: PanelHost) as this =
                 "and stack traces in the output. Code that Fantomas can't parse is always shown as it was run."
             ]
         )
+        ToolTip.SetTip(exportCode, tip [ "Save the code of the selected F# run to an .fsx file."; "Formatted if 'Format' is on." ])
+        ToolTip.SetTip(
+            exportAll,
+            tip [
+                "Save the code of all successful F# runs in the list to one .fsx file, oldest first."
+                "A comment with the run's id and time separates the runs. Formatted if 'Format' is on."
+            ]
+        )
         textMenu output output.Copy output.SelectAll
         textMenu codeView codeView.Copy codeView.SelectAll
 
@@ -301,6 +349,25 @@ type PanelView(host: PanelHost) as this =
         reset.Click.Add(fun _ -> host.Reset (); refresh ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
         formatToggle.Click.Add(fun _ -> showCode ())
+        exportCode.Click.Add(fun _ ->
+            match selectedRun () with
+            | Some r when r.Kind = FSharpCode ->
+                let format = formatToggle.IsChecked.GetValueOrDefault()
+                export $"Export the code of run {r.Id}" $"Caddis-{r.Id}.fsx" (fun () -> exportedCode format r) (fun path ->
+                    $"Caddis: saved the code of run {r.Id} to '{path}'.")
+            | _ -> ())
+        exportAll.Click.Add(fun _ ->
+            let all = exportableRuns ()
+            if all.Length > 0 then
+                let format = formatToggle.IsChecked.GetValueOrDefault()
+                let text () =
+                    task {
+                        let! codes = all |> Array.map (exportedCode format) |> Task.WhenAll
+                        return ScriptExport.combine host.Name (List.ofArray (Array.zip all codes))
+                    }
+                let today = DateTime.Now.ToString "yyyy-MM-dd"
+                export "Export all successful runs" $"Caddis-runs-{today}.fsx" text (fun path ->
+                    $"Caddis: saved the code of {ScriptExport.count all.Length} to '{path}'."))
 
     /// Updates the panel from the server's state. Called every second while the panel is shown.
     member _.Refresh() = refresh ()

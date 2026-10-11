@@ -52,6 +52,7 @@ let host name = {
     Cancel = ignore
     Reset = ignore
     OpenUrl = ignore
+    PickScriptPath = fun _ _ -> None
     Message = if name = "Revit" then Some(fun () -> "Copied MCP command") else None
     Refreshed = ignore
     Palette = fun () -> palette false
@@ -115,8 +116,15 @@ let ``theme is scoped and subscriptions survive detaching and reopening`` () =
     finally window.Close()
     Assert.Equal(0, subscriptions)
 
-let run kind code =
-    Run("r1", kind, UiThread, code, "example.fsx", Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString "N"), 10000, false)
+let runWithId id kind code =
+    Run(id, kind, UiThread, code, "example.fsx", Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString "N"), 10000, false)
+
+let run kind code = runWithId "r1" kind code
+
+let finished id kind status code =
+    let r = runWithId id kind code
+    r.Complete(RunOutcome.ofStatus status) |> ignore
+    r
 
 [<AvaloniaFact>]
 let ``Revit uses the shared formatted code viewer and can show the original code`` () = task {
@@ -175,3 +183,78 @@ let ``shared output retains command results and grouped element changes`` name =
         Assert.Contains("--- elements ---", text)
         Assert.Contains("changed (2): 2 Walls", text)
         Assert.DoesNotContain("Rhino command line", text)
+
+[<Fact>]
+let ``Export all keeps only the successful F# runs, each after a comment with its id`` () =
+    let runs = [|
+        finished "r1" FSharpCode Succeeded "let a = 1\nlet b = a + 1\n"
+        finished "r2" FSharpCode CompileError "let c ="
+        finished "c3" HostCommands Succeeded "-_Line 0,0,0 1,1,1"
+        finished "r4" FSharpCode Succeeded "printfn \"%d\" b"
+    |]
+    let exported = ScriptExport.exportable runs
+    Assert.Equal<string[]>([| "r1"; "r4" |], exported |> Array.map _.Id)
+    let script = ScriptExport.combine "Rhino" [ for r in exported -> r, r.Code ]
+    let lines = script.Split([| Environment.NewLine |], StringSplitOptions.None)
+    Assert.StartsWith("// 2 successful F# runs in Rhino", lines[0])
+    Assert.StartsWith("// ---- run r1, started ", ScriptExport.separator exported[0])
+    let first = Array.IndexOf(lines, ScriptExport.separator exported[0])
+    let second = Array.IndexOf(lines, ScriptExport.separator exported[1])
+    Assert.True(0 < first && first < second)
+    Assert.Equal<string[]>([| "let a = 1"; "let b = a + 1"; "" |], lines[first + 1 .. second - 1])
+    Assert.Equal("printfn \"%d\" b", lines[second + 1])
+    Assert.DoesNotContain("let c =", script)
+    Assert.DoesNotContain("\n", script.Replace(Environment.NewLine, ""))
+
+[<AvaloniaFact>]
+let ``Export saves the code of the selected run and Export all the successful F# runs`` () = task {
+    let messages = Collections.Concurrent.ConcurrentQueue<string>()
+    use engineHost = new HeadlessHost(messages.Enqueue)
+    let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
+    use server = new CaddisServer(engineHost, store)
+    for r in [ finished "r1" FSharpCode Succeeded "let answer=42"
+               finished "r2" FSharpCode CompileError "let broken ="
+               finished "c3" HostCommands Succeeded "-_Line 0,0,0 1,1,1" ] do
+        server.Service.Runs.Add r
+    let dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N")).FullName
+    let mutable suggested = []
+    // Without the extension, as if typed in the dialog: .fsx is added.
+    let pick _ (fileName: string) =
+        suggested <- suggested @ [ fileName ]
+        Some(Path.Combine(dir, Path.GetFileNameWithoutExtension fileName))
+    let saved (fileName: string) = task {
+        let deadline = DateTime.UtcNow.AddSeconds 15
+        while not (messages |> Seq.exists (fun m -> m.Contains fileName)) && DateTime.UtcNow < deadline do
+            do! Task.Delay 20
+        return File.ReadAllText(Path.Combine(dir, fileName))
+    }
+    let view = PanelView({ host "Rhino" with Server = (fun () -> Some server); PickScriptPath = pick })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    try
+        window.Show()
+        let exportCode = view.FindControl<Button> "ExportCode"
+        let exportAll = view.FindControl<Button> "ExportAll"
+        Assert.False exportAll.IsEnabled
+        view.Refresh()
+        Assert.True exportAll.IsEnabled
+        Assert.False exportCode.IsEnabled
+        let runs = view.FindControl<ListBox> "Runs"
+        runs.SelectedIndex <- 0 // newest first: the command run
+        Assert.False exportCode.IsEnabled
+        runs.SelectedIndex <- 2
+        Assert.True exportCode.IsEnabled
+        click exportCode
+        let! single = saved "Caddis-r1.fsx"
+        Assert.Equal("let answer = 42", single.Trim())
+        view.FindControl<ToggleButton>("FormatToggle").IsChecked <- Nullable false
+        click exportAll
+        Assert.Equal(2, suggested.Length)
+        Assert.StartsWith("Caddis-runs-", suggested[1])
+        let! all = saved suggested[1]
+        Assert.Contains("// 1 successful F# run in Rhino", all)
+        Assert.Contains("// ---- run r1, started ", all)
+        Assert.Contains("let answer=42", all)
+        Assert.DoesNotContain("broken", all)
+        Assert.DoesNotContain("-_Line", all)
+    finally window.Close()
+}

@@ -51,6 +51,7 @@
     <Compile Include="EmbeddedView.fs" />
     <Compile Include="FSharpHighlighting.fs" />
     <Compile Include="RunDetails.fs" />
+    <Compile Include="ScriptExport.fs" />
     <Compile Include="PanelView.fs" />
   </ItemGroup>
 </Project>
