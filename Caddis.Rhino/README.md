@@ -72,9 +72,9 @@ Rhino supplies its theme colors and the additional command-line settings.
   `r` for F# code, `c` for Rhino commands, `x` for exports.
 - `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run.
 - `Code` shows its code read-only, with F# highlighting, line numbers and search (Ctrl+F).
-  It is formatted with Fantomas, `Format` switches back to the code as it was run, whose line numbers match the errors.
+  It is formatted with Fantomas, unchecking `Formatted` shows the code as it was run, whose line numbers match the errors.
   `Export` saves the code of the run to an `.fsx` file, `Export all` saves all successful F# runs to one,
-  oldest first, each after a comment with its id and time. Both save the code as `Format` shows it.
+  oldest first, each after a comment with its id and time. Both save the code as it is shown, formatted or not.
 
 The panel follows Rhino's light, dark or custom theme as soon as it changes.
 

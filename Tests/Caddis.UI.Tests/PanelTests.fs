@@ -149,7 +149,7 @@ let ``Revit uses the shared formatted code viewer and can show the original code
         while not (editor.Text.Contains "let answer = 42") && DateTime.UtcNow < deadline do
             do! Task.Delay 20
         Assert.Contains("let answer = 42", editor.Text)
-        let format = view.FindControl<ToggleButton> "FormatToggle"
+        let format = view.FindControl<CheckBox> "FormatCheck"
         format.IsChecked <- Nullable false
         click format
         Assert.Equal(r.Code, editor.Text)
@@ -246,7 +246,7 @@ let ``Export saves the code of the selected run and Export all the successful F#
         click exportCode
         let! single = saved "Caddis-r1.fsx"
         Assert.Equal("let answer = 42", single.Trim())
-        view.FindControl<ToggleButton>("FormatToggle").IsChecked <- Nullable false
+        view.FindControl<CheckBox>("FormatCheck").IsChecked <- Nullable false
         click exportAll
         Assert.Equal(2, suggested.Length)
         Assert.StartsWith("Caddis-runs-", suggested[1])

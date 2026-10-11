@@ -73,7 +73,7 @@ type PanelView(host: PanelHost) as this =
     let runs: ListBox = find "Runs"
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
-    let formatToggle: Primitives.ToggleButton = find "FormatToggle"
+    let formatCheck: CheckBox = find "FormatCheck"
     let exportCode: Button = find "ExportCode"
     let exportAll: Button = find "ExportAll"
 
@@ -126,12 +126,12 @@ type PanelView(host: PanelHost) as this =
                 task
         )
 
-    /// Shows the code of the selected run, formatted if the Format button is checked.
+    /// Shows the code of the selected run, formatted if Formatted is checked.
     /// As it was run until Fantomas is done, or if Fantomas can't parse it.
     and showCode () =
         let code =
             match selectedRun () with
-            | Some r when r.Kind = FSharpCode && formatToggle.IsChecked.GetValueOrDefault() ->
+            | Some r when r.Kind = FSharpCode && formatCheck.IsChecked.GetValueOrDefault() ->
                 let task = formatted r
                 if task.IsCompleted then task.Result |> Option.defaultValue r.Code else r.Code
             | Some r -> r.Code
@@ -154,7 +154,7 @@ type PanelView(host: PanelHost) as this =
         exportAll.IsEnabled <- exportableRuns().Length > 0
         showCode ()
 
-    /// The code of an F# run as the code view shows it with the given state of the Format button.
+    /// The code of an F# run as the code view shows it with the given state of Formatted.
     let exportedCode (format: bool) (r: Run) : Task<string> =
         task {
             if format then
@@ -310,19 +310,20 @@ type PanelView(host: PanelHost) as this =
             ]
         )
         ToolTip.SetTip(
-            formatToggle,
+            formatCheck,
             tip [
                 "Show the code formatted with Fantomas."
-                "Off: the code as it was run, so that the line numbers match those of the diagnostics"
+                "Unchecked: the code as it was run, so that the line numbers match those of the diagnostics"
                 "and stack traces in the output. Code that Fantomas can't parse is always shown as it was run."
             ]
         )
-        ToolTip.SetTip(exportCode, tip [ "Save the code of the selected F# run to an .fsx file."; "Formatted if 'Format' is on." ])
+        ToolTip.SetTip(exportCode, tip [ "Save the code of the selected F# run to an .fsx file,"; "as shown: formatted while 'Formatted' is checked." ])
         ToolTip.SetTip(
             exportAll,
             tip [
                 "Save the code of all successful F# runs in the list to one .fsx file, oldest first."
-                "A comment with the run's id and time separates the runs. Formatted if 'Format' is on."
+                "A comment with the run's id and time separates the runs."
+                "As shown: formatted while 'Formatted' is checked."
             ]
         )
         textMenu output output.Copy output.SelectAll
@@ -348,18 +349,18 @@ type PanelView(host: PanelHost) as this =
         cancel.Click.Add(fun _ -> host.Cancel (); refresh ())
         reset.Click.Add(fun _ -> host.Reset (); refresh ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
-        formatToggle.Click.Add(fun _ -> showCode ())
+        formatCheck.Click.Add(fun _ -> showCode ())
         exportCode.Click.Add(fun _ ->
             match selectedRun () with
             | Some r when r.Kind = FSharpCode ->
-                let format = formatToggle.IsChecked.GetValueOrDefault()
+                let format = formatCheck.IsChecked.GetValueOrDefault()
                 export $"Export the code of run {r.Id}" $"Caddis-{r.Id}.fsx" (fun () -> exportedCode format r) (fun path ->
                     $"Caddis: saved the code of run {r.Id} to '{path}'.")
             | _ -> ())
         exportAll.Click.Add(fun _ ->
             let all = exportableRuns ()
             if all.Length > 0 then
-                let format = formatToggle.IsChecked.GetValueOrDefault()
+                let format = formatCheck.IsChecked.GetValueOrDefault()
                 let text () =
                     task {
                         let! codes = all |> Array.map (exportedCode format) |> Task.WhenAll
