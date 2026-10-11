@@ -34,8 +34,8 @@ module internal Ribbon =
                 setIcon b icon
         match App.server with
         | Some s ->
-            if s.IsRunning then set startStop "Stop listening" RibbonIcons.stop else set startStop "Start listening" RibbonIcons.start
-            set mode (if s.Service.Fsi.Mode = UiThread then "Mode: on UI thread" else "Mode: on background thread") RibbonIcons.mode
+            if s.IsRunning then set startStop "Stop\r\nlistening" RibbonIcons.stop else set startStop "Start\r\nlistening" RibbonIcons.start
+            set mode (if s.Service.Fsi.Mode = UiThread then "Mode:\r\non UI thread" else "Mode:\r\non background thread") RibbonIcons.mode
             RibbonSettings.update ()
         | None -> ()
         let canCancel =
@@ -59,27 +59,27 @@ module internal Ribbon =
         // Revit shows every panel's title below its buttons, so the panels group the buttons by what they act on.
         let server = uiApp.CreateRibbonPanel(tab, "Server")
         startStop <-
-            add server "StartStop" "Start listening" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents." RibbonIcons.start
-        add server "CopyMcp" "Copy MCP Command" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code, including the token, to the clipboard." RibbonIcons.copy
+            add server "StartStop" "Start\r\nlistening" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents." RibbonIcons.start
+        add server "CopyMcp" "Copy MCP\r\nCommand" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code, including the token, to the clipboard." RibbonIcons.copy
         |> ignore
-        add server "NewToken" "New token" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working." RibbonIcons.newToken
+        add server "NewToken" "New\r\ntoken" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working." RibbonIcons.newToken
         |> ignore
         let session = uiApp.CreateRibbonPanel(tab, "F# Session")
         mode <-
             add
                 session
                 "Mode"
-                "Mode: on UI thread"
+                "Mode:\r\non UI thread"
                 "ModeCommand"
                 "Switches between running scripts on Revit's UI thread in its API context, and on a background thread. Resets the F# session."
                 RibbonIcons.mode
-        add session "Reset" "Reset F# Session" "ResetCommand" "Starts a new F# session, all values defined so far are lost." RibbonIcons.reset
+        add session "Reset" "Reset F#\r\nSession" "ResetCommand" "Starts a new F# session, all values defined so far are lost." RibbonIcons.reset
         |> ignore
         cancel <-
-            add session "Cancel" "Cancel run" "CancelCommand" "Cancels the current run, only possible in background mode." RibbonIcons.cancelUnavailable
+            add session "Cancel" "Cancel\r\nrun" "CancelCommand" "Cancels the current run, only possible in background mode." RibbonIcons.cancelUnavailable
         cancel.Enabled <- false
         let status = uiApp.CreateRibbonPanel(tab, "Status")
-        add status "Panel" "Caddis Details Panel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code." RibbonIcons.panel
+        add status "Panel" "Caddis Details\r\nPanel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code." RibbonIcons.panel
         |> ignore
         add status "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis." RibbonIcons.info
         |> ignore
