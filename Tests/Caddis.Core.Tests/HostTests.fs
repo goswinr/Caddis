@@ -181,8 +181,15 @@ let ``MCP export returns a running export after waitMs, caddis_get_run gets its 
     let isError, text = callTool "caddis_export" """{"format": "obj", "name": "slow", "waitMs": 0}"""
     Assert.False isError
     Assert.Contains("still running", text)
-    Assert.Contains("The export is still running in OtherApp.", text)
     let runId = Text.RegularExpressions.Regex.Match(text, @"Run (x\d+)").Groups[1].Value
+    // After 0 ms the UI thread may not have started the export yet, then the result says so.
+    let rec whenStarted (text: string) tries =
+        if text.Contains "It has not started yet" && tries > 0 then
+            Threading.Thread.Sleep 10
+            whenStarted (snd (callTool "caddis_get_run" $"""{{"runId": "{runId}", "waitMs": 0}}""")) (tries - 1)
+        else
+            text
+    Assert.Contains("The export is still running in OtherApp.", whenStarted text 100)
     let status, _ = post "/export" """{"format": "obj"}"""
     Assert.Equal(HttpStatusCode.Conflict, status) // one run at a time
     let isError, text = callTool "caddis_get_run" $"""{{"runId": "{runId}", "waitMs": 10000}}"""
