@@ -18,8 +18,9 @@ jobs:
     # Windows: Velopack signs with signtool.exe and Azure Trusted Signing.
     runs-on: windows-latest
     timeout-minutes: 45
-    # Run in a GitHub Environment so that the `sub` claim of the OIDC token is
-    # repo:goswinr/Caddis:environment:releaseRevit for every tag, as in Fesh.Revit.
+    # Run in a GitHub Environment so that the `sub` claim of the OIDC token is the same for every tag:
+    # repo:goswinr@884885/Caddis@1405302261:environment:releaseRevit. Unlike Fesh.Revit, the repository uses
+    # GitHub's immutable subject, with the ids of the owner and the repository, the default for new repositories.
     # Add required reviewers or branch limits to this environment in the repository settings to gate releases.
     environment:
       name: releaseRevit
@@ -27,7 +28,7 @@ jobs:
       contents: write # vpk upload creates the GitHub release
       # OIDC: azure/login exchanges a short-lived token from GitHub for an Azure access token, no client secret is stored.
       # Azure trusts it only if its `sub` claim matches the federated credential of the app registration:
-      #   repo:goswinr/Caddis:environment:releaseRevit
+      #   repo:goswinr@884885/Caddis@1405302261:environment:releaseRevit
       id-token: write
 
     steps:
@@ -70,7 +71,7 @@ jobs:
         with:
           # Configure a federated credential on the Azure app registration with:
           #   Issuer:   https://token.actions.githubusercontent.com
-          #   Subject:  repo:goswinr/Caddis:environment:releaseRevit
+          #   Subject:  repo:goswinr@884885/Caddis@1405302261:environment:releaseRevit
           #   Audience: api://AzureADTokenExchange
           # and grant the app the role "Trusted Signing Certificate Profile Signer".
           client-id: ${{ secrets.AZURE_CLIENT_ID }}

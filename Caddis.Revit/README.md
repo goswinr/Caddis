@@ -167,5 +167,7 @@ The workflow signs with Azure Trusted Signing, like Fesh.Revit, see [signing-met
 
 1. A GitHub environment `releaseRevit` in the repository settings.
 2. An Azure app registration with the role 'Trusted Signing Certificate Profile Signer' and a federated credential
-   for the subject `repo:goswinr/Caddis:environment:releaseRevit`.
+   for the subject `repo:goswinr@884885/Caddis@1405302261:environment:releaseRevit`.
+   This is GitHub's immutable subject with the ids of the owner and the repository, the default for new repositories.
+   A failed Azure login prints the subject that GitHub sent.
 3. Its ids as the Actions secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`.
