@@ -16,6 +16,9 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    outputs:
+      rh8-package-path: ${{ steps.package.outputs.rh8-package-path }}
+      rh9-package-path: ${{ steps.package.outputs.rh9-package-path }}
 
     steps:
       - name: Checkout repository
@@ -50,12 +53,42 @@ jobs:
             throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION) must match."
           }
 
+      - name: Upload Yak packages
+        # The push jobs below take yak.exe and both packages from here, so each can be re-run on its own.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: yak-packages
+          path: |
+            bin/yak.exe
+            ${{ steps.package.outputs.rh8-package-path }}
+            ${{ steps.package.outputs.rh9-package-path }}
+          if-no-files-found: error
+
+  push:
+    # One job per distribution of the version: Rhino 8 first, then Rhino 9.
+    # A failed push can be re-run without the build and without pushing the other distribution again.
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        rh: [rh8, rh9]
+    name: push ${{ matrix.rh }}
+
+    steps:
+      - name: Download Yak packages
+        # The artifact keeps the paths below bin, so the package paths of the build job stay valid.
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: yak-packages
+          path: bin
+
       - name: Push new version to Yak
-        # Both distributions of the version: Rhino 8 first, then Rhino 9.
         shell: pwsh
         env:
-          RH8_PACKAGE_PATH: ${{ steps.package.outputs.rh8-package-path }}
-          RH9_PACKAGE_PATH: ${{ steps.package.outputs.rh9-package-path }}
+          PACKAGE_PATH: ${{ matrix.rh == 'rh8' && needs.build.outputs.rh8-package-path || needs.build.outputs.rh9-package-path }}
           # Generate this token with yak.exe login --ci, then add it as a repository secret.
           YAK_TOKEN: ${{ secrets.YAK_TOKEN }}
         run: |
@@ -63,12 +96,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:YAK_TOKEN)) {
             throw 'The repository secret YAK_TOKEN is required to publish to Yak.'
           }
-          foreach ($path in $env:RH8_PACKAGE_PATH, $env:RH9_PACKAGE_PATH) {
-            if ([string]::IsNullOrWhiteSpace($path)) {
-              throw 'The packaging action did not return the path of a package.'
-            }
-            bin/yak.exe push $path
-            if ($LASTEXITCODE -ne 0) {
-              throw "yak push of $path failed with exit code $LASTEXITCODE"
-            }
+          if ([string]::IsNullOrWhiteSpace($env:PACKAGE_PATH)) {
+            throw 'The packaging action did not return the path of a package.'
+          }
+          bin/yak.exe push $env:PACKAGE_PATH
+          if ($LASTEXITCODE -ne 0) {
+            throw "yak push of $env:PACKAGE_PATH failed with exit code $LASTEXITCODE"
           }
