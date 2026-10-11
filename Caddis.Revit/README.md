@@ -53,6 +53,10 @@ blue accents and colored action markers. Icons are drawn for the screen's scale 
 Revit's light or dark theme, with simplified details at 16 pixels. They need no icon font.
 `Start` and `Stop` show the server's state in their text and icon, `Mode` the thread mode.
 
+| Dark theme | Light theme |
+| --- | --- |
+| ![The Caddis tab on Revit's ribbon in its dark theme](Docs/ribbon-dark.png) | ![The Caddis tab on Revit's ribbon in its light theme](Docs/ribbon-light.png) |
+
 The **Settings** panel has native checkboxes for **Start with Revit** and
 **Listen on the network (LAN)**. They share the panel's settings and stay in sync
 even while the panel is hidden. Changing the LAN setting takes effect after
@@ -100,17 +104,12 @@ was unchanged. The WPF shell fills its container without an outer margin, avoidi
 black strips at the edges. Mouse/keyboard interaction and moving between monitors
 still need manual verification.
 
-<details>
-<summary>Previous WPF panel previews</summary>
-
-These previews show the earlier WPF implementation in Revit 2026.5, before the
-shared Avalonia panel replaced it.
+Both screenshots were taken in Revit 2026.5 after the same five runs: the first two list the levels and create four walls,
+the fourth fails because the project has no door type. The panel shows the output of the second run, which created the walls.
 
 | Dark theme | Light theme |
 | --- | --- |
-| ![Caddis panel in Revit's dark theme](Docs/panel-dark.png) | ![Caddis panel in Revit's light theme](Docs/panel-light.png) |
-
-</details>
+| ![The Caddis panel in Revit's dark theme, with five runs and the output of the second](Docs/panel-dark.png) | ![The Caddis panel in Revit's light theme, with five runs and the output of the second](Docs/panel-light.png) |
 
 ## Differences to Rhino
 - The Revit API can only be used in Revit's API context, being on the UI thread is not enough.
