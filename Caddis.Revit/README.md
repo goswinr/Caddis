@@ -5,14 +5,17 @@ It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhin
 except `caddis_command`: Revit has no command line. It adds `caddis_dialog` for Revit's dialogs.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
-> Tested in Revit 2026.5 on Windows.
+> Tested in Revit 2024 and 2026.5.
 
 ## Installation
-Download and run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest).
-It needs no admin rights. It installs Caddis in `%LocalAppData%\Caddis.Revit` and registers it with every installed Revit from 2024 on,
+Just download and run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest).
+
+The exe is signed with an Azure code signing certificate.
+It should not require admin rights to run. The installer is created with [Velopack](https://velopack.io/  )
+
+It installs Caddis in `%LocalAppData%\Caddis.Revit` and registers it with every installed Revit from 2024 on,
 with a `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>`. For a Revit installed later, start `%LocalAppData%\Caddis.Revit\current\Caddis.Revit.Bootstrapper.exe` again.
 When Revit starts, Caddis checks for a newer release and offers to download it. It is installed when the last Revit has closed.
-Uninstall it in Windows' 'Installed apps'.
 
 There is a build of Caddis for each .NET that Revit runs on:
 
@@ -32,6 +35,9 @@ The builds reference the Revit API of the oldest Revit they run in, from the pac
 
 The versions of FSharp.Compiler.Service and FSharp.Core are those of the build of [Fesh](https://github.com/goswinr/Fesh) for the same .NET.
 Revit loads only one version of them, so Caddis.Revit can run next to a Fesh.Revit only if it uses the same versions.
+
+### Uninstallation
+Uninstall it via Windows' native `Add or Remove Programs` settings.
 
 ### Installation for development
 ```

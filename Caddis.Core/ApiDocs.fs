@@ -48,6 +48,12 @@ type ApiDocs(host: ICaddisHost) =
             "System.Object", "obj"
             "System.IntPtr", "nativeint"
             "System.UIntPtr", "unativeint"
+            "System.Double.NaN", "nan"
+            "System.Double.PositiveInfinity", "infinity"
+            "System.Double.NegativeInfinity", "-infinity"
+            "System.Single.NaN", "nanf"
+            "System.Single.PositiveInfinity", "infinityf"
+            "System.Single.NegativeInfinity", "-infinityf"
         ]
 
     /// The name without generic arity and with the declaring types of nested types, e.g. 'List' or 'Brep.ExtrudeFlags'.

@@ -12,12 +12,20 @@
 [![license](https://img.shields.io/github/license/goswinr/Caddis)](LICENSE)
 ![code size](https://img.shields.io/github/languages/code-size/goswinr/Caddis.svg)
 
-An F# interactive host for Rhino and Revit.
-Caddis runs F# scripts inside the Rhino or Revit process and is controlled via HTTP:
-AI agents like Claude Code use its [MCP](https://modelcontextprotocol.io) endpoint, curl and your own scripts its REST endpoints.
-For AI agents, remote script execution and automation.
+An MCP server to host F# interactive in Rhino or Revit.
+This gives your AI agent the full power to do anything that RhinoCommon or the RevitAPI can do.
+Your LLM already knows how to use these APIs, but can't execute them directly, unless hosted inside Rhino or Revit.
 
-> Early development. Tested in Rhino 8.35 and Revit 2026.5 on Windows, not yet on Mac.
+
+Caddis runs F# scripts directly from inside the Rhino or Revit process and is controlled via HTTP:
+AI agents like Claude or Codex generate the F# code and send it for evaluation and execution inside the host application via it's [MCP](https://modelcontextprotocol.io) endpoint.
+
+
+Plus, you get the F# code it ran too, so you could make a permanent plugin form from it.
+This makes it ideal for AI-driven automation and rapid prototyping within Rhino and Revit.
+
+> Early development. Tested in Revit 2024 and 2026.5 and Rhino 8.35 and 9.0-beta on Windows, not yet on Mac.
+
 
 | App | Runs in | Install | Read more |
 |---|---|---|---|

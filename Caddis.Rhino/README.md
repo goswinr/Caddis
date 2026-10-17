@@ -4,7 +4,7 @@ The Rhino plugin of Caddis, an F# interactive host controlled through HTTP and M
 AI agents like Claude Code, and your own scripts, run F# code and Rhino commands in the Rhino you are working in.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
-> Tested in Rhino 8.35 on Windows, not yet on Mac.
+> Tested in Rhino 8.35 and 9.0-beta on Windows, not yet on Mac.
 
 ## Installation
 
