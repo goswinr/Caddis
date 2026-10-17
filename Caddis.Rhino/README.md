@@ -61,9 +61,11 @@ Open it with the command `Caddis` and the option `Panel`, then dock it like any 
 Its content is the Avalonia panel shared with Revit in `Caddis.UI`, hosted in Rhino's Eto docking container.
 Rhino supplies its theme colors and the additional command-line settings.
 
+Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after the [exemplary run](#exemplary-run) below.
+
 | Dark theme, during a run | Light theme, with the settings unfolded |
 | --- | --- |
-| ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings and the output of a run](Docs/panel-light.png) |
+| ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings unfolded and the output of the third run](Docs/panel-light.png) |
 
 - The header shows where the server listens, and the state and thread mode of the F# session.
 - `Start` / `Stop` the server.
@@ -71,12 +73,14 @@ Rhino supplies its theme colors and the additional command-line settings.
   see [Connect an AI agent](../README.md#connect-an-ai-agent).
 - `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
 - `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
-  and `Cancel commands in scripts that wait for input`. All buttons and options have tooltips.
+  and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core, FSharp.Compiler.Service and Caddis.
+  All buttons and options have tooltips.
 - The recent runs are listed newest first, with their id, status, duration and first line of code:
   `r` for F# code, `c` for Rhino commands, `x` for exports.
 - `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run.
 - `Code` shows its code read-only, with F# highlighting, line numbers and search (Ctrl+F).
   It is formatted with Fantomas, unchecking `Formatted` shows the code as it was run, whose line numbers match the errors.
+  `Run again` runs the code of the selected F# run as a new run.
   `Export` saves the code of the run to an `.fsx` file, `Export all` saves all successful F# runs to one,
   oldest first, each after a comment with its id and time. Both save the code as it is shown, formatted or not.
 
@@ -148,12 +152,13 @@ An agent sent these, the panel lists them newest first:
   ```
   </details>
 - `c2` sets up the view with Rhino commands, via `caddis_command`:
-  `-_SetActiveViewport Perspective`, `-_MaxViewport`, `-_SetDisplayMode _Viewport=_Active _Mode=_Shaded`, `_Zoom _All _Extents`.
+  `-_SetActiveViewport Perspective`, `-_MaxViewport`, `-_SetDisplayMode _Viewport=_Active _Mode=_Shaded`,
+  four times `-_RotateView _Right`, and `_Zoom _All _Extents`.
 - `r3` computes the volumes of the slabs. It uses `slabs` from `r1`: the values of earlier runs stay available.
 - `x4` exports all objects to `towers.obj`, via `caddis_export`.
 - `r5` runs for 12 s on the background thread, the viewport screenshot below was taken meanwhile.
 
-This screenshot was taken in Rhino 8.35 on Windows, after the runs listed above.
+This screenshot was taken in Rhino 8.35 on Windows with Caddis 0.3.0, while `r5` was running.
 
 ![Three twisted towers in a Rhino viewport, framed by the yellow border Caddis draws while a run is in progress](Docs/run-border.png)
 

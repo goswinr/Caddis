@@ -106,10 +106,12 @@ output, scrollbars and keyboard focus.
 
 The code viewer is read-only, with F# highlighting, line numbers and Ctrl+F search.
 The `Formatted` check box switches between Fantomas formatting and the original script, whose line
-numbers match the diagnostics. `Export` saves the code of the run to an `.fsx` file,
+numbers match the diagnostics. `Run again` runs the code of the selected F# run as a new run.
+`Export` saves the code of the run to an `.fsx` file,
 `Export all` saves all successful F# runs to one, oldest first, each after a comment
 with its id and time, both as the code is shown, formatted or not. `Settings` unfolds the thread mode
-and **Start with Revit**. Revit's latest status message and grouped
+and **Start with Revit**, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service,
+and whether this is the latest version of Caddis. Revit's latest status message and grouped
 element changes are preserved; Rhino's command-line options are hidden.
 
 The shared view is covered by headless tests on .NET 8 and .NET 10. The WPF wrapper
@@ -122,12 +124,14 @@ was unchanged. The WPF shell fills its container without an outer margin, avoidi
 black strips at the edges. Mouse/keyboard interaction and moving between monitors
 still need manual verification.
 
-Both screenshots were taken in Revit 2026.5 after the same five runs: the first two list the levels and create four walls,
-the fourth fails because the project has no door type. The panel shows the output of the second run, which created the walls.
+Both screenshots were taken in Revit 2026.5 with Caddis 0.3.0, after the same five runs: `r1` lists the levels and wall types,
+`r2` creates four walls and `r3` a floor inside them. `r4` fails because the project has no door type,
+so `r5` cuts an opening into the first wall instead. The dark one shows the output of `r2`, which created the walls,
+the light one the error of `r4`, with the settings unfolded.
 
-| Dark theme | Light theme |
+| Dark theme | Light theme, with the settings unfolded |
 | --- | --- |
-| ![The Caddis panel in Revit's dark theme, with five runs and the output of the second](Docs/panel-dark.png) | ![The Caddis panel in Revit's light theme, with five runs and the output of the second](Docs/panel-light.png) |
+| ![The Caddis panel in Revit's dark theme, with five runs and the output of the second, which created four walls](Docs/panel-dark.png) | ![The Caddis panel in Revit's light theme, with the settings unfolded and the error of the fourth run](Docs/panel-light.png) |
 
 ## Differences to Rhino
 - The Revit API can only be used in Revit's API context, being on the UI thread is not enough.
