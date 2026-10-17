@@ -1,6 +1,7 @@
 namespace Caddis.UI
 
 open System
+open System.ComponentModel
 open System.IO
 open System.Runtime.CompilerServices
 open System.Threading
@@ -18,12 +19,25 @@ open Fantomas.Core
 open Caddis
 
 /// A row in the list of runs. The list's item template binds to its properties.
-type RunRow = {
-    Id: string
-    Status: string
-    Time: string
-    Code: string
-    }
+/// The time of a running run counts up, so it notifies its changes; the other properties don't change.
+type RunRow(id: string, status: string, time: string, code: string) =
+    let mutable time = time
+    let propertyChanged = Event<PropertyChangedEventHandler, PropertyChangedEventArgs>()
+
+    member _.Id = id
+    member _.Status = status
+    member _.Code = code
+
+    member this.Time
+        with get () = time
+        and set (value: string) =
+            if value <> time then
+                time <- value
+                propertyChanged.Trigger(this, PropertyChangedEventArgs "Time")
+
+    interface INotifyPropertyChanged with
+        [<CLIEvent>]
+        member _.PropertyChanged = propertyChanged.Publish
 
 /// The controls of an AI agent in the panel: a dot and a text for its state, and a button to set it up or to connect it to this app.
 type internal AgentRow = {
@@ -225,6 +239,8 @@ type PanelView(host: PanelHost) as this =
             }
             |> ignore
 
+    let runTime (r: Run) = $"{int r.Duration.TotalMilliseconds} ms"
+
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
         let signature = all |> Array.map (fun r -> r.Id + RunStatus.toString r.Status) |> String.concat ","
@@ -234,17 +250,17 @@ type PanelView(host: PanelHost) as this =
                 match runs.SelectedItem with
                 | :? RunRow as row -> row.Id
                 | _ -> null
-            let rows =
-                all
-                |> Array.map (fun r -> {
-                    Id = r.Id
-                    Status = RunStatus.toString r.Status
-                    Time = $"{int r.Duration.TotalMilliseconds} ms"
-                    Code = firstCodeLine r.Code
-                })
+            let rows = all |> Array.map (fun r -> RunRow(r.Id, RunStatus.toString r.Status, runTime r, firstCodeLine r.Code))
             runs.ItemsSource <- rows
             runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = selectedId) |> Option.map box |> Option.toObj
             showDetails ()
+        else
+            // The same runs with the same states: only the time of a running run changed. It is updated in its row,
+            // because a new list would select the row again and show its details again, every second.
+            match runs.ItemsSource with
+            | :? (RunRow[]) as rows ->
+                Array.iter2 (fun (row: RunRow) (r: Run) -> if r.Status = Running then row.Time <- runTime r) rows all
+            | _ -> ()
 
     /// Selects a run in the list, e.g. the one started by Run again.
     let selectRun (id: string) =

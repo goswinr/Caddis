@@ -12,6 +12,7 @@ open Avalonia.Interactivity
 open Avalonia.Media
 open Avalonia.Styling
 open Avalonia.Threading
+open Avalonia.VisualTree
 open AvaloniaEdit
 open Xunit
 open Caddis
@@ -319,6 +320,41 @@ let ``Run again runs the code of the selected F# run as a new run and selects it
         Assert.NotEqual<string>(original.ScriptPath, again.ScriptPath)
         do! again.Completion
         Assert.Equal(Succeeded, again.Status)
+    finally window.Close()
+}
+
+[<AvaloniaFact>]
+let ``the time of a running run counts up in its row, which stays selected`` () = task {
+    use engineHost = new HeadlessHost(ignore)
+    let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
+    use server = new CaddisServer(engineHost, store)
+    server.Service.Runs.Add(finished "r1" FSharpCode Succeeded "let a = 1")
+    let running = runWithId "r2" FSharpCode "let b = 2"
+    server.Service.Runs.Add running
+    let view = PanelView({ host "Rhino" with Server = (fun () -> Some server) })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    try
+        window.Show()
+        view.Refresh()
+        let runs = view.FindControl<ListBox> "Runs"
+        runs.SelectedIndex <- 0 // newest first: the running run
+        window.UpdateLayout()
+        let row = runs.SelectedItem :?> RunRow
+        let shownTime () =
+            runs.ContainerFromIndex(0).GetVisualDescendants()
+            |> Seq.choose (function :? TextBlock as t when not (isNull t.Text) && t.Text.EndsWith " ms" -> Some t.Text | _ -> None)
+            |> Seq.exactlyOne
+        let before = shownTime ()
+        do! Task.Delay 50
+        view.Refresh()
+        Assert.Same(row, runs.SelectedItem)
+        Assert.NotEqual<string>(before, row.Time)
+        Assert.Equal(row.Time, shownTime ())
+        // When its status changes, the list is made again, and the run stays selected.
+        running.Complete(RunOutcome.ofStatus Succeeded) |> ignore
+        view.Refresh()
+        Assert.NotSame(row, runs.SelectedItem)
+        Assert.Equal("r2", (runs.SelectedItem :?> RunRow).Id)
     finally window.Close()
 }
 

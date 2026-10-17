@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - The link to the README in the messages of the Revit installer opens the README of Caddis for Revit, it pointed to a heading that doesn't exist.
+- In the panel's list of runs, the time of a running run counts up every second. It stayed at the time when the run was first listed.
 
 ## [0.3.0] - 2026-10-17
 
