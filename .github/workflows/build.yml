@@ -45,3 +45,6 @@ jobs:
 
       - name: Publish for every Revit
         uses: ./.github/actions/package-revit
+
+      - name: Package for Claude Desktop
+        uses: ./.github/actions/package-claude-desktop

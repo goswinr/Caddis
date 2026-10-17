@@ -423,35 +423,63 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
         with _ ->
             None
 
+    /// Opens a file with the app that the system has for it, e.g. an .mcpb file with Claude Desktop. Tests set one that doesn't.
+    member val OpenFile: string -> unit = (fun path -> Process.Start(ProcessStartInfo(path, UseShellExecute = true)) |> ignore) with get, set
+
+    /// The extension of Claude Desktop for this server, with its port, and its instructions and tools for while it isn't running.
+    member this.DesktopBundle() : DesktopExtension.Bundle = {
+        serverName = host.Info.mcpServerName
+        appName = host.Info.appName
+        port = port
+        version = svc.Version
+        platforms = [ (if OperatingSystem.IsMacOS() then "darwin" else "win32") ]
+        instructions = host.Info.mcp.instructions
+        tools = mcp.Tools
+    }
+
     /// Adds this server to the agent for all projects of the user with the agent's program, e.g. 'claude mcp add ...'.
     /// Replaces the agent's server of the same name.
+    /// For Claude Desktop it writes the extension and opens it, Claude Desktop asks the person to install it.
     member this.SetUpAgent(agent: McpAgent) : Task<Result<string, string>> =
         task {
             let name = McpAgent.name agent
-            let program = McpAgent.program agent
             let serverName = host.Info.mcpServerName
             if not this.IsRunning then
                 return Error "Start the server first."
             else
-                match AgentCli.find program with
+                match McpAgent.program agent with
                 | None ->
-                    return
-                        Error
-                            $"{name} was not found, there is no program '{program}' on PATH. Install {name}, or copy the command with a right-click on the button and run it in a terminal."
-                | Some exe ->
-                    let url = this.McpUrl
-                    let args = McpAgent.addArgs agent serverName url
                     try
-                        if agent = ClaudeCode && this.AgentConfigs.RegisteredUrl(agent, serverName).IsSome then
-                            let! _ = AgentCli.run exe (McpAgent.removeArgs agent serverName)
-                            ()
-                        let! code, output = AgentCli.run exe args
-                        if code = 0 then
-                            return Ok $"{name} connects to this {host.Info.appName} now, at {url}. Sessions of {name} that were open before see it after a restart."
-                        else
-                            return Error $"'{McpAgent.commandLine agent args}' failed: {output}"
+                        let path = Path.Combine(runs.RootDir, $"{serverName}.mcpb")
+                        DesktopExtension.writeBundle (this.DesktopBundle()) path
+                        this.OpenFile path
+                        return
+                            Ok
+                                $"Opened the extension {serverName}.mcpb, Claude Desktop asks to install it. It relays to this {host.Info.appName} at {this.McpUrl}."
                     with e ->
-                        return Error $"Could not run '{exe}': {e.Message}"
+                        return Error $"Could not open the extension of {name}: {e.Message}"
+                | Some program ->
+                    match AgentCli.find program with
+                    | None ->
+                        return
+                            Error
+                                $"{name} was not found, there is no program '{program}' on PATH. Install {name}, or copy the command with a right-click on the button and run it in a terminal."
+                    | Some exe ->
+                        let url = this.McpUrl
+                        let args = McpAgent.addArgs agent serverName url
+                        try
+                            if agent = ClaudeCode && this.AgentConfigs.RegisteredUrl(agent, serverName).IsSome then
+                                let! _ = AgentCli.run exe (McpAgent.removeArgs agent serverName)
+                                ()
+                            let! code, output = AgentCli.run exe args
+                            if code = 0 then
+                                return
+                                    Ok
+                                        $"{name} connects to this {host.Info.appName} now, at {url}. Sessions of {name} that were open before see it after a restart."
+                            else
+                                return Error $"'{McpAgent.commandLine agent args}' failed: {output}"
+                        with e ->
+                            return Error $"Could not run '{exe}': {e.Message}"
         }
 
     /// Listens on the port instead of the current one. If another Caddis of this app listens there, it hands the port over once

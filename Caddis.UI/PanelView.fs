@@ -72,7 +72,7 @@ type PanelView(host: PanelHost) as this =
     let agents: StackPanel = find "Agents"
     let agentNote: TextBlock = find "AgentNote"
     let agentRows =
-        [ ClaudeCode, "Claude"; Codex, "Codex" ]
+        [ ClaudeCode, "Claude"; Codex, "Codex"; ClaudeDesktop, "Desktop" ]
         |> List.map (fun (agent, prefix) -> {
             Agent = agent
             Row = find (prefix + "Row")
@@ -265,11 +265,13 @@ type PanelView(host: PanelHost) as this =
             errorsText.FontWeight <- if host.Errors.Unseen > 0 then FontWeight.Bold else FontWeight.Normal
 
     /// The commands that set the agent up for this server: Claude Code's 'mcp add' fails if the name exists, so it is removed first.
+    /// None for Claude Desktop, which gets an extension.
     let agentCommands (s: CaddisServer) (agent: McpAgent) =
         [
             if agent = ClaudeCode && s.AgentState agent <> AgentState.NotSetUp then
                 McpAgent.commandLine agent (McpAgent.removeArgs agent s.Service.Host.Info.mcpServerName)
-            s.AgentCommand agent
+            if (McpAgent.program agent).IsSome then
+                s.AgentCommand agent
         ]
 
     /// The state of each agent, and its button: Set up, Activate, or Cancel while an activation waits.
@@ -277,20 +279,32 @@ type PanelView(host: PanelHost) as this =
         agents.IsVisible <- s.IsRunning
         if s.IsRunning then
             let app = host.Name
+            let serverName = s.Service.Host.Info.mcpServerName
             for row in agentRows do
+                row.Row.IsVisible <- s.AgentConfigs.IsInstalled row.Agent
                 let name = McpAgent.name row.Agent
                 let state = s.AgentState row.Agent
                 let commands = agentCommands s row.Agent
-                let copyHint = "Right-click to copy the command, e.g. to run it in a terminal yourself."
+                let isExtension = commands.IsEmpty
+                // What Set up does: the commands it runs, or the extension it opens.
+                let setUp =
+                    if isExtension then
+                        [ $"It opens the extension {serverName}.mcpb, Claude Desktop asks to install it."; $"It relays to {s.McpUrl}." ]
+                    else
+                        [ "It runs:"; yield! commands; "Right-click to copy the command, e.g. to run it in a terminal yourself." ]
                 let label, stateTip =
                     match state with
                     | AgentState.Active ->
                         "active",
-                        tip [
-                            $"{name} connects to Caddis in this {app}, at {s.McpUrl}."
-                            $"Sessions of {name} that were open before it was set up see Caddis after a restart."
-                        ]
-                    | AgentState.NotSetUp -> "not set up", $"{name} has no MCP server '{s.Service.Host.Info.mcpServerName}' for all your projects."
+                        if isExtension then
+                            $"The extension of {name} relays to Caddis in this {app}, at {s.McpUrl}."
+                        else
+                            tip [
+                                $"{name} connects to Caddis in this {app}, at {s.McpUrl}."
+                                $"Sessions of {name} that were open before it was set up see Caddis after a restart."
+                            ]
+                    | AgentState.NotSetUp when isExtension -> "not set up", $"{name} has no extension '{serverName}' turned on."
+                    | AgentState.NotSetUp -> "not set up", $"{name} has no MCP server '{serverName}' for all your projects."
                     | AgentState.Inactive url ->
                         let where =
                             match McpAgent.localPort url |> Option.bind s.InstanceOnPort with
@@ -316,7 +330,7 @@ type PanelView(host: PanelHost) as this =
                     | AgentState.Active -> ()
                     | AgentState.NotSetUp ->
                         row.Action.Content <- "Set up"
-                        ToolTip.SetTip(row.Action, tip [ $"Add Caddis in this {app} to {name}, for all your projects. Runs:"; yield! commands; copyHint ])
+                        ToolTip.SetTip(row.Action, tip [ $"Add Caddis in this {app} to {name}, for all your projects."; yield! setUp ])
                     | AgentState.Inactive url ->
                         row.Action.Content <- "Activate"
                         let how =
@@ -324,10 +338,10 @@ type PanelView(host: PanelHost) as this =
                             | Some p -> [
                                 $"Connect {name} to this {app}: the {app} on port {p} hands it over to this one once it is idle,"
                                 "with no run in progress. All agents connected to that port follow."
-                                $"If the port can't be taken, e.g. another program uses it, {name} is set up for this {app}. That runs:"
+                                $"If the port can't be taken, e.g. another program uses it, {name} is set up for this {app}:"
                               ]
-                            | None -> [ $"Connect {name} to this {app}. Runs:" ]
-                        ToolTip.SetTip(row.Action, tip [ yield! how; yield! commands; copyHint ])
+                            | None -> [ $"Connect {name} to this {app}." ]
+                        ToolTip.SetTip(row.Action, tip [ yield! how; yield! setUp ])
             match agentNoteText with
             | Some(note, until) when DateTime.UtcNow < until ->
                 agentNote.Text <- note
@@ -526,9 +540,11 @@ type PanelView(host: PanelHost) as this =
                 host.OpenUrl repoUrl)
         for row in agentRows do
             row.Action.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> agentClicked s row))
-            let copy = MenuItem(Header = "Copy the command")
-            copy.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyAgentCommands s row))
-            row.Row.ContextMenu <- ContextMenu(ItemsSource = [ copy ])
+            // Claude Desktop gets an extension, there is no command to copy
+            if (McpAgent.program row.Agent).IsSome then
+                let copy = MenuItem(Header = "Copy the command")
+                copy.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyAgentCommands s row))
+                row.Row.ContextMenu <- ContextMenu(ItemsSource = [ copy ])
         mode.SelectionChanged.Add(fun _ -> if not updating then host.SetMode (if mode.SelectedIndex = 1 then Background else UiThread))
         // Click is only raised by the user, not when refresh sets IsChecked.
         autoStart.Click.Add(fun _ -> host.SetAutoStart (autoStart.IsChecked.GetValueOrDefault()))

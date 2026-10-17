@@ -470,6 +470,9 @@ type McpEndpoint(svc: CaddisService) =
             | Some m -> return Some(errorResponse id -32601 $"Method not found: {m}")
         }
 
+    /// The tools as tools/list lists them, new nodes on each call.
+    member _.Tools: JsonNode list = List.map toolJson tools
+
     member _.Handle(req: Request) : Task<Response> =
         task {
             match req.method with

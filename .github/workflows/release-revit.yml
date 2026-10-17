@@ -55,6 +55,11 @@ jobs:
         id: package
         uses: ./.github/actions/package-revit
 
+      - name: Package for Claude Desktop
+        # Before the signing session: the extensions are not signed.
+        id: desktop
+        uses: ./.github/actions/package-claude-desktop
+
       - name: Check git tag matches CHANGELOG.md
         shell: pwsh
         env:
@@ -128,3 +133,18 @@ jobs:
             --tag $env:VERSION `
             --outputDir bin/installer
           Check 'vpk upload'
+
+      - name: Attach the Claude Desktop extensions to the release
+        # The only GitHub release of a version is the one vpk created, so it carries the extension for Rhino too.
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.package.outputs.version }}
+          RHINO_PATH: ${{ steps.desktop.outputs.rhino-path }}
+          REVIT_PATH: ${{ steps.desktop.outputs.revit-path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release upload $env:VERSION $env:RHINO_PATH $env:REVIT_PATH --repo goswinr/Caddis --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "gh release upload failed with exit code $LASTEXITCODE"
+          }

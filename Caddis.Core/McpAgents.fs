@@ -12,6 +12,8 @@ open System.Threading.Tasks
 type McpAgent =
     | ClaudeCode
     | Codex
+    /// Gets Caddis as an extension, see ClaudeDesktop, not with a command line program.
+    | ClaudeDesktop
 
 /// Whether an agent reaches this Caddis server.
 [<RequireQualifiedAccess>]
@@ -25,35 +27,42 @@ type AgentState =
 
 module McpAgent =
 
-    let all = [ ClaudeCode; Codex ]
+    let all = [ ClaudeCode; Codex; ClaudeDesktop ]
 
     /// e.g. "Claude Code"
     let name (agent: McpAgent) =
         match agent with
         | ClaudeCode -> "Claude Code"
         | Codex -> "Codex"
+        | ClaudeDesktop -> "Claude Desktop"
 
-    /// The agent's command line program.
+    /// The agent's command line program. None for Claude Desktop, which installs an extension instead.
     let program (agent: McpAgent) =
         match agent with
-        | ClaudeCode -> "claude"
-        | Codex -> "codex"
+        | ClaudeCode -> Some "claude"
+        | Codex -> Some "codex"
+        | ClaudeDesktop -> None
 
-    /// The arguments that add an MCP server for all projects of the user.
+    /// The arguments that add an MCP server for all projects of the user. None for Claude Desktop.
     let addArgs (agent: McpAgent) (serverName: string) (url: string) =
         match agent with
         | ClaudeCode -> [ "mcp"; "add"; "--transport"; "http"; "--scope"; "user"; serverName; url ]
         | Codex -> [ "mcp"; "add"; serverName; "--url"; url ]
+        | ClaudeDesktop -> []
 
     /// The arguments that remove it. Needed before adding it again to Claude Code, whose 'mcp add' fails if the name exists.
-    /// Codex's replaces it.
+    /// Codex's replaces it. None for Claude Desktop.
     let removeArgs (agent: McpAgent) (serverName: string) =
         match agent with
         | ClaudeCode -> [ "mcp"; "remove"; "--scope"; "user"; serverName ]
         | Codex -> [ "mcp"; "remove"; serverName ]
+        | ClaudeDesktop -> []
 
-    /// The command line, as typed in a terminal.
-    let commandLine (agent: McpAgent) (args: string list) = String.concat " " (program agent :: args)
+    /// The command line, as typed in a terminal. "" for Claude Desktop.
+    let commandLine (agent: McpAgent) (args: string list) =
+        match program agent with
+        | Some p -> String.concat " " (p :: args)
+        | None -> ""
 
     /// An environment variable of this process, or of the user if it was set after the app started.
     let private envVar (name: string) =
@@ -71,11 +80,13 @@ module McpAgent =
 
     /// The file in which the agent keeps the MCP servers for all projects of the user:
     /// ~/.claude.json, or .claude.json in CLAUDE_CONFIG_DIR, and ~/.codex/config.toml, or config.toml in CODEX_HOME.
+    /// For Claude Desktop the list of its extensions, see DesktopExtension.installationsPath.
     let configPath (agent: McpAgent) =
         let home = Environment.GetFolderPath Environment.SpecialFolder.UserProfile
         match agent with
         | ClaudeCode -> Path.Combine(envVar "CLAUDE_CONFIG_DIR" |> Option.defaultValue home, ".claude.json")
         | Codex -> Path.Combine(envVar "CODEX_HOME" |> Option.defaultWith (fun () -> Path.Combine(home, ".codex")), "config.toml")
+        | ClaudeDesktop -> DesktopExtension.installationsPath ()
 
     /// The URL of the MCP server with this name in the text of ~/.claude.json: in its top-level "mcpServers",
     /// where Claude Code keeps those of user scope. "" for a server without URL. Raises a JsonException if the text isn't JSON.
@@ -153,18 +164,28 @@ type AgentConfigs(pathOf: McpAgent -> string) =
     let cache = Dictionary<McpAgent * string, string * DateTime * int64 * string option>()
 
     let read (agent: McpAgent) (path: string) (serverName: string) =
-        // the agent may be writing it
-        use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
-        use reader = new StreamReader(stream, Encoding.UTF8)
-        let text = reader.ReadToEnd()
+        let text () =
+            // the agent may be writing it
+            use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
+            use reader = new StreamReader(stream, Encoding.UTF8)
+            reader.ReadToEnd()
         match agent with
-        | ClaudeCode -> McpAgent.claudeUrl text serverName
-        | Codex -> McpAgent.codexUrl text serverName
+        | ClaudeCode -> McpAgent.claudeUrl (text ()) serverName
+        | Codex -> McpAgent.codexUrl (text ()) serverName
+        | ClaudeDesktop -> DesktopExtension.installedUrl path serverName
 
     /// The files in their usual places, see McpAgent.configPath.
     new() = AgentConfigs(McpAgent.configPath)
 
     member _.PathOf(agent: McpAgent) = pathOf agent
+
+    /// Whether the agent is installed, as far as the panel needs to know: Claude Desktop if its settings folder exists.
+    /// Claude Code and Codex always count as installed, their Set up says if their program isn't found.
+    member _.IsInstalled(agent: McpAgent) =
+        match agent with
+        | ClaudeDesktop -> Directory.Exists(Path.GetDirectoryName(pathOf agent))
+        | ClaudeCode
+        | Codex -> true
 
     /// The URL of the MCP server with this name in the agent's config, None if it has none or there is no config file.
     member _.RegisteredUrl(agent: McpAgent, serverName: string) : string option =
@@ -176,7 +197,11 @@ type AgentConfigs(pathOf: McpAgent -> string) =
             lock sync (fun () ->
                 let key = agent, serverName
                 match cache.TryGetValue key with
-                | true, (p, time, length, url) when p = path && time = file.LastWriteTimeUtc && length = file.Length -> url
+                // Claude Desktop's files are read every time: its extension's settings are in another file, both are small
+                | true, (p, time, length, url) when
+                    agent <> ClaudeDesktop && p = path && time = file.LastWriteTimeUtc && length = file.Length
+                    ->
+                    url
                 | found, previous ->
                     try
                         let url = read agent path serverName

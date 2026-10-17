@@ -35,7 +35,7 @@ let start (s: CaddisServer) =
 /// Agent configs in a new temporary folder.
 let tempConfigs () =
     let dir = newTempDir ()
-    let path agent = Path.Combine(dir, (match agent with ClaudeCode -> ".claude.json" | Codex -> "config.toml"))
+    let path agent = Path.Combine(dir, (match agent with ClaudeCode -> ".claude.json" | Codex -> "config.toml" | ClaudeDesktop -> Path.Combine("Claude", "extensions-installations.json")))
     AgentConfigs path, path
 
 let post (baseUrl: string) (path: string) (session: string option) (json: string) =
@@ -194,7 +194,7 @@ let ``Set up adds the server with the agent's program, also again`` () =
             Environment.SetEnvironmentVariable(name, folder)
         start s
         for agent in McpAgent.all do
-            if (AgentCli.find (McpAgent.program agent)).IsSome then
+            if (McpAgent.program agent |> Option.bind AgentCli.find).IsSome then
                 Assert.Equal(AgentState.NotSetUp, s.AgentState agent)
                 let first = s.SetUpAgent(agent).Result
                 Assert.True(isOk first, $"%A{first}")

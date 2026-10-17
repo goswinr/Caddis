@@ -107,7 +107,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - A discovery file per running server in `instances/<pid>.json`.
 
 **User interface**
-- A dockable panel in both apps, in the app's light or dark theme: server state, whether Claude Code and Codex connect to this app with `Set up` and `Activate`, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
+- A dockable panel in both apps, in the app's light or dark theme: server state, whether Claude Code, Codex and Claude Desktop connect to this app with `Set up` and `Activate`, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
 - Rhino: the command `Caddis` with options, scriptable as `-Caddis`.
 - Revit: a `Caddis` ribbon tab with vector icons drawn for the theme and screen scale, native checkboxes, and an `Info` dialog that turns red on unseen errors.
 
@@ -256,7 +256,8 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [Worker.fs](Caddis.Core/Worker.fs) | `WorkerThread` | a dedicated thread with a queue: background runs, and the UI thread of the headless host |
 | [FsiHost.fs](Caddis.Core/FsiHost.fs) | `FsiState`, `BusyException`, `FsiAssemblyResolver`, `EvalRequest`, `FsiHost` | the F# session and its runs |
 | [Service.fs](Caddis.Core/Service.fs) | `EvalArgs`, `CommandArgs`, `CaddisService` | the operations behind REST and MCP |
-| [McpAgents.fs](Caddis.Core/McpAgents.fs) | `McpAgent`, `AgentState`, `AgentConfigs`, `AgentCli` | the config files and command line programs of Claude Code and Codex, for the panel's `Set up` and `Activate` |
+| [DesktopExtension.fs](Caddis.Core/DesktopExtension.fs), [ClaudeDesktop/relay.js](Caddis.Core/ClaudeDesktop/relay.js) | `DesktopExtension` | the extension of Claude Desktop: its manifest and `.mcpb` file with the relay and the logo as resources, and what Claude Desktop installed |
+| [McpAgents.fs](Caddis.Core/McpAgents.fs) | `McpAgent`, `AgentState`, `AgentConfigs`, `AgentCli` | the config files and command line programs of Claude Code and Codex, and the extension of Claude Desktop, for the panel's `Set up` and `Activate` |
 | [Http/Types.fs](Caddis.Core/Http/Types.fs) | `Caddis.Http.Request`, `Response`, `Args` | request and response independent of `HttpListener`, so handlers are testable without a server; argument parsing shared by REST and MCP |
 | [Http/Rest.fs](Caddis.Core/Http/Rest.fs) | module `Caddis.Http.Rest` | the REST router |
 | [Http/McpView.fs](Caddis.Core/Http/McpView.fs) | module `Caddis.Http.McpView` | results as text for the model |
@@ -503,7 +504,8 @@ Missing or invalid values fall back to the defaults; a file that can't be parsed
 
 **Discovery file**: `{pid, port, url, mcpUrl, app, mcpServerName, host, startedAt}`. It is written again when the server moves to another port, and deleted on stop; files of processes that are no longer running are deleted when a server starts. The panel reads them to name the other instance that listens on an agent's port.
 
-**The agents' config files**, read by the panel to show whether an agent connects to this app: Claude Code keeps its MCP servers of user scope in the top-level `mcpServers` of `~/.claude.json` (in `CLAUDE_CONFIG_DIR` if set), Codex in the tables `[mcp_servers.<name>]` of `~/.codex/config.toml` (in `CODEX_HOME` if set). [`AgentConfigs`](Caddis.Core/McpAgents.fs) reads a file again only when its time or length changed, and keeps the URL found before while a file can't be parsed, e.g. half written. It reads only the server's `url`, not all of TOML.
+**The agents' config files**, read by the panel to show whether an agent connects to this app: Claude Code keeps its MCP servers of user scope in the top-level `mcpServers` of `~/.claude.json` (in `CLAUDE_CONFIG_DIR` if set), Codex in the tables `[mcp_servers.<name>]` of `~/.codex/config.toml` (in `CODEX_HOME` if set). Claude Desktop lists its extensions, each with its manifest, in `extensions-installations.json` in `%APPDATA%\Claude` (on Mac `~/Library/Application Support/Claude`), and keeps whether one is turned on and the settings the person changed, under `userConfig`, in `Claude Extensions Settings/<id>.json`; Caddis' extension is found by the `name` in its manifest, its port is its setting or the default of the manifest.
+[`AgentConfigs`](Caddis.Core/McpAgents.fs) reads a file again only when its time or length changed, Claude Desktop's small files every time, and keeps the URL found before while a file can't be parsed, e.g. half written. It reads only the server's `url`, not all of TOML.
 
 ### 7.9 HTTP server
 
@@ -726,11 +728,15 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
 - **Refresh**: a 1 s timer of the app calls `Refresh`, which reads the server's state. The run list is rebuilt only when ids or statuses changed.
 - **Contents**: server and session state; Start or Stop, Cancel run (only for background runs), Reset; while the server runs, a row per AI agent; Settings with the mode, autostart, echo and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.
 - **Code actions**: `Formatted` formats with Fantomas on the thread pool, cached per run; code Fantomas can't parse is shown as it was run. `Run again` starts the selected F# run's code as a new run, keeping a user's script path for its relative `#load`. `Export` and `Export all` save `.fsx` files as shown, via the app's save dialog; `Export all` takes the successful F# runs, oldest first, each after a comment with its id and time ([`ScriptExport`](Caddis.UI/ScriptExport.fs)).
-- **AI agents**: a row each for Claude Code and Codex, with a dot and their state from their config files, see [7.8](#78-settings-and-files):
+- **AI agents**: a row each for Claude Code, Codex and, if it is installed, Claude Desktop, with a dot and their state from their config files, see [7.8](#78-settings-and-files):
   `active` (green) if the agent's URL for the app's MCP name has this server's port, `not set up` (gray) with `Set up`, or `inactive` (amber) with `Activate`, whose tooltip names the other instance on that port from its discovery file and its main window's title.
   `Set up` runs the agent's program, found on PATH as the process has it and as it is now in the registry, and in the folders the agents install to: `claude mcp add --transport http --scope user <name> <url>`, after `claude mcp remove --scope user <name>` if the name exists, since Claude Code's `add` fails then; `codex mcp add <name> --url <url>`, which replaces.
   `Activate` calls `ActivateAgent`: it takes over the port of the agent's URL, see [7.9](#79-http-server), and while it waits the button cancels it; if the port can't be taken, or the URL isn't one of Caddis on this computer, it sets the agent up instead.
-  Only one button works at a time, both agents may use the same port. The commands are only in the tooltips, a right-click on a row copies them. A note below the rows says what the last click did.
+  Only one button works at a time, the agents may use the same port. The commands are only in the tooltips, a right-click on a row copies them. A note below the rows says what the last click did.
+- **Claude Desktop** runs local MCP servers over stdio only, and reaches the URLs of its connectors from Anthropic's servers, which can't reach this computer. So it gets an extension, an MCP Bundle ([`DesktopExtension`](Caddis.Core/DesktopExtension.fs)): a zip of `manifest.json`, `server/relay.js`, `server/caddis.json` and `icon.png`.
+  Its `Set up` writes `<name>.mcpb` into the run folder of the process, with this server's port as the default of the setting `port` and its instructions and tools in `caddis.json`, and opens it; Claude Desktop asks the person to install it.
+  Claude Desktop runs [relay.js](Caddis.Core/ClaudeDesktop/relay.js) with its own Node: it POSTs each line from stdin to `http://127.0.0.1:<port>/mcp` and writes the reply to stdout, keeps the `Mcp-Session-Id`, and retries for a moment on 503 or no answer, as during a handover.
+  While Caddis doesn't answer, it answers `initialize` itself with the instructions of `caddis.json`, lists its tools, or `caddis_status` without them, and returns tool calls as errors that say to start the app. It polls every 5 s and sends `notifications/tools/list_changed` once Caddis answers.
 - **Failure**: if Avalonia can't start, the panel shows the error as plain text and the command or ribbon still works.
 
 ---
@@ -813,12 +819,13 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, both packaging actions |
+| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, the three packaging actions |
 | [release-rhino.yml](.github/workflows/release-rhino.yml) | tag `x.y.z` | build, test, package, check tag against CHANGELOG.md, then push `rh8` and `rh9` to Yak in separate jobs with `YAK_TOKEN` |
-| [release-revit.yml](.github/workflows/release-revit.yml) | tag `x.y.z` | in environment `releaseRevit`: build, test, package, check tag, Azure login with OIDC, `vpk pack` signed with Azure Trusted Signing, `vpk upload` to the GitHub release |
+| [release-revit.yml](.github/workflows/release-revit.yml) | tag `x.y.z` | in environment `releaseRevit`: build, test, package, check tag, Azure login with OIDC, `vpk pack` signed with Azure Trusted Signing, `vpk upload` to the GitHub release, then attach the two Claude Desktop extensions to it |
 
 - [package-rhino](.github/actions/package-rhino/action.yml) publishes the three Rhino builds, adds manifest, logo and license, downloads `yak.exe` 0.19.1 with a SHA256 check, and builds `caddis-<v>-rh8_19-any.yak` (net8.0 and net48) and `caddis-<v>-rh9_0-any.yak` (net10.0).
 - [package-revit](.github/actions/package-revit/action.yml) publishes the three Revit builds, the loader and the bootstrapper into `bin/publish/revit`, the folder Velopack packs.
+- [package-claude-desktop](.github/actions/package-claude-desktop/action.yml) writes the extensions `caddis-rhino` (Windows and Mac) and `caddis-revit` with [bundles.fsx](.github/actions/package-claude-desktop/bundles.fsx), which uses the Release build of Caddis.Core like the panel does, but without instructions and tools, then validates and packs them into `bin/publish/claude-desktop/<name>.mcpb` with the MCPB CLI 2.1.2 from npm. The Anthropic directory takes no `.mcpb` files anymore, so the GitHub release is where they are published.
 - **To release**: add a versioned entry to CHANGELOG.md, commit, push a tag with the same version without `v`.
 
 ---
@@ -827,7 +834,7 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 
 | Project | Frameworks | Tests | Runner |
 |---|---|---|---|
-| [Caddis.Core.Tests](Tests/Caddis.Core.Tests) | net8.0, net10.0, net48 | 105 test methods | xUnit 2, not in parallel: output capture redirects `Console.Out` for the whole process |
+| [Caddis.Core.Tests](Tests/Caddis.Core.Tests) | net8.0, net10.0, net48 | 111 test methods | xUnit 2, not in parallel: output capture redirects `Console.Out` for the whole process |
 | [Caddis.UI.Tests](Tests/Caddis.UI.Tests) | net8.0, net10.0 | 9 test methods, two of them run for both Rhino and Revit | xUnit v3 with Avalonia's headless platform, not in parallel |
 
 | File | Covers |
@@ -836,6 +843,7 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 | HttpTests (26) | Origin, REST, MCP initialize and versions, tools, errors, running runs, images, describe, cancel notifications, body limit, discovery file, requests during a run on the UI thread |
 | HostTests (14) | host texts and names, hosts without commands, id formats, settings per host, exports as runs, dialogs, grouped changes, runs that have not started, finalization failures |
 | AgentTests (8) | the agents' config files and commands, their state, re-reading changed configs; two servers handing the port over once idle, cancelled and done, with the note to a moved session; another app's port refused, a free one taken; `Set up` with the real `claude` and `codex` in a temporary config folder, where they are installed |
+| DesktopTests (6) | the extension's manifest and `.mcpb` file, what Claude Desktop installed and its settings, `Set up` opening the extension; the relay with Node, where it is installed: messages to Caddis and back, and without Caddis its tools, errors and the `list_changed` once Caddis starts |
 | CommandTests (10) | command runs, input timeouts, argument checks, cancellation, notes and objects in MCP |
 | BackgroundTests (9) | background evaluation, `OnUi`, 409, cancel, timeout, `OnUi` callbacks during cancellation |
 | ApiDocsTests (11) | signatures, docs, short names, curried functions, filters, out parameters, enums, large types, suggestions, namespaces, search |
@@ -898,7 +906,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | STEP export in Revit 2024 | Needs Revit 2025. |
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, AutoCAD, other apps | None. `ICaddisHost` is the extension point. |
-| Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user. Others are set up by hand with the URL. |
+| Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user, and Claude Desktop. Others are set up by hand with the URL. |
+| Caddis in Anthropic's directory | Not listed. The directory takes no `.mcpb` files anymore, and the local MCP servers of a listed plugin run in Claude Code and Cowork, not in the chat of Claude Desktop. |
 | A NuGet package of Caddis.Core | Not published. |
 
 ### Testing and docs
@@ -928,7 +937,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Stack trace lines**: an exception in a top-level statement is reported at line 1, a limitation of FSI's debug info; inside functions the line is right.
 - **NuGet references** with `#r "nuget:"` need the .NET SDK.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
-- **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs.
+- **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
+- **Claude Desktop**: the extension is validated and packed with the MCPB CLI and its relay is tested with Node, but installing it in Claude Desktop is tested by hand only.
 - **Not tested yet**: Mac, Windows on ARM64, the port-change warning in Rhino, several Revit ribbon buttons, the Revit pane's Start/Stop and Cancel. Handing the port over is tested with two servers in one process, not yet with two Revits, nor with open sessions of Claude Code and Codex.
 
 ---
@@ -945,7 +955,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | Default ports | Rhino 7810, Revit 7820, the headless host 7810 |
 | MCP server names | `caddis-rhino`, `caddis-revit`, `caddis` for the headless host |
 | Settings folder | `%AppData%\Caddis`, `~/.config/Caddis` on Mac |
-| The agents' config files | `~/.claude.json` or `$CLAUDE_CONFIG_DIR/.claude.json`, `~/.codex/config.toml` or `$CODEX_HOME/config.toml` |
+| The agents' config files | `~/.claude.json` or `$CLAUDE_CONFIG_DIR/.claude.json`, `~/.codex/config.toml` or `$CODEX_HOME/config.toml`, Claude Desktop's `%APPDATA%\Claude\extensions-installations.json` and `Claude Extensions Settings\<id>.json` |
+| Claude Desktop extensions | `caddis-rhino.mcpb`, `caddis-revit.mcpb`, with the names of the MCP servers |
 | Output folders | `%TEMP%\Caddis\<pid>\<run id>`, `%TEMP%\Caddis\<pid>\logs` |
 | Revit installation | `%LocalAppData%\Caddis.Revit\current` |
 | Revit add-in files | `%AppData%\Autodesk\Revit\Addins\<year>\Caddis.addin` |

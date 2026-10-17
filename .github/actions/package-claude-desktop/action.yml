@@ -1,0 +1,45 @@
+name: Package for Claude Desktop
+description: Build the Claude Desktop extensions caddis-rhino.mcpb and caddis-revit.mcpb.
+
+# Used by build.yml and release-revit.yml. Requires a Release build of Caddis.Core for net10.0, and Node, which the runners have.
+# bundles.fsx writes the files of each extension with Caddis.Core, as the panel does, into bin/publish/claude-desktop/<name>,
+# then the MCPB CLI validates the manifest and packs them into bin/publish/claude-desktop/<name>.mcpb.
+# https://github.com/modelcontextprotocol/mcpb/blob/main/CLI.md
+
+outputs:
+  rhino-path:
+    description: Path to caddis-rhino.mcpb, relative to the repository root
+    value: ${{ steps.pack.outputs.rhino-path }}
+  revit-path:
+    description: Path to caddis-revit.mcpb, relative to the repository root
+    value: ${{ steps.pack.outputs.revit-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Write the extensions
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        dotnet fsi .github/actions/package-claude-desktop/bundles.fsx bin/publish/claude-desktop
+        if ($LASTEXITCODE -ne 0) {
+          throw "bundles.fsx failed with exit code $LASTEXITCODE"
+        }
+
+    - name: Pack the extensions
+      id: pack
+      shell: pwsh
+      env:
+        # Pinned. Update it on purpose, after checking that Claude Desktop installs the packed extensions.
+        MCPB_VERSION: '2.1.2'
+      run: |
+        $ErrorActionPreference = 'Stop'
+        foreach ($app in 'rhino', 'revit') {
+          $dir = "bin/publish/claude-desktop/caddis-$app"
+          npx --yes "@anthropic-ai/mcpb@$env:MCPB_VERSION" pack $dir "$dir.mcpb"
+          if ($LASTEXITCODE -ne 0) {
+            throw "mcpb pack of caddis-$app failed with exit code $LASTEXITCODE"
+          }
+          "$app-path=$dir.mcpb" >> $env:GITHUB_OUTPUT
+          Write-Host "Built $dir.mcpb"
+        }

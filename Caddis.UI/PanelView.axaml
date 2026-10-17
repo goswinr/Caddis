@@ -119,8 +119,8 @@
             </StackPanel>
           </ToggleButton>
         </WrapPanel>
-        <!-- While the server is running: whether Claude Code and Codex connect to this app, with a button to set them up or to
-             connect them to this app. The tooltips of the buttons name the commands they run, a right-click on a row copies them.
+        <!-- While the server is running: whether Claude Code, Codex and Claude Desktop connect to this app, with a button to set them up
+             or to connect them to this app. The tooltips of the buttons name the commands they run, a right-click on a row copies them.
              The note says what the last click did. -->
         <StackPanel x:Name="Agents" Grid.Row="2" Grid.Column="1" IsVisible="False">
           <WrapPanel>
@@ -133,6 +133,12 @@
               <Ellipse x:Name="CodexDot" Classes="agentDot" />
               <TextBlock x:Name="CodexState" VerticalAlignment="Center" />
               <Button x:Name="CodexAction" />
+            </StackPanel>
+            <!-- Only if Claude Desktop is installed. It gets an extension, not a command. -->
+            <StackPanel x:Name="DesktopRow" Classes="row agent">
+              <Ellipse x:Name="DesktopDot" Classes="agentDot" />
+              <TextBlock x:Name="DesktopState" VerticalAlignment="Center" />
+              <Button x:Name="DesktopAction" />
             </StackPanel>
           </WrapPanel>
           <TextBlock x:Name="AgentNote" TextWrapping="Wrap" IsVisible="False" Margin="0,0,0,2" />

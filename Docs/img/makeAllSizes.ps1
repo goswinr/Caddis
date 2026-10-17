@@ -4,7 +4,7 @@ Generates the logo assets used by this repository from logo.png.
 
 .DESCRIPTION
 Checks that ImageMagick is installed through Winget (and installs it when absent),
-then creates a 128px PNG, a multi-resolution favicon, and a centered repository card.
+then creates a 128px and a 512px PNG, a multi-resolution favicon, and a centered repository card.
 ImageMagick replaces existing output files.
 #>
 
@@ -86,6 +86,7 @@ if (-not (Test-Path -LiteralPath $logoPath -PathType Leaf)) {
 }
 
 $logo128Path = Join-Path $scriptDirectory 'logo128.png'
+$logo512Path = Join-Path $scriptDirectory 'logo512.png'
 $faviconPath = Join-Path $scriptDirectory 'favicon.ico'
 $repoCardPath = Join-Path $scriptDirectory 'repoCard.png'
 
@@ -94,6 +95,10 @@ Write-Host 'Processing logo.png...'
 # Create a 128 by 128 PNG logo.
 Write-Host 'Generating logo128.png...'
 Invoke-Magick -Arguments @($logoPath, '-resize', '128x128', $logo128Path)
+
+# Create a 512 by 512 PNG logo, the icon of the Claude Desktop extension.
+Write-Host 'Generating logo512.png...'
+Invoke-Magick -Arguments @($logoPath, '-resize', '512x512', $logo512Path)
 
 # Create an ICO containing 256, 64, 48, 32, and 16 pixel variants.
 Write-Host 'Generating favicon.ico...'

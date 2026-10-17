@@ -64,7 +64,7 @@ Rhino supplies its theme colors and the additional command-line settings.
 
 - The header shows where the server listens, and the state and thread mode of the F# session.
 - `Start` / `Stop` the server.
-- While it runs, whether Claude Code and Codex connect to this Rhino, with `Set up` or `Activate`,
+- While it runs, whether Claude Code, Codex and Claude Desktop connect to this Rhino, with `Set up` or `Activate`,
   see [Connect an AI agent](../README.md#connect-an-ai-agent).
 - `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
 - `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`

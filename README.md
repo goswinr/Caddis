@@ -53,10 +53,10 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino 
 What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md) and [Caddis for Revit](Caddis.Revit/README.md).
 
 ## Connect an AI agent
-Start the server in the app and open the Caddis panel. While the server runs, it shows for Claude Code and Codex whether they connect to Caddis in this app:
+Start the server in the app and open the Caddis panel. While the server runs, it shows for Claude Code, Codex and Claude Desktop whether they connect to Caddis in this app:
 
 - **active**: the agent connects to this app.
-- **not set up**: `Set up` adds Caddis to the agent for all your projects, with the agent's own program, e.g. `claude mcp add ...`.
+- **not set up**: `Set up` adds Caddis to the agent for all your projects, with the agent's own program, e.g. `claude mcp add ...`. For Claude Desktop it opens the extension `caddis-rhino.mcpb` or `caddis-revit.mcpb`, and Claude Desktop asks to install it.
 - **inactive**: the agent connects to another port, e.g. that of a second Revit with Caddis. `Activate` asks the app on that port to hand it over once it is idle, with no run in progress, and waits for that. Then this app listens on that port, and agents connected to it go on with this app. If the port can't be taken, e.g. another program uses it, `Activate` sets the agent up for this app instead.
 
 The tooltips of the buttons show the commands they run, a right-click on an agent copies them.
@@ -74,6 +74,16 @@ For Codex:
 ```
 codex mcp add caddis-rhino --url http://127.0.0.1:7810/mcp
 ```
+
+### Claude Desktop
+Claude Desktop can't use the URL of Caddis directly: it runs local MCP servers as programs only, and reaches the URLs of connectors
+from Anthropic's servers, which can't reach your computer. So Caddis comes as a Claude Desktop extension, a `.mcpb` file,
+whose small relay passes Claude Desktop's messages to Caddis on this computer. Claude Desktop brings the Node.js that runs it.
+
+The panel's `Set up` makes the extension for the running app, with its port and its tools. Each [release](https://github.com/goswinr/Caddis/releases)
+also has `caddis-rhino.mcpb` and `caddis-revit.mcpb` for the default ports: open one, or drag it into Claude Desktop.
+Its setting `Port` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
+While the app isn't running, the extension still lists its tools, and their results say to start the app.
 
 Rhino and Revit have their own port and MCP name, so that both can run and stay registered in Claude Code at the same time:
 

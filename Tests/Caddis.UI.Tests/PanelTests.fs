@@ -153,7 +153,7 @@ let ``while the server runs, the agents show whether they connect to it, and the
     store.Save { CaddisSettings.defaults with port = 27910 }
     use server = new CaddisServer(engineHost, store)
     let dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N")).FullName
-    let path agent = Path.Combine(dir, (match agent with ClaudeCode -> ".claude.json" | Codex -> "config.toml"))
+    let path agent = Path.Combine(dir, (match agent with ClaudeCode -> ".claude.json" | Codex -> "config.toml" | ClaudeDesktop -> Path.Combine("Claude", "extensions-installations.json")))
     server.AgentConfigs <- AgentConfigs path
     let copied = ref ""
     let view = PanelView({ host "Revit" with Server = (fun () -> Some server); SetClipboard = fun text -> copied.Value <- text; true })
@@ -193,6 +193,18 @@ let ``while the server runs, the agents show whether they connect to it, and the
         copy.RaiseEvent(RoutedEventArgs(MenuItem.ClickEvent))
         Assert.Equal(server.CodexMcpCommand, copied.Value)
         Assert.Contains("Copied the command", view.FindControl<TextBlock>("AgentNote").Text)
+        // Claude Desktop only once it is installed, it gets an extension
+        Assert.False(view.FindControl<StackPanel>("DesktopRow").IsVisible)
+        Directory.CreateDirectory(Path.GetDirectoryName(path ClaudeDesktop)) |> ignore
+        view.Refresh()
+        Assert.True(view.FindControl<StackPanel>("DesktopRow").IsVisible)
+        Assert.Equal("Claude Desktop: not set up", state "Desktop")
+        Assert.Contains("opens the extension caddis.mcpb", tipOf (action "Desktop"))
+        Assert.Null(view.FindControl<StackPanel>("DesktopRow").ContextMenu)
+        let extension = Json.obj [ "id", Json.ofString "x"; "manifest", DesktopExtension.manifest (server.DesktopBundle()) ]
+        File.WriteAllText(path ClaudeDesktop, Json.toText (Json.obj [ "extensions", Json.obj [ "x", extension ] ]))
+        view.Refresh()
+        Assert.Equal("Claude Desktop: active", state "Desktop")
         server.Stop()
         view.Refresh()
         Assert.False(view.FindControl<StackPanel>("Agents").IsVisible)

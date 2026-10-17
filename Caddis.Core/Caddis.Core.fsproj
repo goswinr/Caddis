@@ -27,6 +27,14 @@
     <PackageReference Include="System.Text.Json" Version="10.0.2" />
     <!-- HttpClient, to ask another Caddis to hand over its port -->
     <Reference Include="System.Net.Http" />
+    <!-- ZipArchive, for the extension of Claude Desktop -->
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+  <!-- The relay and icon of the extension of Claude Desktop, see DesktopExtension.fs -->
+  <ItemGroup>
+    <EmbeddedResource Include="ClaudeDesktop/relay.js" LogicalName="Caddis.Core.ClaudeDesktop.relay.js" />
+    <EmbeddedResource Include="../Docs/img/logo512.png" Link="ClaudeDesktop/icon.png" LogicalName="Caddis.Core.ClaudeDesktop.icon.png" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,6 +49,7 @@
     <Compile Include="Worker.fs" />
     <Compile Include="FsiHost.fs" />
     <Compile Include="Service.fs" />
+    <Compile Include="DesktopExtension.fs" />
     <Compile Include="McpAgents.fs" />
     <Compile Include="Http/Types.fs" />
     <Compile Include="Http/Rest.fs" />
