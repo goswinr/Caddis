@@ -16,6 +16,12 @@ An MCP server to host F# interactive in Rhino or Revit.
 This gives your AI agent the full power to do anything that RhinoCommon or the RevitAPI can do.
 Your LLM already knows how to use these APIs, but can't execute them directly, unless hosted inside Rhino or Revit.
 
+**Individual Rhino/Revit methods are not registered as MCP tools.** Agents discover Caddis's tools through MCP,
+then use `caddis_describe` to explore the API loaded in the running app: search names, list the types in a namespace,
+inspect a type's members, or look up a method's overloads. It returns signatures in F# syntax from reflection,
+with documentation from XML files when available, so agents can check the installed API version before using it.
+They then write F# code that calls those methods, check it with `caddis_check`, and execute it with `caddis_eval`.
+
 
 Caddis runs F# scripts directly from inside the Rhino or Revit process and is controlled via HTTP:
 AI agents like Claude or Codex generate the F# code and send it for evaluation and execution inside the host application via it's [MCP](https://modelcontextprotocol.io) endpoint.
