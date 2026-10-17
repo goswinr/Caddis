@@ -54,6 +54,8 @@ let host name = {
     Message = if name = "Revit" then Some(fun () -> "Copied MCP command") else None
     Errors = ErrorLog 20
     Refreshed = ignore
+    Version = fun () -> $"You're using Caddis 1.2.3 in {name}."
+    VersionTip = "Updates"
     Palette = fun () -> palette false
     SubscribeTheme = fun _ -> { new IDisposable with member _.Dispose() = () }
 }
@@ -78,6 +80,7 @@ let ``shared XAML loads and exposes the host's options and actions`` name =
         click (view.FindControl<Button> "StartStop")
         Assert.Equal(1, starts)
         if name = "Revit" then Assert.Equal("Copied MCP command", view.FindControl<TextBlock>("Message").Text)
+        Assert.Equal($"You're using Caddis 1.2.3 in {name}.", view.FindControl<TextBlock>("Version").Text)
         Assert.NotNull(view.FindControl<Image>("LogoImage").Source)
         Assert.NotNull(view.FindControl<TextEditor>("CodeView").SyntaxHighlighting)
     finally window.Close()

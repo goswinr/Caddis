@@ -42,6 +42,9 @@ module private PanelServices =
         Message = None
         Errors = RhinoLog.errors
         Refreshed = ignore
+        // Rhino's PackageManager knows of newer releases, Caddis doesn't.
+        Version = fun () -> App.server |> Option.map (fun s -> $"You're using Caddis {s.Service.Version}.") |> Option.defaultValue ""
+        VersionTip = "Rhino's PackageManager installs and updates Caddis, search for Caddis there."
         Palette = PanelTheme.palette
         SubscribeTheme = PanelTheme.subscribe
     }

@@ -187,6 +187,7 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 | `settings-revit.json` | The settings of Caddis in Revit |
 | `instances\<process id>.json` | The port of each running server |
 | `revit.log` | Caddis' own messages in Revit |
+| `revit-update.json` | The result of the latest update check in Revit, which the panel and `Info` show |
 
 ## Security
 Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.

@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Copy MCP command` in the panel, `CopyMcpCommand` in Rhino's `Caddis` command and `Copy MCP` on Revit's ribbon: the panel's agents replace them. Without the panel, Rhino prints the commands for Claude Code and Codex when the server starts, and Revit's `Info` dialog shows them.
 - Listening on the network: the setting `listenOnLan`, the option `ListenOnLan` in Rhino and the checkbox `Listen on the network (LAN)` in the panel and on Revit's ribbon. Caddis listens on localhost only.
 - `listenOnLan` and `tokenFile` in the status and in the discovery files.
+- The panel's settings show the version of Caddis. In Revit also whether it is the latest, or whether a newer one is available or downloaded, from the update check at Revit's start.
+- Revit's `Info` button shows the same update status, and the `Caddis` command in Rhino shows the version.
 
 ## [0.2.1] - 2026-10-11
 

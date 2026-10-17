@@ -93,6 +93,7 @@ type PanelView(host: PanelHost) as this =
     let echo: CheckBox = find "Echo"
     let cancelWaiting: CheckBox = find "CancelWaiting"
     let runtimeInfo: TextBlock = find "RuntimeInfo"
+    let version: TextBlock = find "Version"
     let runs: ListBox = find "Runs"
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
@@ -351,6 +352,7 @@ type PanelView(host: PanelHost) as this =
     let refresh () =
         message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
         refreshErrors ()
+        version.Text <- host.Version ()
         match host.Server () with
         | None ->
             serverStatus.Text <- "Caddis is not loaded."
@@ -479,9 +481,10 @@ type PanelView(host: PanelHost) as this =
             reset,
             tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ]
         )
-        ToolTip.SetTip(settingsToggle, "Show or hide the settings.")
         ToolTip.SetTip(errorsToggle, tip [ "Show or hide the internal errors of Caddis,"; "e.g. that the F# session could not be created." ])
         ToolTip.SetTip(clearErrors, tip [ "Remove these errors from the list."; "The Errors button is hidden until the next error." ])
+        ToolTip.SetTip(settingsToggle, "Show or hide the settings and the version of Caddis.")
+        ToolTip.SetTip(version, host.VersionTip)
         ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])

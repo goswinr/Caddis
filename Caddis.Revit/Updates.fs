@@ -1,8 +1,10 @@
 namespace Caddis.Revit
 
+open System
 open System.Diagnostics
 open System.IO
 open System.Reflection
+open Caddis
 
 /// Updates of Caddis installed by its installer, from the releases on GitHub. Velopack runs in the app of the installer,
 /// Caddis.Revit.Bootstrapper.exe in the folder above the folder of this build, not in Revit: Revit loads only one version of an assembly,
@@ -12,6 +14,16 @@ module internal Updates =
     let private bootstrapper =
         Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)), "Caddis.Revit.Bootstrapper.exe")
 
+    /// Not for a build registered by install-dev.ps1.
+    let private installed = File.Exists bootstrapper
+
+    /// The version of this build, e.g. 0.2.1, from the changelog.
+    let version =
+        let a = Assembly.GetExecutingAssembly()
+        match a.GetCustomAttribute<AssemblyInformationalVersionAttribute>() with
+        | null -> a.GetName().Version.ToString 3
+        | v -> v.InformationalVersion.Split('+')[0] // without the git commit hash
+
     /// With the shell, so that the bootstrapper inherits no handles of Revit.
     let private start (args: string) =
         try Process.Start(ProcessStartInfo(bootstrapper, args, UseShellExecute = true)) |> ignore
@@ -19,7 +31,7 @@ module internal Updates =
 
     /// At Revit's start: the bootstrapper checks for a newer release and asks whether to download it.
     let check () =
-        if File.Exists bootstrapper then start "--check-for-update"
+        if installed then start "--check-for-update"
         else RevitLog.write "Caddis: updates are off, Caddis was not installed by its installer."
 
     /// When the last Revit closes: the bootstrapper lets Velopack install a downloaded release once this Revit has exited.
@@ -27,5 +39,64 @@ module internal Updates =
     /// A Revit that has exited may still be listed for minutes, e.g. while a thread of it is stuck in a driver, it doesn't count.
     let installOnExit () =
         let running (p: Process) = try not p.HasExited with _ -> false
-        if File.Exists bootstrapper && (Process.GetProcessesByName "Revit" |> Array.filter running).Length = 1 then
+        if installed && (Process.GetProcessesByName "Revit" |> Array.filter running).Length = 1 then
             start $"--install-update {Process.GetCurrentProcess().Id}"
+
+    /// The result of the bootstrapper's latest check, see Caddis.Revit.Bootstrapper/Updates.fs. Each None if not known.
+    type private CheckResult = {
+        Latest: string option
+        Downloaded: string option
+        Error: string option
+        }
+
+    let private statusPath = Path.Combine(SettingsStore.DefaultFolder, "revit-update.json")
+
+    /// The last read check and the time its file was written. Read again when the file changes.
+    let mutable private lastCheck: (DateTime * CheckResult) option = None
+
+    /// None before the first check. While the bootstrapper writes the file it may not parse, then the last one is kept and it is read again next time.
+    let private readCheck () =
+        try
+            let written = File.GetLastWriteTimeUtc statusPath
+            match lastCheck with
+            | Some(time, check) when time = written -> Some check
+            | _ when not (File.Exists statusPath) -> None
+            | _ ->
+                let node =
+                    match Json.parse (File.ReadAllText statusPath) with
+                    | null -> failwith "empty"
+                    | node -> node
+                let check = {
+                    Latest = Json.tryString "latest" node
+                    Downloaded = Json.tryString "downloaded" node
+                    Error = Json.tryString "error" node
+                }
+                lastCheck <- Some(written, check)
+                Some check
+        with _ ->
+            lastCheck |> Option.map snd
+
+    /// Whether version a is newer than b, e.g. 0.3.0 than 0.2.1 or than 0.3.0-beta.1.
+    let private isNewer (a: string) (b: string) =
+        let numbers (v: string) =
+            match Version.TryParse(v.Split('-')[0]) with
+            | true, n -> Some n
+            | _ -> None
+        match numbers a, numbers b with
+        | Some x, Some y -> x > y || (x = y && not (a.Contains "-") && b.Contains "-")
+        | _ -> a <> b
+
+    /// The version of Caddis and whether a newer one is available or downloaded, compared to this build:
+    /// the file of the check may be older than this build, e.g. at the first start after an update, until the bootstrapper checked again.
+    let status () =
+        if not installed then
+            $"You're using Caddis {version}. Updates are off, Caddis was not installed by its installer."
+        else
+            match readCheck () with
+            | Some { Downloaded = Some d } when isNewer d version ->
+                $"Caddis {d} is downloaded, it is installed when the last Revit has closed. You're using {version}."
+            | Some { Latest = Some l } when isNewer l version ->
+                $"Caddis {l} is available, you're using {version}. Caddis offers to download it when Revit starts."
+            | Some { Latest = Some _ } -> $"You're using the latest version of Caddis, {version}."
+            | Some { Error = Some e } -> $"You're using Caddis {version}. Checking for updates failed: {e}"
+            | _ -> $"You're using Caddis {version}."

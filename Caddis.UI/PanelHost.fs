@@ -35,6 +35,10 @@ type PanelHost = {
     /// The host's internal errors. The panel shows a button for them while there are any.
     Errors: ErrorLog
     Refreshed: unit -> unit
+    /// The version of Caddis, and whether a newer one is available if the host knows it. Shown with the settings.
+    Version: unit -> string
+    /// Where the updates of Caddis come from.
+    VersionTip: string
     Palette: unit -> PanelPalette
     SubscribeTheme: (unit -> unit) -> IDisposable
     }

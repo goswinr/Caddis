@@ -33,7 +33,8 @@ module App =
         String.concat
             Environment.NewLine
             [
-                $"Caddis {Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString 3} on {Runtime.InteropServices.RuntimeInformation.FrameworkDescription}"
+                $"Caddis {Updates.version} on {Runtime.InteropServices.RuntimeInformation.FrameworkDescription}"
+                Updates.status ()
                 if s.IsRunning then $"Caddis is listening on {s.Url} , MCP endpoint: {s.McpUrl}" else "Caddis is stopped."
                 $"F# session: {FsiState.toString s.Service.Fsi.State}, runs on: {ThreadMode.toString s.Service.Fsi.Mode} thread"
                 $"Auto start: {autoStart}"

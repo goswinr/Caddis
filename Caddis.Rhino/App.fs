@@ -21,6 +21,7 @@ module App =
         String.concat
             Environment.NewLine
             [
+                $"Caddis {s.Service.Version} on {Runtime.InteropServices.RuntimeInformation.FrameworkDescription}"
                 if s.IsRunning then $"Caddis is listening on {s.Url} , MCP endpoint: {s.McpUrl}" else "Caddis is stopped."
                 $"F# session: {FsiState.toString s.Service.Fsi.State}, runs on: {ThreadMode.toString s.Service.Fsi.Mode} thread"
             ]

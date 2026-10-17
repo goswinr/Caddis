@@ -16,13 +16,48 @@ module Updates =
 
     let private source () = GithubSource("https://github.com/goswinr/Caddis", "", false)
 
+    /// %AppData%/Caddis, with the settings and the log of Caddis in Revit.
+    let private folder = Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Caddis")
+
     /// Appends to the log of Caddis in Revit, see Caddis.Revit/Log.fs. The Info button of Caddis in Revit shows only its own messages.
     let private log (msg: string) =
         try
-            let path = Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Caddis", "revit.log")
+            let path = Path.Combine(folder, "revit.log")
             File.AppendAllText(path, DateTime.Now.ToString "yyyy-MM-dd HH:mm:ss" + " Caddis.Revit.Bootstrapper: " + msg + Environment.NewLine)
         with _ ->
             ()
+
+    /// A JSON string, or null. By hand, .NET Framework has no System.Text.Json.
+    let private json (value: string option) =
+        match value with
+        | None -> "null"
+        | Some s ->
+            let sb = StringBuilder "\""
+            for c in s do
+                match c with
+                | '"' -> sb.Append "\\\"" |> ignore
+                | '\\' -> sb.Append "\\\\" |> ignore
+                | c when c < ' ' -> sb.AppendFormat("\\u{0:x4}", int c) |> ignore
+                | c -> sb.Append c |> ignore
+            sb.Append('"').ToString()
+
+    /// The result of the latest check, for the panel and the Info button of Caddis in Revit, see Caddis.Revit/Updates.fs:
+    /// the newest release, the one downloaded to be installed, and why the check failed, each null if not known.
+    let private writeStatus (latest: string option) (downloaded: string option) (error: string option) =
+        let path = Path.Combine(folder, "revit-update.json")
+        try
+            let fields =
+                [
+                    "checked", Some(DateTime.Now.ToString "yyyy-MM-dd HH:mm:ss")
+                    "latest", latest
+                    "downloaded", downloaded
+                    "error", error
+                ]
+                |> List.map (fun (name, value) -> $"  \"{name}\": {json value}")
+            Directory.CreateDirectory folder |> ignore
+            File.WriteAllLines(path, [ "{"; String.concat ("," + Environment.NewLine) fields; "}" ])
+        with e ->
+            log $"writing {path} failed: {e.Message}"
 
     let private show (text: string) (buttons: MessageBoxButton) (icon: MessageBoxImage) = MessageBox.Show(text, "Caddis for Revit", buttons, icon)
 
@@ -34,20 +69,25 @@ module Updates =
                 try
                     let um = UpdateManager(source ())
                     match um.CheckForUpdates() with
-                    | null -> ()
+                    | null -> writeStatus (Some(string um.CurrentVersion)) None None
                     | info ->
                         let v = info.TargetFullRelease.Version
                         let pending = um.UpdatePendingRestart
                         if isNull pending || pending.Version <> v then
+                            writeStatus (Some(string v)) None None
                             let question =
                                 $"Caddis {v} is available, this is {um.CurrentVersion}.{Environment.NewLine}{Environment.NewLine}Download it now? It is installed when the last Revit has closed."
                             if show question MessageBoxButton.YesNo MessageBoxImage.Question = MessageBoxResult.Yes then
                                 um.DownloadUpdates info
+                                writeStatus (Some(string v)) (Some(string v)) None
                                 log $"downloaded Caddis {v}, it is installed when the last Revit has closed."
                                 show $"Caddis {v} is downloaded. It is installed when the last Revit has closed." MessageBoxButton.OK MessageBoxImage.Information |> ignore
                             else
                                 log $"the update to Caddis {v} was skipped."
+                        else
+                            writeStatus (Some(string v)) (Some(string v)) None
                 with e ->
+                    writeStatus None None (Some e.Message)
                     log $"checking for updates failed: {e.Message}"
             finally
                 running.ReleaseMutex()

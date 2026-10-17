@@ -146,22 +146,25 @@
         <TextBlock x:Name="Message" Grid.Row="3" Grid.ColumnSpan="2" TextWrapping="Wrap" Margin="0,2,0,2" />
       </Grid>
 
-      <!-- Folded until the Settings button is checked. -->
+      <!-- Folded until the Settings button is checked. Below the settings, the version of Caddis and whether a newer one is available. -->
       <Border x:Name="Settings" Grid.Row="1" IsVisible="{Binding #SettingsToggle.IsChecked}" Margin="0,0,0,4" Padding="8,2,0,2"
               BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="1" CornerRadius="2">
-        <WrapPanel Classes="settings">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <TextBlock x:Name="ModeLabel" Text="Run scripts on:" VerticalAlignment="Center" />
-            <ComboBox x:Name="Mode" MinWidth="130">
-              <ComboBoxItem Content="UI thread" />
-              <ComboBoxItem Content="Background thread" />
-            </ComboBox>
-          </StackPanel>
-          <CheckBox x:Name="AutoStart" Content="Start with host" />
-          <CheckBox x:Name="Echo" Content="Echo output to the command line" />
-          <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
-          <TextBlock x:Name="RuntimeInfo" Opacity="0.7" TextWrapping="Wrap" VerticalAlignment="Center" />
-        </WrapPanel>
+        <StackPanel>
+          <WrapPanel Classes="settings">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock x:Name="ModeLabel" Text="Run scripts on:" VerticalAlignment="Center" />
+              <ComboBox x:Name="Mode" MinWidth="130">
+                <ComboBoxItem Content="UI thread" />
+                <ComboBoxItem Content="Background thread" />
+              </ComboBox>
+            </StackPanel>
+            <CheckBox x:Name="AutoStart" Content="Start with host" />
+            <CheckBox x:Name="Echo" Content="Echo output to the command line" />
+            <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
+            <TextBlock x:Name="RuntimeInfo" Opacity="0.7" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </WrapPanel>
+          <TextBlock x:Name="Version" TextWrapping="Wrap" Margin="0,2,8,4" />
+        </StackPanel>
       </Border>
 
       <!-- The host's errors, newest first. Folded until the Errors button is checked. -->

@@ -44,6 +44,7 @@
 
   <ItemGroup>
     <Compile Include="Log.fs" />
+    <Compile Include="Updates.fs" />
     <Compile Include="ApiContext.fs" />
     <Compile Include="Script.fs" />
     <Compile Include="RevitInfo.fs" />
@@ -55,7 +56,6 @@
     <Compile Include="Panel.fs" />
     <Compile Include="RibbonIcons.fs" />
     <Compile Include="RibbonSettings.fs" />
-    <Compile Include="Updates.fs" />
     <Compile Include="Addin.fs" />
   </ItemGroup>
   <!-- Revit runs on Windows x64. Software rendering needs neither ANGLE nor native debug symbols. -->
