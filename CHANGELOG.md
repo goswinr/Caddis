@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The window of the Revit installer closes after 30 seconds. Its button counts down the seconds, clicking it keeps the window open.
+
+### Fixed
+- The link to the README in the messages of the Revit installer opens the README of Caddis for Revit, it pointed to a heading that doesn't exist.
+
 ## [0.3.0] - 2026-10-17
 
 ### Added

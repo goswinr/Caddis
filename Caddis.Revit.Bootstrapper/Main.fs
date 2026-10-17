@@ -7,6 +7,7 @@ open System.Windows
 open System.Windows.Controls
 open System.Windows.Documents
 open System.Windows.Media
+open System.Windows.Threading
 open Velopack
 
 /// The app that Velopack installs, updates and uninstalls. It registers Caddis with Revit and shows what it did.
@@ -15,7 +16,7 @@ module Main =
 
     let private version = Assembly.GetExecutingAssembly().GetName().Version.ToString 3
 
-    let private readme = "https://github.com/goswinr/Caddis#revit"
+    let private readme = "https://github.com/goswinr/Caddis/blob/main/Caddis.Revit/README.md"
 
     /// The messages as a read-only document, problems in red, with a link to the README.
     let private document (messages: Message seq) =
@@ -32,6 +33,25 @@ module Main =
         add Brushes.Black link
         doc
 
+    /// A button that counts down the seconds until the window closes. Clicking it keeps the window open.
+    let private autoClose (win: Window) (seconds: int) =
+        let left = ref seconds
+        let text () = $"Keep open (closing in {left.Value} s)"
+        let button = Button(Content = text (), Padding = Thickness(12.0, 4.0, 12.0, 4.0), Margin = Thickness 8.0, HorizontalAlignment = HorizontalAlignment.Right)
+        let timer = DispatcherTimer(Interval = TimeSpan.FromSeconds 1.0)
+        timer.Tick.Add(fun _ ->
+            left.Value <- left.Value - 1
+            if left.Value > 0 then
+                button.Content <- text ()
+            else
+                timer.Stop()
+                win.Close())
+        button.Click.Add(fun _ ->
+            timer.Stop()
+            button.Visibility <- Visibility.Collapsed)
+        win.Loaded.Add(fun _ -> timer.Start())
+        button
+
     /// Registers Caddis again, to show where, and for a Revit installed since, and shows what it did.
     let private showWindow (updatedTo: string option) =
         let messages = ResizeArray [ Info $"Caddis {version}, an F# interactive host for Revit, controlled via HTTP and MCP." ]
@@ -40,14 +60,13 @@ module Main =
         messages.Add(Info "Start Revit and use the Caddis tab on its ribbon. If Revit asks whether to load Caddis, choose 'Always Load'.")
         messages.Add(Info $"To register Caddis with a Revit that you install later, start this program again: {Revit.installFolder}Caddis.Revit.Bootstrapper.exe")
         messages.Add(Info "You can close this window now. Read more about Caddis in Revit at:")
-        let win =
-            Window(
-                Title = "Caddis for Revit",
-                Width = 820.0,
-                Height = 440.0,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                Content = FlowDocumentScrollViewer(Document = document messages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto)
-            )
+        let win = Window(Title = "Caddis for Revit", Width = 820.0, Height = 480.0, WindowStartupLocation = WindowStartupLocation.CenterScreen)
+        let button = autoClose win 30
+        DockPanel.SetDock(button, Dock.Bottom)
+        let panel = DockPanel()
+        panel.Children.Add button |> ignore
+        panel.Children.Add(FlowDocumentScrollViewer(Document = document messages, VerticalScrollBarVisibility = ScrollBarVisibility.Auto)) |> ignore
+        win.Content <- panel
         Application().Run win
 
     [<EntryPoint; STAThread>]
