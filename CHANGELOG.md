@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once. The token is kept.
+
 ## [0.2.1] - 2026-10-11
 
 ### Fixed

@@ -136,10 +136,10 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
     static member DefaultFolder =
         Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Caddis")
 
-    /// settings.json with the default settings, used by Rhino.
-    new(folder: string) = SettingsStore(folder, "settings.json", CaddisSettings.defaults)
+    /// settings-rhino.json with the default settings, used by Rhino.
+    new(folder: string) = SettingsStore(folder, "settings-rhino.json", CaddisSettings.defaults)
 
-    new() = SettingsStore(SettingsStore.DefaultFolder, "settings.json", CaddisSettings.defaults)
+    new() = SettingsStore(SettingsStore.DefaultFolder, "settings-rhino.json", CaddisSettings.defaults)
 
     member _.Folder = folder
 

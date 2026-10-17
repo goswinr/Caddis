@@ -40,7 +40,7 @@ Run the command `Caddis`. Its options:
 - `NewToken` replaces the token.
 
 It is scriptable, e.g. `-Caddis Start`.
-The settings are saved in `%AppData%\Caddis\settings.json` on Windows and `~/.config/Caddis/settings.json` on Mac, next to the token in `token.txt`.
+The settings are saved in `%AppData%\Caddis\settings-rhino.json` on Windows and `~/.config/Caddis/settings-rhino.json` on Mac, next to the token in `token.txt`.
 
 ## While a run is in progress
 
@@ -155,13 +155,13 @@ This screenshot was taken in Rhino 8.35 on Windows, after the runs listed above.
 
 ## Yak releases
 
-Build and release CI use the same [packaging action](../.github/actions/package/action.yml).
-It publishes the plugin and its dependencies into the repository's `bin/Release/rh8/net8.0`, `bin/Release/rh8/net48` and `bin/Release/rh9/net10.0`,
+Build and release CI use the same [packaging action](../.github/actions/package-rhino/action.yml).
+It publishes the plugin and its dependencies into the repository's `bin/publish/rhino/rh8/net8.0`, `bin/publish/rhino/rh8/net48` and `bin/publish/rhino/rh9/net10.0`,
 adds the Yak manifest, logo and license to `rh8` and `rh9`, then builds two distributions of the same version:
-`bin/Release/caddis-<version>-rh8_19-any.yak` for Rhino 8 and `bin/Release/caddis-<version>-rh9_0-any.yak` for Rhino 9.
+`bin/publish/rhino/caddis-<version>-rh8_19-any.yak` for Rhino 8 and `bin/publish/rhino/caddis-<version>-rh9_0-any.yak` for Rhino 9.
 The package manager gives each Rhino version only its own distribution.
 
-The [release workflow](../.github/workflows/release.yml) runs for a version tag, see [Releases](../README.md#releases).
+The [Rhino release workflow](../.github/workflows/release-rhino.yml) runs for a version tag, see [Releases](../README.md#releases).
 It builds, tests, packages, checks the tag against the changelog, and pushes both packages to Yak.
 Build CI also creates them on every push and pull request to `main`.
 It needs a Yak CI token: generate one with `yak.exe login --ci` and save it as the repository Actions secret `YAK_TOKEN`.

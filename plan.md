@@ -28,7 +28,7 @@ Four projects keep the core and shared UI independent of the host APIs:
 
 ```
 Caddis.Core/   net8.0;net10.0;net48, no Rhino or Revit dependency
-  Settings.fs      port, listenOnLan, autostart, threadMode, token → AppData/Caddis/settings.json
+  Settings.fs      port, listenOnLan, autostart, threadMode, token → AppData/Caddis/settings-rhino.json
   Output.fs        TextWriter that captures output per run; swaps Console.Out/Err during an eval
   FsiHost.fs       session create/reset, eval, modes, cancel (ported from Fesh Src/Fsi.fs)
   (type-check)     FsiEvaluationSession.ParseAndCheckInteraction, against the live session

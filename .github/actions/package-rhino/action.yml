@@ -1,10 +1,10 @@
-name: Package
+name: Package for Rhino
 description: Publish Caddis for every Rhino runtime and build the Rhino 8 and Rhino 9 Yak packages without pushing them.
 
-# Used by build.yml and release.yml. Requires a checkout and the .NET 10 SDK, on Windows for net48.
-# Two distributions of the same version are built into bin/Release:
-#   caddis-x.y.z-rh8_19-any.yak  from bin/Release/rh8: manifest.yml, logo.png, LICENSE, net8.0/ and net48/
-#   caddis-x.y.z-rh9_0-any.yak   from bin/Release/rh9: manifest.yml, logo.png, LICENSE, net10.0/
+# Used by build.yml and release-rhino.yml. Requires a checkout and the .NET 10 SDK, on Windows for net48.
+# Two distributions of the same version are built into bin/publish/rhino:
+#   caddis-x.y.z-rh8_19-any.yak  from bin/publish/rhino/rh8: manifest.yml, logo.png, LICENSE, net8.0/ and net48/
+#   caddis-x.y.z-rh9_0-any.yak   from bin/publish/rhino/rh9: manifest.yml, logo.png, LICENSE, net10.0/
 # The package manager matches the major version of the distribution tag, so Rhino 8 only gets rh8 and Rhino 9 only gets rh9.
 # Within a package Rhino chooses the folder of the runtime it runs on: in Rhino 8 net8.0 on Windows and Mac, net48 on Windows with .NET Framework.
 # https://developer.rhino3d.com/guides/yak/creating-a-multi-targeted-rhino-plugin-package/
@@ -31,7 +31,7 @@ runs:
       run: >-
         dotnet publish Caddis.Rhino/Caddis.Rhino.fsproj
         --configuration Release --framework net8.0 --self-contained false
-        --output bin/Release/rh8/net8.0
+        --output bin/publish/rhino/rh8/net8.0
 
     - name: Publish net48
       # Rhino 8 on .NET Framework, the panel with Avalonia 11.
@@ -39,7 +39,7 @@ runs:
       run: >-
         dotnet publish Caddis.Rhino/Caddis.Rhino.fsproj
         --configuration Release --framework net48
-        --output bin/Release/rh8/net48
+        --output bin/publish/rhino/rh8/net48
 
     - name: Publish net10.0
       # Rhino 9
@@ -47,7 +47,7 @@ runs:
       run: >-
         dotnet publish Caddis.Rhino/Caddis.Rhino.fsproj
         --configuration Release --framework net10.0 --self-contained false
-        --output bin/Release/rh9/net10.0
+        --output bin/publish/rhino/rh9/net10.0
 
     - name: Copy package metadata
       # Each package folder gets its own manifest.yml outside of the framework folders.
@@ -55,9 +55,9 @@ runs:
       run: |
         $ErrorActionPreference = 'Stop'
         foreach ($rh in 'rh8', 'rh9') {
-          Copy-Item -LiteralPath 'Caddis.Rhino/yak.yml' -Destination "bin/Release/$rh/manifest.yml"
-          Copy-Item -LiteralPath 'Docs/img/logo128.png' -Destination "bin/Release/$rh/logo.png"
-          Copy-Item -LiteralPath 'LICENSE' -Destination "bin/Release/$rh/LICENSE"
+          Copy-Item -LiteralPath 'Caddis.Rhino/yak.yml' -Destination "bin/publish/rhino/$rh/manifest.yml"
+          Copy-Item -LiteralPath 'Docs/img/logo128.png' -Destination "bin/publish/rhino/$rh/logo.png"
+          Copy-Item -LiteralPath 'LICENSE' -Destination "bin/publish/rhino/$rh/LICENSE"
         }
 
     - name: Download Yak
@@ -81,10 +81,10 @@ runs:
     - name: Build Yak
       id: pack
       shell: pwsh
-      working-directory: bin/Release
+      working-directory: bin/publish/rhino
       run: |
         $ErrorActionPreference = 'Stop'
-        $version = (Get-Content -LiteralPath '../../Caddis.Rhino/bin/ChangelogVersion.txt' -Raw).Trim()
+        $version = (Get-Content -LiteralPath '../../../Caddis.Rhino/bin/ChangelogVersion.txt' -Raw).Trim()
         if ($version -notmatch '^\d+\.\d+\.\d+$') {
           throw "Expected a stable semantic version from CHANGELOG.md, found '$version'."
         }
@@ -96,7 +96,7 @@ runs:
         $tags = [ordered]@{ rh8 = 'rh8_19'; rh9 = 'rh9_0' }
         foreach ($rh in $tags.Keys) {
           Push-Location $rh
-          ../../yak.exe build --platform any --version $version
+          ../../../yak.exe build --platform any --version $version
           if ($LASTEXITCODE -ne 0) {
             throw "yak build for $rh failed with exit code $LASTEXITCODE"
           }
@@ -109,6 +109,6 @@ runs:
 
           Move-Item -LiteralPath $yakFiles[0].FullName -Destination "../$expectedName" -Force
           Pop-Location
-          "$rh-package-path=bin/Release/$expectedName" >> $env:GITHUB_OUTPUT
+          "$rh-package-path=bin/publish/rhino/$expectedName" >> $env:GITHUB_OUTPUT
           Write-Host "Built $expectedName"
         }

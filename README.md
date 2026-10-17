@@ -3,7 +3,7 @@
 # Caddis
 
 [![build](https://github.com/goswinr/Caddis/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/build.yml)
-[![publish yak](https://github.com/goswinr/Caddis/actions/workflows/release.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release.yml)
+[![release rhino](https://github.com/goswinr/Caddis/actions/workflows/release-rhino.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-rhino.yml)
 [![release revit](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml)
 
 ![latest tag](https://img.shields.io/github/v/tag/goswinr/Caddis?label=Latest%20Tag)
@@ -153,7 +153,7 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 | File | |
 |---|---|
 | `token.txt` | The token, shared by Rhino and Revit |
-| `settings.json` | The settings of Caddis in Rhino |
+| `settings-rhino.json` | The settings of Caddis in Rhino |
 | `settings-revit.json` | The settings of Caddis in Revit |
 | `instances\<process id>.json` | The port of each running server |
 | `revit.log` | Caddis' own messages in Revit |
