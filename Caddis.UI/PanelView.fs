@@ -79,6 +79,7 @@ type PanelView(host: PanelHost) as this =
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
     let formatCheck: CheckBox = find "FormatCheck"
+    let runAgain: Button = find "RunAgain"
     let exportCode: Button = find "ExportCode"
     let exportAll: Button = find "ExportAll"
 
@@ -152,8 +153,16 @@ type PanelView(host: PanelHost) as this =
         | Some s -> ScriptExport.exportable s.Service.Runs.All
         | None -> [||]
 
+    /// Run again: for a selected F# run, while no run is in progress.
+    let updateRunAgain () =
+        runAgain.IsEnabled <-
+            match selectedRun (), host.Server () with
+            | Some r, Some s -> r.Kind = FSharpCode && s.Service.Fsi.Current.IsNone
+            | _ -> false
+
     let showDetails () =
         let selected = selectedRun ()
+        updateRunAgain ()
         output.Text <- selected |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
         exportCode.IsEnabled <- selected |> Option.exists (fun r -> r.Kind = FSharpCode)
         exportAll.IsEnabled <- exportableRuns().Length > 0
@@ -208,6 +217,12 @@ type PanelView(host: PanelHost) as this =
             runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = selectedId) |> Option.map box |> Option.toObj
             showDetails ()
 
+    /// Selects a run in the list, e.g. the one started by Run again.
+    let selectRun (id: string) =
+        match runs.ItemsSource with
+        | :? (RunRow[]) as rows -> runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = id) |> Option.map box |> Option.toObj
+        | _ -> ()
+
     /// The Errors button while the host has errors, in bold for new ones, and their list while it is shown.
     let refreshErrors () =
         match host.Errors.Lines with
@@ -255,6 +270,7 @@ type PanelView(host: PanelHost) as this =
                 runtimeInfo.Text <- svc.RuntimeInfo
                 cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
                 refreshRuns s
+                updateRunAgain ()
                 host.Refreshed ()
             finally
                 updating <- false
@@ -342,6 +358,14 @@ type PanelView(host: PanelHost) as this =
                 "and stack traces in the output. Code that Fantomas can't parse is always shown as it was run."
             ]
         )
+        ToolTip.SetTip(
+            runAgain,
+            tip [
+                "Run the code of the selected F# run again, as it was run, also while 'Formatted' is checked."
+                "It is a new run in the current F# session, on the thread set under Settings."
+                "Only while no other run is in progress."
+            ]
+        )
         ToolTip.SetTip(exportCode, tip [ "Save the code of the selected F# run to an .fsx file,"; "as shown: formatted while 'Formatted' is checked." ])
         ToolTip.SetTip(
             exportAll,
@@ -380,6 +404,28 @@ type PanelView(host: PanelHost) as this =
             refreshErrors ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
         formatCheck.Click.Add(fun _ -> showCode ())
+        runAgain.Click.Add(fun _ ->
+            match selectedRun (), host.Server () with
+            | Some r, Some s when r.Kind = FSharpCode ->
+                runAgain.IsEnabled <- false
+                // A script file of the user is kept, for its relative #load and #r. Not the script.fsx in the run's own folder.
+                let path = if Path.GetDirectoryName r.ScriptPath = r.OutDir then None else Some r.ScriptPath
+                let args: EvalArgs = { code = Some r.Code; path = path; timeoutMs = None; waitMs = None; recordUndo = r.RecordUndo }
+                // From the thread pool, like the requests of agents: on Rhino's UI thread the run would start inline.
+                Task
+                    .Run<Run>(Func<Task<Run>>(fun () -> s.Service.StartEval args))
+                    .ContinueWith(
+                        Action<Task<Run>>(fun t ->
+                            Dispatcher.UIThread.Post(fun () ->
+                                if t.IsFaulted then
+                                    match t.Exception.InnerException with
+                                    | BusyException id -> log $"Caddis: run '{id}' is still in progress, cancel it first (only possible in background mode)."
+                                    | e -> log $"Caddis: could not run '{r.Id}' again: {e.Message}"
+                                refresh ()
+                                if t.Status = TaskStatus.RanToCompletion then selectRun t.Result.Id))
+                    )
+                |> ignore
+            | _ -> ())
         exportCode.Click.Add(fun _ ->
             match selectedRun () with
             | Some r when r.Kind = FSharpCode ->

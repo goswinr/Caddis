@@ -188,6 +188,43 @@ let ``Revit uses the shared formatted code viewer and can show the original code
     finally window.Close()
 }
 
+[<AvaloniaFact>]
+let ``Run again runs the code of the selected F# run as a new run and selects it`` () = task {
+    use engineHost = new HeadlessHost(ignore)
+    let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
+    use server = new CaddisServer(engineHost, store)
+    let outDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N")).FullName
+    // Ids that the registry doesn't give, it counts from r1.
+    let original = Run("x1", FSharpCode, UiThread, "let again = 6 * 7", Path.Combine(outDir, "script.fsx"), outDir, 10000, false)
+    original.Complete(RunOutcome.ofStatus Succeeded) |> ignore
+    server.Service.Runs.Add original
+    server.Service.Runs.Add(finished "x2" HostCommands Succeeded "-_Line 0,0,0 1,1,1")
+    let view = PanelView({ host "Revit" with Server = (fun () -> Some server) })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    let selectedId (runs: ListBox) = match runs.SelectedItem with :? RunRow as row -> row.Id | _ -> ""
+    try
+        window.Show()
+        view.Refresh()
+        let runAgain = view.FindControl<Button> "RunAgain"
+        let runs = view.FindControl<ListBox> "Runs"
+        Assert.False runAgain.IsEnabled
+        runs.SelectedIndex <- 0 // newest first: the command run
+        Assert.False runAgain.IsEnabled
+        runs.SelectedIndex <- 1
+        Assert.True runAgain.IsEnabled
+        click runAgain
+        let deadline = DateTime.UtcNow.AddSeconds 60
+        while not ((selectedId runs).StartsWith "r") && DateTime.UtcNow < deadline do
+            do! Task.Delay 20
+        Assert.Equal("r1", selectedId runs)
+        let again = server.Service.Runs.TryGet("r1").Value
+        Assert.Equal(original.Code, again.Code)
+        Assert.NotEqual<string>(original.ScriptPath, again.ScriptPath)
+        do! again.Completion
+        Assert.Equal(Succeeded, again.Status)
+    finally window.Close()
+}
+
 [<Theory>]
 [<InlineData("Rhino")>]
 [<InlineData("Revit")>]

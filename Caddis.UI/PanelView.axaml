@@ -182,10 +182,11 @@
         </TabItem>
       </TabControl>
       <!-- At the right end of the tab headers, while the code is shown. A check box for how the code is shown, set apart from
-           the buttons that act on it. The buttons are enabled when there is code to export. -->
+           the buttons that act on it. The buttons are enabled when there is code to run or export. -->
       <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="4" IsVisible="{Binding #CodeTab.IsSelected}"
                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,0,0">
         <CheckBox x:Name="FormatCheck" Content="Formatted" IsChecked="True" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <Button x:Name="RunAgain" Content="Run again" IsEnabled="False" MinHeight="22" />
         <Button x:Name="ExportCode" Content="Export" IsEnabled="False" MinHeight="22" />
         <Button x:Name="ExportAll" Content="Export all" IsEnabled="False" MinHeight="22" />
       </StackPanel>
