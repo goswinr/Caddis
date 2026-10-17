@@ -55,6 +55,7 @@ type OtherAppHost() =
             Ok ()
         member _.Echo(_, _) = ()
         member _.Log _ = ()
+        member _.LogError _ = ()
         member _.Status() = []
         member _.CaptureView(v, w, h, d, p) = inner.CaptureView(v, w, h, d, p)
         member this.Export(selection, path) =

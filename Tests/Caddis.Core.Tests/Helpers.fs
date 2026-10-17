@@ -85,6 +85,7 @@ type QueuedHost() =
         member this.AfterRun(r, s) = this.Finalize(r, s)
         member _.Echo(_, _) = ()
         member _.Log _ = ()
+        member _.LogError _ = ()
         member _.Status() = []
         member _.CaptureView(v, w, h, d, p) = host.CaptureView(v, w, h, d, p)
         member _.Export(s, p) = host.Export(s, p)

@@ -61,6 +61,7 @@ type HeadlessHost(log: string -> unit) =
         member _.AfterRun(_, _) = Ok ()
         member _.Echo(_, _) = ()
         member _.Log msg = log msg
+        member _.LogError msg = log msg
         member _.Status() = []
         member _.CaptureView(_, _, _, _, _) = failwith "Capturing a viewport needs a host app like Rhino or Revit."
         member _.Export(_, _) = failwith "Exporting needs a host app like Rhino or Revit."

@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Compile Include="Compat.fs" />
+    <Compile Include="ErrorLog.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="Settings.fs" />
     <Compile Include="Output.fs" />

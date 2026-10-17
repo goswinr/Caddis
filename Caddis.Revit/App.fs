@@ -47,7 +47,10 @@ module App =
         withServer (fun s ->
             match s.Start() with
             | Ok url -> (if quiet then log else show) $"Caddis is listening on {url} , MCP endpoint: {url}/mcp"
-            | Error msg -> (if quiet then log else show) $"Caddis could not start:{Environment.NewLine}{msg}")
+            | Error msg ->
+                let msg = $"Caddis could not start:{Environment.NewLine}{msg}"
+                RevitLog.error msg
+                if not quiet && ApiContext.isActive () then TaskDialog.Show("Message", msg) |> ignore)
 
     let stop () =
         withServer (fun s ->
@@ -62,7 +65,7 @@ module App =
                 log $"Caddis: {doneMessage}"
             with
             | BusyException runId -> log $"Caddis: run '{runId}' is still in progress, cancel it first (only possible in background mode)."
-            | e -> log $"Caddis: {e.Message}"
+            | e -> RevitLog.error $"Caddis: {e.Message}"
         }
         |> ignore
 
@@ -128,15 +131,36 @@ module App =
             s.NewToken() |> ignore
             show "Created a new token, the old one does not work anymore. Copy the MCP command again and update your MCP client.")
 
-    /// The info and the latest messages, in a dialog.
+    /// The last items, at most n.
+    let private lastOf (n: int) (items: 'T list) = items |> List.rev |> List.truncate n |> List.rev
+
+    /// The info, the latest errors and the latest messages, in a dialog. Afterwards the Info button doesn't show the errors anymore.
     let showInfo () =
         withServer (fun s ->
+            let errorCount = RevitLog.errors.Count
+            RevitLog.errors.MarkSeen()
             let recent =
                 match RevitLog.recentLines () with
                 | [] -> "none"
-                | lines -> lines |> List.rev |> List.truncate 12 |> List.rev |> String.concat Environment.NewLine
+                | lines -> lines |> lastOf 12 |> String.concat Environment.NewLine
             use d = new TaskDialog("Info", MainInstruction = "Caddis, F# Interactive for AI agents")
-            d.MainContent <- info s
+            match RevitLog.errors.Lines with
+            | [] -> d.MainContent <- info s
+            | errors ->
+                // An error may have a stack trace: its first lines only, the log file has all.
+                let shortened (e: string) =
+                    let lines = e.Replace("\r\n", "\n").Split '\n'
+                    if lines.Length <= 4 then e
+                    else String.concat Environment.NewLine lines[..3] + Environment.NewLine + "   ... (more in the log file)"
+                let shown = 5
+                d.MainIcon <- TaskDialogIcon.TaskDialogIconError
+                d.MainContent <-
+                    String.concat Environment.NewLine [
+                        info s
+                        ""
+                        if errorCount <= shown then "Errors:" else $"{errorCount} errors, the latest {shown}:"
+                        yield! errors |> lastOf shown |> List.map shortened
+                    ]
             d.ExpandedContent <- $"Latest messages:{Environment.NewLine}{recent}"
             d.Show() |> ignore)
 

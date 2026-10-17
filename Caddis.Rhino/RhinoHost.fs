@@ -35,6 +35,14 @@ module RhinoLog =
 
     let writeLine (s: string) = onUi (fun () -> uncaptured (fun () -> RhinoApp.WriteLine s))
 
+    /// The latest errors, for the panel, which also shows them after the command line has scrolled on.
+    let errors = ErrorLog 20
+
+    /// An internal error. Called from any thread.
+    let error (s: string) =
+        errors.Add s
+        writeLine s
+
 
 /// Rhino.Scripting finds the UI SynchronizationContext via reflection in the Fesh.Rhino plugin.
 /// Without Fesh.Rhino set it via its public RhinoSync.SyncContext property,
@@ -52,7 +60,7 @@ module RhinoScriptingSync =
                     | null -> ()
                     | p -> p.SetValue(null, ctx)
             with e ->
-                RhinoLog.writeLine $"Caddis: setting RhinoSync.SyncContext of Rhino.Scripting failed: {e.Message}"
+                RhinoLog.error $"Caddis: setting RhinoSync.SyncContext of Rhino.Scripting failed: {e.Message}"
 
     /// Call on the UI thread.
     let install () =
@@ -557,6 +565,8 @@ type RhinoHost() =
             flushEcho false
 
         member _.Log(msg) = RhinoLog.writeLine msg
+
+        member _.LogError(msg) = RhinoLog.error msg
 
         member _.Status() =
             // don't use the UI thread here: it might be blocked by a run

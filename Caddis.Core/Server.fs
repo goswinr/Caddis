@@ -167,7 +167,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
             | :? HttpListenerException
             | :? IOException
             | :? ObjectDisposedException -> () // the client disconnected
-            | e -> host.Log $"Caddis: writing the response to {r.HttpMethod} {r.Url.AbsolutePath} failed: {e}"
+            | e -> host.LogError $"Caddis: writing the response to {r.HttpMethod} {r.Url.AbsolutePath} failed: {e}"
         }
 
     /// A backgroundTask, not a task: Start is called on the UI thread of the host,
@@ -205,7 +205,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                 ]
             File.WriteAllText(discoveryPath (), Json.toText info)
         with e ->
-            host.Log $"Caddis: writing the discovery file failed: {e.Message}"
+            host.LogError $"Caddis: writing the discovery file failed: {e.Message}"
 
     /// Tries the port and the next ones until one is free.
     let rec tryListen (lan: bool) (firstPort: int) (p: int) (attemptsLeft: int) : Result<HttpListener * int, string> =

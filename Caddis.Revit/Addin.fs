@@ -13,6 +13,8 @@ module internal Ribbon =
     let mutable private startStop: PushButton = null
     let mutable private mode: PushButton = null
     let mutable private cancel: PushButton = null
+    let mutable private info: PushButton = null
+    let private infoTip = "Shows the state of the server and the F# session, and the latest messages of Caddis."
     /// Every button with its current icon, to draw them again when Revit's theme changes.
     let private icons = Collections.Generic.Dictionary<string, PushButton * RibbonIcons.Icon>()
 
@@ -46,6 +48,14 @@ module internal Ribbon =
             let icon = if canCancel then RibbonIcons.cancel else RibbonIcons.cancelUnavailable
             if snd icons[cancel.Name] <> icon then setIcon cancel icon
             if cancel.Enabled <> canCancel then cancel.Enabled <- canCancel
+        // Until the Info dialog or the panel has shown them, errors turn the Info button red. Revit can't color a button's text.
+        let errors = RevitLog.errors.Unseen
+        match errors with
+        | 0 -> set info "Info" RibbonIcons.info
+        | 1 -> set info "Info:\r\n1 error" RibbonIcons.infoError
+        | n -> set info $"Info:\r\n{n} errors" RibbonIcons.infoError
+        let tip = if errors = 0 then infoTip else $"Caddis had errors, this shows them. {infoTip}"
+        if not (isNull info) && info.ToolTip <> tip then info.ToolTip <- tip
 
     let create (uiApp: UIControlledApplication) =
         let tab = "Caddis"
@@ -81,8 +91,7 @@ module internal Ribbon =
         let status = uiApp.CreateRibbonPanel(tab, "Status")
         add status "Panel" "Caddis Details\r\nPanel" "PanelCommand" "Shows or hides the Caddis panel with the server settings and the recent runs, their output and code." RibbonIcons.panel
         |> ignore
-        add status "Info" "Info" "InfoCommand" "Shows the state of the server and the F# session, and the latest messages of Caddis." RibbonIcons.info
-        |> ignore
+        info <- add status "Info" "Info" "InfoCommand" infoTip RibbonIcons.info
         uiApp.CreateRibbonPanel(tab, "Settings") |> ignore
         RibbonSettings.create tab "Settings"
 
@@ -101,7 +110,7 @@ type CaddisCommand() =
                     Ribbon.update ())
                 Result.Succeeded
             with e ->
-                RevitLog.write $"Caddis: {e}"
+                RevitLog.error $"Caddis: {e}"
                 message <- e.Message
                 Result.Failed
 
@@ -182,7 +191,7 @@ type CaddisApplication() =
             try
                 // before Caddis.Core uses System.Text.Json or FCS, so that on .NET Framework it gets its versions, not Revit's older ones
                 try FsiAssemblyResolver.install ()
-                with e -> RevitLog.write $"Caddis: putting its assembly resolver first failed: {e.Message}"
+                with e -> RevitLog.error $"Caddis: putting its assembly resolver first failed: {e.Message}"
                 ApiContext.init ()
                 RevitDialogs.mainWindow <- uiApp.MainWindowHandle
                 let host = RevitHost(uiApp.ControlledApplication)
@@ -195,13 +204,13 @@ type CaddisApplication() =
                 uiApp.ThemeChanged.AddHandler themeChanged
                 uiApp.Idling.AddHandler idling
                 try uiApp.RegisterDockablePane(CaddisPanel.PaneId, "Caddis", CaddisPaneProvider())
-                with e -> RevitLog.write $"Caddis: registering the panel failed: {e.Message}"
+                with e -> RevitLog.error $"Caddis: registering the panel failed: {e.Message}"
                 if server.Service.Settings.autoStart then App.start true
                 Ribbon.update ()
                 Updates.check ()
                 Result.Succeeded
             with e ->
-                RevitLog.write $"Caddis failed to load: {e}"
+                RevitLog.error $"Caddis failed to load: {e}"
                 TaskDialog.Show("Load error", $"Caddis failed to load:{Environment.NewLine}{e.Message}") |> ignore
                 Result.Failed
 

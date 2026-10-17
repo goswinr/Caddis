@@ -679,6 +679,10 @@ type ICaddisHost =
     /// Shows a message from Caddis itself to the user, e.g. on the Rhino command line. Called from any thread.
     abstract Log: string -> unit
 
+    /// Shows an internal error of Caddis to the user, e.g. that the F# session could not be created. Called from any thread.
+    /// The host keeps errors apart from the messages of Log, so that many messages don't push them out.
+    abstract LogError: string -> unit
+
     /// Host specific entries for the status endpoint.
     abstract Status: unit -> (string * JsonNode) list
 

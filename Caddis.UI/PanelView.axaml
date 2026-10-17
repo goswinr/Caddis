@@ -59,6 +59,7 @@
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" MinHeight="48" />
         <RowDefinition Height="6" />
         <RowDefinition Height="*" MinHeight="60" />
@@ -89,6 +90,18 @@
               </StackPanel>
             </ToggleButton>
           </StackPanel>
+          <!-- Only while the host has errors. Shows them below, like the settings. -->
+          <ToggleButton x:Name="ErrorsToggle" IsVisible="False" Margin="0,2,4,2">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <!-- A red disc with an exclamation mark, the same in light and dark themes. -->
+              <Grid Width="14" Height="14" VerticalAlignment="Center">
+                <Ellipse Fill="#D13438" />
+                <Rectangle Fill="White" Width="2" Height="6" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0" />
+                <Rectangle Fill="White" Width="2" Height="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,2" />
+              </Grid>
+              <TextBlock x:Name="ErrorsText" Text="Errors" />
+            </StackPanel>
+          </ToggleButton>
         </WrapPanel>
         <TextBlock x:Name="Message" Grid.Row="2" Grid.ColumnSpan="2" TextWrapping="Wrap" Margin="0,2,0,2" />
       </Grid>
@@ -112,8 +125,14 @@
         </WrapPanel>
       </Border>
 
+      <!-- The host's errors, newest first. Folded until the Errors button is checked. -->
+      <Grid x:Name="ErrorsPane" Grid.Row="2" RowDefinitions="Auto,Auto" IsVisible="{Binding #ErrorsToggle.IsChecked}" Margin="0,0,0,4">
+        <TextBox x:Name="ErrorList" Theme="{StaticResource Caddis.OutputTextBox}" MaxHeight="200" />
+        <Button x:Name="ClearErrors" Grid.Row="1" Content="Clear errors" HorizontalAlignment="Left" Margin="0,4,0,0" />
+      </Grid>
+
       <!-- The recent runs, newest first. The columns share their widths with the header. -->
-      <Border Grid.Row="2" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
+      <Border Grid.Row="3" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
         <Grid RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
           <Border BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="0,0,0,1" Padding="0,3">
             <Grid Classes="runColumns">
@@ -150,9 +169,9 @@
         </Grid>
       </Border>
 
-      <GridSplitter Grid.Row="3" ResizeDirection="Rows" Cursor="SizeNorthSouth" />
+      <GridSplitter Grid.Row="4" ResizeDirection="Rows" Cursor="SizeNorthSouth" />
 
-      <TabControl Grid.Row="4">
+      <TabControl Grid.Row="5">
         <TabItem Header="Output">
           <TextBox x:Name="Output" Theme="{StaticResource Caddis.OutputTextBox}" />
         </TabItem>
@@ -164,7 +183,7 @@
       </TabControl>
       <!-- At the right end of the tab headers, while the code is shown. A check box for how the code is shown, set apart from
            the buttons that act on it. The buttons are enabled when there is code to export. -->
-      <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="4" IsVisible="{Binding #CodeTab.IsSelected}"
+      <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="4" IsVisible="{Binding #CodeTab.IsSelected}"
                   HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,0,0">
         <CheckBox x:Name="FormatCheck" Content="Formatted" IsChecked="True" VerticalAlignment="Center" Margin="0,0,8,0" />
         <Button x:Name="ExportCode" Content="Export" IsEnabled="False" MinHeight="22" />

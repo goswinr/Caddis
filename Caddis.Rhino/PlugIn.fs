@@ -29,7 +29,7 @@ type CaddisPlugIn() =
             try
                 // before Caddis.Core uses System.Text.Json or FCS, so that on .NET Framework it gets its versions, not Rhino's older ones
                 try FsiAssemblyResolver.install ()
-                with e -> RhinoLog.writeLine $"Caddis: putting its assembly resolver first failed: {e.Message}"
+                with e -> RhinoLog.error $"Caddis: putting its assembly resolver first failed: {e.Message}"
                 RhinoScriptingSync.install ()
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
@@ -40,7 +40,7 @@ type CaddisPlugIn() =
                         "Caddis.Rhino.Resources.Caddis.ico", Rhino.UI.PanelType.PerDoc
                     )
                 with e ->
-                    RhinoLog.writeLine $"Caddis: registering the panel failed: {e.Message}"
+                    RhinoLog.error $"Caddis: registering the panel failed: {e.Message}"
                 if server.Service.Settings.autoStart then App.start ()
                 LoadReturnCode.Success
             with e ->

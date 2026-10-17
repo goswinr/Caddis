@@ -15,7 +15,7 @@ module internal Updates =
     /// With the shell, so that the bootstrapper inherits no handles of Revit.
     let private start (args: string) =
         try Process.Start(ProcessStartInfo(bootstrapper, args, UseShellExecute = true)) |> ignore
-        with e -> RevitLog.write $"Caddis: starting {bootstrapper} failed: {e.Message}"
+        with e -> RevitLog.error $"Caddis: starting {bootstrapper} failed: {e.Message}"
 
     /// At Revit's start: the bootstrapper checks for a newer release and asks whether to download it.
     let check () =

@@ -44,7 +44,8 @@ module private PanelServices =
         OpenUrl = fun url ->
             try Process.Start(ProcessStartInfo(url, UseShellExecute = true)) |> ignore with _ -> ()
         PickScriptPath = pickScriptPath
-        Message = Some(fun () -> RevitLog.recentLines () |> List.tryLast |> Option.defaultValue "")
+        Message = Some RevitLog.latestLine
+        Errors = RevitLog.errors
         Refreshed = fun () -> try App.stateChanged () with _ -> ()
         Palette = PanelTheme.palette
         SubscribeTheme = PanelTheme.subscribe
@@ -73,7 +74,7 @@ type CaddisPanel() as this =
                 timer.Start())
             this.Unloaded.Add(fun _ -> timer.Stop())
         with e ->
-            RevitLog.write $"Caddis: the panel could not start Avalonia: {e}"
+            RevitLog.error $"Caddis: the panel could not start Avalonia: {e}"
             this.Content <- TextBlock(
                 Text = $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the Caddis ribbon buttons instead.",
                 TextWrapping = TextWrapping.Wrap)

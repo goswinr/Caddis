@@ -579,6 +579,8 @@ type RevitHost(app: ControlledApplication) =
 
         member _.Log(msg) = RevitLog.write msg
 
+        member _.LogError(msg) = RevitLog.error msg
+
         member _.Status() =
             // Revit may be busy, e.g. with a run on the 'ui' thread or in a dialog: then the status of the last call
             // also updates lastStatus when Revit answers too late for this call

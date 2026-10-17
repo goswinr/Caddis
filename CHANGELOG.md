@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Internal errors of Caddis, e.g. when the F# session can't be created, are kept apart from its other messages, which can't push them out anymore. While there are any, the panel shows an `Errors` button with a red exclamation mark, in Rhino and Revit; it lists them newest first and can clear them.
+- In Revit, unseen errors also turn the ribbon's `Info` button red with an exclamation mark and their number, and the Info dialog lists the latest ones above the other messages. In `revit.log` they are marked with `ERROR`.
+
 ### Changed
 - Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once. The token is kept.
 

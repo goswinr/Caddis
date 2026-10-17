@@ -66,6 +66,10 @@ type PanelView(host: PanelHost) as this =
     let cancel: Button = find "Cancel"
     let reset: Button = find "Reset"
     let settingsToggle: Primitives.ToggleButton = find "SettingsToggle"
+    let errorsToggle: Primitives.ToggleButton = find "ErrorsToggle"
+    let errorsText: TextBlock = find "ErrorsText"
+    let errorList: TextBox = find "ErrorList"
+    let clearErrors: Button = find "ClearErrors"
     let autoStart: CheckBox = find "AutoStart"
     let echo: CheckBox = find "Echo"
     let lan: CheckBox = find "Lan"
@@ -204,8 +208,25 @@ type PanelView(host: PanelHost) as this =
             runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = selectedId) |> Option.map box |> Option.toObj
             showDetails ()
 
+    /// The Errors button while the host has errors, in bold for new ones, and their list while it is shown.
+    let refreshErrors () =
+        match host.Errors.Lines with
+        | [] ->
+            errorsToggle.IsVisible <- false
+            errorsToggle.IsChecked <- false
+        | lines ->
+            errorsToggle.IsVisible <- true
+            errorsText.Text <- if lines.Length = 1 then "1 error" else $"{lines.Length} errors"
+            if errorsToggle.IsChecked.GetValueOrDefault() then
+                host.Errors.MarkSeen()
+                // Setting the text clears the selection, so only when there are other errors.
+                let text = lines |> List.rev |> String.concat "\n\n"
+                if errorList.Text <> text then errorList.Text <- text
+            errorsText.FontWeight <- if host.Errors.Unseen > 0 then FontWeight.Bold else FontWeight.Normal
+
     let refresh () =
         message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
+        refreshErrors ()
         match host.Server () with
         | None -> serverStatus.Text <- "Caddis is not loaded."
         | Some s ->
@@ -284,6 +305,8 @@ type PanelView(host: PanelHost) as this =
             tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ]
         )
         ToolTip.SetTip(settingsToggle, "Show or hide the settings.")
+        ToolTip.SetTip(errorsToggle, tip [ "Show or hide the internal errors of Caddis,"; "e.g. that the F# session could not be created." ])
+        ToolTip.SetTip(clearErrors, tip [ "Remove these errors from the list."; "The Errors button is hidden until the next error." ])
         ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])
@@ -329,6 +352,7 @@ type PanelView(host: PanelHost) as this =
             ]
         )
         textMenu output output.Copy output.SelectAll
+        textMenu errorList errorList.Copy errorList.SelectAll
         textMenu codeView codeView.Copy codeView.SelectAll
 
         startStop.Click.Add(fun _ ->
@@ -350,6 +374,10 @@ type PanelView(host: PanelHost) as this =
         cancelWaiting.Click.Add(fun _ -> host.SetCancelWaitingCommands |> Option.iter (fun set -> set (cancelWaiting.IsChecked.GetValueOrDefault())))
         cancel.Click.Add(fun _ -> host.Cancel (); refresh ())
         reset.Click.Add(fun _ -> host.Reset (); refresh ())
+        errorsToggle.Click.Add(fun _ -> refreshErrors ())
+        clearErrors.Click.Add(fun _ ->
+            host.Errors.Clear()
+            refreshErrors ())
         runs.SelectionChanged.Add(fun _ -> showDetails ())
         formatCheck.Click.Add(fun _ -> showCode ())
         exportCode.Click.Add(fun _ ->

@@ -42,6 +42,7 @@ module private PanelServices =
         OpenUrl = fun url -> Application.Instance.Open url
         PickScriptPath = pickScriptPath
         Message = None
+        Errors = RhinoLog.errors
         Refreshed = ignore
         Palette = PanelTheme.palette
         SubscribeTheme = PanelTheme.subscribe
@@ -70,7 +71,7 @@ type CaddisPanel() as this =
                 timer.Start())
             this.UnLoad.Add(fun _ -> timer.Stop())
         with e ->
-            RhinoLog.writeLine $"Caddis: the panel could not start Avalonia: {e}"
+            RhinoLog.error $"Caddis: the panel could not start Avalonia: {e}"
             this.Content <-
                 new Label(
                     Text = $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the command 'Caddis' instead.",

@@ -23,6 +23,7 @@ type CommandHost(runCommands: Run * CommandRequest -> RunOutcome) =
         member _.AfterRun(r, s) = inner.AfterRun(r, s)
         member _.Echo(k, t) = inner.Echo(k, t)
         member _.Log m = inner.Log m
+        member _.LogError m = inner.LogError m
         member _.Status() = inner.Status()
         member _.CaptureView(v, w, h, d, p) = inner.CaptureView(v, w, h, d, p)
         member _.Export(s, p) = inner.Export(s, p)

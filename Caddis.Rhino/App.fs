@@ -30,7 +30,7 @@ module App =
         withServer (fun s ->
             match s.Start() with
             | Ok url -> log $"Caddis is listening on {url} , MCP endpoint: {url}/mcp"
-            | Error msg -> log $"Caddis could not start:{Environment.NewLine}{msg}")
+            | Error msg -> RhinoLog.error $"Caddis could not start:{Environment.NewLine}{msg}")
 
     let stop () =
         withServer (fun s ->
@@ -45,7 +45,7 @@ module App =
                 log $"Caddis: {doneMessage}"
             with
             | BusyException runId -> log $"Caddis: run '{runId}' is still in progress, cancel it first (only possible in background mode)."
-            | e -> log $"Caddis: {e.Message}"
+            | e -> RhinoLog.error $"Caddis: {e.Message}"
         }
         |> ignore
 

@@ -20,6 +20,7 @@ module internal RibbonIcons =
         | CancelRunUnavailable
         | Panel
         | Info
+        | InfoError
 
     let start = ServerStart
     let stop = ServerStop
@@ -31,6 +32,7 @@ module internal RibbonIcons =
     let cancelUnavailable = CancelRunUnavailable
     let panel = Panel
     let info = Info
+    let infoError = InfoError
 
     type private Palette = {
         Face: Brush
@@ -196,6 +198,14 @@ module internal RibbonIcons =
             rect p.Top 20.0 15.0 2.0 2.0
             rect p.Top 20.0 19.0 2.0 8.0
             if not compact then rect p.Top 18.0 25.0 6.0 2.0
+        | InfoError ->
+            // The sheet of Info behind a larger red disc with a broad exclamation mark, to stand out on the ribbon.
+            sheet 4.0 2.0
+            rect p.Ink 8.0 10.0 10.0 2.0
+            ellipse p.RedShade 21.0 21.0 10.0
+            ellipse p.Red 20.0 20.0 10.0
+            rect p.Top 18.0 12.0 4.0 10.0
+            rect p.Top 18.0 24.0 4.0 4.0
 
     /// Draws a transparent 16 or 32 DIP bitmap in Revit's current theme, at the screen's DPI.
     let draw (icon: Icon) (size: int) : ImageSource =

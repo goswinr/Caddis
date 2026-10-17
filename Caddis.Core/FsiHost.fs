@@ -351,14 +351,14 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                             try
                                 let s = createSession m
                                 try FsiAssemblyResolver.register s
-                                with e -> host.Log $"Caddis: values of earlier runs might not be found, setting up the resolver for FSI assemblies failed: {e.Message}"
+                                with e -> host.LogError $"Caddis: values of earlier runs might not be found, setting up the resolver for FSI assemblies failed: {e.Message}"
                                 lock sync (fun () ->
                                     session <- Some s
                                     worker <- if m = Background then Some(new WorkerThread("Caddis FSI")) else None
                                     state <- Ready)
                             with e ->
                                 lock sync (fun () -> state <- Failed e.Message)
-                                host.Log $"Caddis: creating the F# Interactive session failed:\n{e}")
+                                host.LogError $"Caddis: creating the F# Interactive session failed:\n{e}")
                     )
                 initTask)
 

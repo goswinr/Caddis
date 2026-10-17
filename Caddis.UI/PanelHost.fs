@@ -33,6 +33,8 @@ type PanelHost = {
     /// Shows the host's dialog to save an F# script, with a title and a suggested file name. The chosen path, None if cancelled.
     PickScriptPath: string -> string -> string option
     Message: (unit -> string) option
+    /// The host's internal errors. The panel shows a button for them while there are any.
+    Errors: ErrorLog
     Refreshed: unit -> unit
     Palette: unit -> PanelPalette
     SubscribeTheme: (unit -> unit) -> IDisposable

@@ -54,6 +54,7 @@ let host name = {
     OpenUrl = ignore
     PickScriptPath = fun _ _ -> None
     Message = if name = "Revit" then Some(fun () -> "Copied MCP command") else None
+    Errors = ErrorLog 20
     Refreshed = ignore
     Palette = fun () -> palette false
     SubscribeTheme = fun _ -> { new IDisposable with member _.Dispose() = () }
@@ -81,6 +82,37 @@ let ``shared XAML loads and exposes the host's options and actions`` name =
         if name = "Revit" then Assert.Equal("Copied MCP command", view.FindControl<TextBlock>("Message").Text)
         Assert.NotNull(view.FindControl<Image>("LogoImage").Source)
         Assert.NotNull(view.FindControl<TextEditor>("CodeView").SyntaxHighlighting)
+    finally window.Close()
+
+[<AvaloniaFact>]
+let ``the Errors button shows only while there are errors, and lists them newest first`` () =
+    let services = host "Revit"
+    let view = PanelView(services)
+    let window = Window(Content = view, Width = 600, Height = 600)
+    let toggle = view.FindControl<ToggleButton> "ErrorsToggle"
+    try
+        window.Show()
+        view.Refresh()
+        Assert.False toggle.IsVisible
+        services.Errors.Add "Caddis: first failure"
+        services.Errors.Add "Caddis: second failure"
+        view.Refresh()
+        Assert.True toggle.IsVisible
+        Assert.Equal("2 errors", view.FindControl<TextBlock>("ErrorsText").Text)
+        Assert.Equal(FontWeight.Bold, view.FindControl<TextBlock>("ErrorsText").FontWeight)
+        Assert.False(view.FindControl<Grid>("ErrorsPane").IsVisible)
+        Assert.Equal(2, services.Errors.Unseen)
+        toggle.IsChecked <- true
+        toggle.RaiseEvent(RoutedEventArgs(Button.ClickEvent))
+        Assert.True(view.FindControl<Grid>("ErrorsPane").IsVisible)
+        let text = view.FindControl<TextBox>("ErrorList").Text
+        Assert.True(text.IndexOf "second failure" < text.IndexOf "first failure", text)
+        Assert.Equal(0, services.Errors.Unseen)
+        Assert.Equal(FontWeight.Normal, view.FindControl<TextBlock>("ErrorsText").FontWeight)
+        click (view.FindControl<Button> "ClearErrors")
+        Assert.False toggle.IsVisible
+        Assert.False(view.FindControl<Grid>("ErrorsPane").IsVisible)
+        Assert.Empty services.Errors.Lines
     finally window.Close()
 
 [<AvaloniaFact>]
