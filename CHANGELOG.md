@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-17
+
 ### Added
 - Internal errors of Caddis, e.g. when the F# session can't be created, are kept apart from its other messages, which can't push them out anymore. While there are any, the panel shows an `Errors` button with a red exclamation mark, in Rhino and Revit; it lists them newest first and can clear them.
 - The panel's code view has `Run again` to run the code of the selected F# run again, as a new run in the current F# session.
@@ -15,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For development, the files in `Dev`, e.g. `Rhino8.cmd` or `Revit2026.cmd`, start Rhino or Revit with a local build of Caddis, while the installed Caddis stays installed for every other start. In Revit 2025 and later the loader loads Caddis.Revit from the folder in the environment variable `CADDIS_REVIT_DEV` if it is set.
 - With two instances of an app, e.g. two Revits, `Activate` in the second one takes over the port where the agents connect, once the first one is idle with no run in progress. The first one moves to another port and logs that. Agents connected to the port go on with the second one, and their next tool result says that another Caddis answers now. `POST /release` asks for the port.
 - Claude Desktop: Caddis as a Claude Desktop extension, `caddis-rhino.mcpb` and `caddis-revit.mcpb`, whose relay passes Claude Desktop's messages to Caddis on this computer. The panel shows Claude Desktop too, its `Set up` makes the extension for the running app and opens it. Each GitHub release has both extensions for the default ports.
+- The panel's settings show the version of Caddis. In Revit also whether it is the latest, or whether a newer one is available or downloaded, from the update check at Revit's start.
+- Revit's `Info` button shows the same update status, and the `Caddis` command in Rhino shows the version.
+- Caddis checks whether a .NET SDK is installed that can restore NuGet packages for `#r "nuget: ..."`. `caddis_status` reports it under `nuget`, and the description of `caddis_eval` and the MCP instructions tell the agent.
+- Without that SDK the panel recommends installing it, with a button to its download page, and a failed run with `#r "nuget:"` gets a note explaining why.
 
 ### Changed
 - Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once.
@@ -25,10 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Copy MCP command` in the panel, `CopyMcpCommand` in Rhino's `Caddis` command and `Copy MCP` on Revit's ribbon: the panel's agents replace them. Without the panel, Rhino prints the commands for Claude Code and Codex when the server starts, and Revit's `Info` dialog shows them.
 - Listening on the network: the setting `listenOnLan`, the option `ListenOnLan` in Rhino and the checkbox `Listen on the network (LAN)` in the panel and on Revit's ribbon. Caddis listens on localhost only.
 - `listenOnLan` and `tokenFile` in the status and in the discovery files.
-- The panel's settings show the version of Caddis. In Revit also whether it is the latest, or whether a newer one is available or downloaded, from the update check at Revit's start.
-- Revit's `Info` button shows the same update status, and the `Caddis` command in Rhino shows the version.
-- Caddis checks whether a .NET SDK is installed that can restore NuGet packages for `#r "nuget: ..."`. `caddis_status` reports it under `nuget`, and the description of `caddis_eval` and the MCP instructions tell the agent.
-- Without that SDK the panel recommends installing it, with a button to its download page, and a failed run with `#r "nuget:"` gets a note explaining why.
 
 ## [0.2.1] - 2026-10-11
 
