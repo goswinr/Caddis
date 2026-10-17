@@ -13,6 +13,9 @@ The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, 
 On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`).
 There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
 
+Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`:
+F# Interactive downloads them with the SDK. In Rhino 8 the .NET SDK 8 is enough. Caddis runs without it, the panel shows when it is missing.
+
 Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
 both use the same versions of FSharp.Core and FSharp.Compiler.Service.
 

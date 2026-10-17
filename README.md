@@ -38,6 +38,9 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino 
 | Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | Rhino's `PackageManager`, search for `Caddis` (after the first Yak release) | [Caddis for Rhino](Caddis.Rhino/README.md) |
 | Revit | Revit 2024 to 2027 on Windows | `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
 
+Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
+It works for every version of Rhino and Revit. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).
+
 ## What it does
 - Hosts one persistent F# Interactive session inside the app.
   Values, functions and types defined in one run stay available in the next.

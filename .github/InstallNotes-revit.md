@@ -6,6 +6,9 @@ It registers Caddis with every installed Revit from 2024 on.
 Revit 2024 runs it on .NET Framework 4.8, Revit 2025 and 2026 on .NET 8, or on .NET 10 from their .5 updates on, Revit 2027 on .NET 10.
 Caddis loads its build for the runtime of Revit when Revit starts, so it keeps working when Revit is updated.
 
+To use NuGet packages in scripts via `#r "nuget: Name"`, also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer.
+Caddis runs without it, only NuGet packages need it.
+
 For Rhino, install Caddis with Rhino's Package Manager instead.
 
 <details>
