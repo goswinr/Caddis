@@ -25,7 +25,7 @@ The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.40
 
 ## The Caddis command
 Run the command `Caddis`. Its options:
-- `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port.
+- `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port. On start it prints the commands to add Caddis to Claude Code and Codex.
 - `Panel` opens the [Caddis panel](#the-caddis-panel).
 - `CopyMcpCommand` copies the command to add Caddis to Claude Code.
 - `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.

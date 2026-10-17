@@ -62,6 +62,13 @@ claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/
 
 `--scope user` makes Caddis available across your Claude Code projects.
 
+For Codex the command is:
+```
+codex mcp add caddis-rhino --url http://127.0.0.1:7810/mcp
+```
+
+Rhino prints both commands to its command line when the server starts.
+
 Rhino and Revit have their own port and MCP name, so that both can run and stay registered in Claude Code at the same time:
 
 | App | Default port | MCP name |

@@ -211,6 +211,10 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
     member this.ClaudeMcpCommand =
         $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl}"
 
+    /// The command line to add this server to Codex, for all projects of the current user.
+    member this.CodexMcpCommand =
+        $"codex mcp add {host.Info.mcpServerName} --url {this.McpUrl}"
+
     /// Starts listening and creating the F# session. Returns the URL, or an error message.
     member this.Start() : Result<string, string> =
         lock sync (fun () ->

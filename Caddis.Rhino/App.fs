@@ -28,7 +28,16 @@ module App =
     let start () =
         withServer (fun s ->
             match s.Start() with
-            | Ok url -> log $"Caddis is listening on {url} , MCP endpoint: {url}/mcp"
+            | Ok url ->
+                String.concat
+                    Environment.NewLine
+                    [
+                        $"Caddis is listening on {url} , MCP endpoint: {url}/mcp"
+                        "To add Caddis to Claude Code or Codex, run one of these in a terminal:"
+                        s.ClaudeMcpCommand
+                        s.CodexMcpCommand
+                    ]
+                |> log
             | Error msg -> RhinoLog.error $"Caddis could not start:{Environment.NewLine}{msg}")
 
     let stop () =

@@ -99,6 +99,7 @@ let ``MCP uses the name and instructions of the host`` () =
     Assert.Equal("caddis-other", str [ "serverInfo"; "name" ] result)
     Assert.Equal("Caddis runs F# code inside OtherApp.", str [ "instructions" ] result)
     Assert.Equal($"claude mcp add --transport http --scope user caddis-other {server.Value.McpUrl}", server.Value.ClaudeMcpCommand)
+    Assert.Equal($"codex mcp add caddis-other --url {server.Value.McpUrl}", server.Value.CodexMcpCommand)
 
 [<Fact>]
 let ``MCP does not offer commands if the host has none`` () =
