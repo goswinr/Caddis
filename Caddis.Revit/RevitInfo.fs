@@ -84,7 +84,6 @@ module RevitInfo =
     let info: HostInfo = {
         appName = "Revit"
         mcpServerName = "caddis-revit"
-        copyMcpCommandUi = "the button 'Copy MCP' on the Caddis ribbon tab in Revit"
         objectIdKind = "an element id (a number)"
         isObjectId = fun s -> fst (Int64.TryParse s)
         mcp = mcp

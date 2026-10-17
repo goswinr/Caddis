@@ -3,6 +3,7 @@ namespace Caddis.UI
 open System
 open System.IO
 open System.Runtime.CompilerServices
+open System.Threading
 open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Input
@@ -22,6 +23,15 @@ type RunRow = {
     Status: string
     Time: string
     Code: string
+    }
+
+/// The controls of an AI agent in the panel: a dot and a text for its state, and a button to set it up or to connect it to this app.
+type internal AgentRow = {
+    Agent: McpAgent
+    Row: StackPanel
+    Dot: Shapes.Ellipse
+    State: TextBlock
+    Action: Button
     }
 
 /// The content of the Caddis panel: the server state and settings, the recent runs, and the output and code of the selected run.
@@ -59,7 +69,17 @@ type PanelView(host: PanelHost) as this =
     let fsiStatus: TextBlock = find "FsiStatus"
     let message: TextBlock = find "Message"
     let startStop: Button = find "StartStop"
-    let copyMcp: Button = find "CopyMcp"
+    let agents: StackPanel = find "Agents"
+    let agentNote: TextBlock = find "AgentNote"
+    let agentRows =
+        [ ClaudeCode, "Claude"; Codex, "Codex" ]
+        |> List.map (fun (agent, prefix) -> {
+            Agent = agent
+            Row = find (prefix + "Row")
+            Dot = find (prefix + "Dot")
+            State = find (prefix + "State")
+            Action = find (prefix + "Action")
+        })
     let modeLabel: TextBlock = find "ModeLabel"
     let mode: ComboBox = find "Mode"
     let cancel: Button = find "Cancel"
@@ -92,6 +112,13 @@ type PanelView(host: PanelHost) as this =
 
     /// While attached: the subscription to changes of the host's theme.
     let mutable themeChanges: IDisposable option = None
+
+    /// The agent whose button is at work, with the way to cancel it while an activation waits for the other app.
+    /// Only one at a time: both agents may connect to the same port.
+    let mutable agentWork: (McpAgent * CancellationTokenSource option) option = None
+
+    /// What the last click on an agent's button did, shown below the agents until the time.
+    let mutable agentNoteText: (string * DateTime) option = None
 
     let applyTheme () =
         let palette = host.Palette ()
@@ -237,11 +264,83 @@ type PanelView(host: PanelHost) as this =
                 if errorList.Text <> text then errorList.Text <- text
             errorsText.FontWeight <- if host.Errors.Unseen > 0 then FontWeight.Bold else FontWeight.Normal
 
+    /// The commands that set the agent up for this server: Claude Code's 'mcp add' fails if the name exists, so it is removed first.
+    let agentCommands (s: CaddisServer) (agent: McpAgent) =
+        [
+            if agent = ClaudeCode && s.AgentState agent <> AgentState.NotSetUp then
+                McpAgent.commandLine agent (McpAgent.removeArgs agent s.Service.Host.Info.mcpServerName)
+            s.AgentCommand agent
+        ]
+
+    /// The state of each agent, and its button: Set up, Activate, or Cancel while an activation waits.
+    let refreshAgents (s: CaddisServer) =
+        agents.IsVisible <- s.IsRunning
+        if s.IsRunning then
+            let app = host.Name
+            for row in agentRows do
+                let name = McpAgent.name row.Agent
+                let state = s.AgentState row.Agent
+                let commands = agentCommands s row.Agent
+                let copyHint = "Right-click to copy the command, e.g. to run it in a terminal yourself."
+                let label, stateTip =
+                    match state with
+                    | AgentState.Active ->
+                        "active",
+                        tip [
+                            $"{name} connects to Caddis in this {app}, at {s.McpUrl}."
+                            $"Sessions of {name} that were open before it was set up see Caddis after a restart."
+                        ]
+                    | AgentState.NotSetUp -> "not set up", $"{name} has no MCP server '{s.Service.Host.Info.mcpServerName}' for all your projects."
+                    | AgentState.Inactive url ->
+                        let where =
+                            match McpAgent.localPort url |> Option.bind s.InstanceOnPort with
+                            | Some(other, "") -> [ $"where Caddis in {other} listens." ]
+                            | Some(other, title) -> [ $"where Caddis in {other} listens:"; title ]
+                            | None -> [ $"where no other Caddis listens." ]
+                        "inactive", tip ($"{name} connects to {url}," :: where)
+                row.State.Text <- $"{name}: {label}"
+                ToolTip.SetTip(row.State, stateTip)
+                ToolTip.SetTip(row.Dot, stateTip)
+                row.Dot.Classes.Set("active", (state = AgentState.Active))
+                row.Dot.Classes.Set("inactive", (match state with AgentState.Inactive _ -> true | _ -> false))
+                match agentWork with
+                | Some(agent, cts) when agent = row.Agent ->
+                    row.Action.IsVisible <- true
+                    row.Action.IsEnabled <- cts.IsSome
+                    row.Action.Content <- if cts.IsSome then "Cancel" else "Setting up..."
+                    ToolTip.SetTip(row.Action, $"Stop waiting for the other {app}, it keeps the port.")
+                | _ ->
+                    row.Action.IsVisible <- state <> AgentState.Active
+                    row.Action.IsEnabled <- agentWork.IsNone
+                    match state with
+                    | AgentState.Active -> ()
+                    | AgentState.NotSetUp ->
+                        row.Action.Content <- "Set up"
+                        ToolTip.SetTip(row.Action, tip [ $"Add Caddis in this {app} to {name}, for all your projects. Runs:"; yield! commands; copyHint ])
+                    | AgentState.Inactive url ->
+                        row.Action.Content <- "Activate"
+                        let how =
+                            match McpAgent.localPort url with
+                            | Some p -> [
+                                $"Connect {name} to this {app}: the {app} on port {p} hands it over to this one once it is idle,"
+                                "with no run in progress. All agents connected to that port follow."
+                                $"If the port can't be taken, e.g. another program uses it, {name} is set up for this {app}. That runs:"
+                              ]
+                            | None -> [ $"Connect {name} to this {app}. Runs:" ]
+                        ToolTip.SetTip(row.Action, tip [ yield! how; yield! commands; copyHint ])
+            match agentNoteText with
+            | Some(note, until) when DateTime.UtcNow < until ->
+                agentNote.Text <- note
+                agentNote.IsVisible <- true
+            | _ -> agentNote.IsVisible <- false
+
     let refresh () =
         message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
         refreshErrors ()
         match host.Server () with
-        | None -> serverStatus.Text <- "Caddis is not loaded."
+        | None ->
+            serverStatus.Text <- "Caddis is not loaded."
+            agents.IsVisible <- false
         | Some s ->
             let svc = s.Service
             updating <- true
@@ -259,7 +358,7 @@ type PanelView(host: PanelHost) as this =
                 fsiStatus.Text <- $"F# session ({thread}): {FsiState.toString svc.Fsi.State}{running}"
                 startStop.Content <- if s.IsRunning then "Stop" else "Start"
                 ToolTip.SetTip(startStop, (if s.IsRunning then stopTip else startTip))
-                copyMcp.IsEnabled <- s.IsRunning
+                refreshAgents s
                 mode.SelectedIndex <- (match svc.Fsi.Mode with UiThread -> 0 | Background -> 1)
                 autoStart.IsChecked <- Nullable svc.Settings.autoStart
                 echo.IsChecked <- Nullable svc.Settings.echoOutput
@@ -280,6 +379,66 @@ type PanelView(host: PanelHost) as this =
             m
         control.ContextMenu <- ContextMenu(ItemsSource = [ item "Copy" copy; item "Select all" selectAll ])
 
+    /// Shows what an agent's button did, below the agents, for some seconds, or until the next note for infinity.
+    let noteAgent (seconds: float) (text: string) =
+        agentNoteText <- Some(text, (if Double.IsInfinity seconds then DateTime.MaxValue else DateTime.UtcNow.AddSeconds seconds))
+
+    /// Sets the agent up for this server, or connects it to this server, on the thread pool:
+    /// the agent's program runs for a second or two, and an activation waits until the other app is idle.
+    /// While an activation waits, the button cancels it.
+    let agentClicked (s: CaddisServer) (row: AgentRow) =
+        let name = McpAgent.name row.Agent
+        match agentWork with
+        | Some(agent, Some cts) when agent = row.Agent -> cts.Cancel()
+        | Some _ -> ()
+        | None ->
+            let work =
+                match s.AgentState row.Agent with
+                | AgentState.Active -> None
+                | AgentState.NotSetUp -> Some((fun () -> s.SetUpAgent row.Agent), None, $"Setting up {name}...")
+                | AgentState.Inactive _ ->
+                    let cts = new CancellationTokenSource()
+                    let waiting reason =
+                        Dispatcher.UIThread.Post(fun () ->
+                            if not cts.IsCancellationRequested then
+                                noteAgent infinity $"Activating this {host.Name} for {name}, waiting: {reason}"
+                                refresh ())
+                    Some((fun () -> s.ActivateAgent(row.Agent, waiting, cts.Token)), Some cts, $"Activating this {host.Name} for {name}...")
+            match work with
+            | None -> ()
+            | Some(start, cts, starting) ->
+                agentWork <- Some(row.Agent, cts)
+                noteAgent infinity starting
+                Task
+                    .Run<Result<string, string>>(Func<Task<Result<string, string>>>(start))
+                    .ContinueWith(
+                        Action<Task<Result<string, string>>>(fun t ->
+                            Dispatcher.UIThread.Post(fun () ->
+                                agentWork <- None
+                                cts |> Option.iter _.Dispose()
+                                if t.Status = TaskStatus.RanToCompletion then
+                                    match t.Result with
+                                    | Ok msg -> noteAgent 20.0 msg
+                                    | Error msg -> noteAgent 60.0 msg
+                                elif t.IsCanceled || (t.Exception.InnerException :? OperationCanceledException) then
+                                    noteAgent 20.0 $"Cancelled, {name} connects to the other {host.Name}."
+                                else
+                                    noteAgent 60.0 $"{name}: {t.Exception.InnerException.Message}"
+                                refresh ()))
+                    )
+                |> ignore
+            refresh ()
+
+    /// Puts the commands of the agent's button on the clipboard.
+    let copyAgentCommands (s: CaddisServer) (row: AgentRow) =
+        let commands = agentCommands s row.Agent
+        let what = if commands.Length = 1 then "the command that sets" else "the commands that set"
+        if host.SetClipboard(String.concat Environment.NewLine commands) then
+            noteAgent 20.0 $"Copied {what} up {McpAgent.name row.Agent} for this {host.Name}, paste it in a terminal."
+        else
+            noteAgent 20.0 "The clipboard is in use by another program, try again."
+        refresh ()
+
     do
         applyTheme ()
         autoStart.Content <- $"Start with {host.Name}"
@@ -292,10 +451,6 @@ type PanelView(host: PanelHost) as this =
 
         ToolTip.SetTip(logo, $"Caddis on GitHub: {repoUrl}")
         ToolTip.SetTip(startStop, startTip)
-        ToolTip.SetTip(
-            copyMcp,
-            tip [ "Copy the command that adds Caddis to Claude Code."; "Paste it into a terminal. Only while the server is running." ]
-        )
         ToolTip.SetTip(modeLabel, modeTip)
         ToolTip.SetTip(mode, modeTip)
         ToolTip.SetTip(
@@ -369,7 +524,11 @@ type PanelView(host: PanelHost) as this =
             if e.InitialPressMouseButton = MouseButton.Left then
                 e.Handled <- true
                 host.OpenUrl repoUrl)
-        copyMcp.Click.Add(fun _ -> host.CopyMcpCommand (); refresh ())
+        for row in agentRows do
+            row.Action.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> agentClicked s row))
+            let copy = MenuItem(Header = "Copy the command")
+            copy.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyAgentCommands s row))
+            row.Row.ContextMenu <- ContextMenu(ItemsSource = [ copy ])
         mode.SelectionChanged.Add(fun _ -> if not updating then host.SetMode (if mode.SelectedIndex = 1 then Background else UiThread))
         // Click is only raised by the user, not when refresh sets IsChecked.
         autoStart.Click.Add(fun _ -> host.SetAutoStart (autoStart.IsChecked.GetValueOrDefault()))

@@ -80,17 +80,14 @@ module App =
     let setCancelWaitingCommands (on: bool) =
         withServer (fun s -> s.Service.UpdateSettings(fun x -> { x with cancelWaitingCommands = on }))
 
-    let private copyToClipboard (text: string) =
-        use clipboard = new Eto.Forms.Clipboard()
-        clipboard.Text <- text
-
-    let copyMcpCommand () =
-        withServer (fun s ->
-            if s.IsRunning then
-                copyToClipboard s.ClaudeMcpCommand
-                log $"Caddis: copied the command to add Caddis to Claude Code to the clipboard: {s.ClaudeMcpCommand}"
-            else
-                log "Caddis: start the server first.")
+    /// Puts the text on the clipboard. False if that failed, e.g. because another program has the clipboard open.
+    let trySetClipboard (text: string) : bool =
+        try
+            use clipboard = new Eto.Forms.Clipboard()
+            clipboard.Text <- text
+            true
+        with _ ->
+            false
 
     /// Cancels a background run and stops the server, when Rhino closes.
     let shutdown () =

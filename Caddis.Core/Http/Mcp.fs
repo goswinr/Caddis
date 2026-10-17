@@ -21,7 +21,8 @@ type private McpTool = {
 
 /// The MCP endpoint: JSON-RPC over Streamable HTTP, answering every request with a single JSON response, no SSE.
 /// Only tools are offered, no resources or prompts.
-/// A session id is handed out on initialize, it is only used to tell apart the request ids of different clients.
+/// A session id is handed out on initialize, it is only used to tell apart the request ids of different clients,
+/// and to tell agents whose session another Caddis started that this is another one.
 /// see https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http
 type McpEndpoint(svc: CaddisService) =
 
@@ -274,6 +275,26 @@ type McpEndpoint(svc: CaddisService) =
     /// Runs started by a tools/call, by session id and the JSON text of the request id, so that notifications/cancelled can cancel them.
     let runsByRequest = ConcurrentDictionary<string, string>()
 
+    /// The session ids handed out by this server.
+    let issuedSessions = ConcurrentDictionary<string, bool>()
+
+    /// The first tool result in a session that another Caddis started tells the agent: another instance of the app took over the port,
+    /// see CaddisServer.TakeOverPort, or the app was restarted. Caddis doesn't reject such sessions, so that agents just go on.
+    let withSessionNote (req: Request) (result: JsonNode) : JsonNode =
+        match req.headers["Mcp-Session-Id"], result with
+        | null, _ -> result
+        | session, (:? JsonObject as o) when issuedSessions.TryAdd(session, true) ->
+            match o["content"] with
+            | :? JsonArray as content ->
+                content.Insert(
+                    0,
+                    text
+                        $"Note: this MCP session was started with another Caddis server, now Caddis in {svc.Host.Description} answers it: another {info.appName} handed its port over to this one, or {info.appName} was restarted. Values defined by earlier runs and the ids of runs from before may not exist here, and the open document may be another one."
+                )
+            | _ -> ()
+            result
+        | _ -> result
+
     let requestKey (req: Request) (requestId: JsonNode) =
         let session = req.headers["Mcp-Session-Id"] |> Option.ofObj |> Option.defaultValue ""
         let id = if isNull requestId then "" else requestId.ToJsonString()
@@ -434,7 +455,7 @@ type McpEndpoint(svc: CaddisService) =
                 if tools |> List.exists (fun t -> t.name = name) then
                     let args = Json.prop "arguments" p |> Option.defaultWith (fun () -> JsonObject())
                     let! result = callTool req id name args
-                    return Some(response id result)
+                    return Some(response id (withSessionNote req result))
                 else
                     return Some(errorResponse id -32602 $"Unknown tool: '{name}'.")
             | Some "notifications/cancelled" ->
@@ -474,7 +495,9 @@ type McpEndpoint(svc: CaddisService) =
                     | Ok msg ->
                         match! handleMessage req msg with
                         | Some r when Json.tryString "method" msg = Some "initialize" ->
-                            return WithHeaders(JsonResponse(200, r), [ "Mcp-Session-Id", newSessionId () ])
+                            let session = newSessionId ()
+                            issuedSessions[session] <- true
+                            return WithHeaders(JsonResponse(200, r), [ "Mcp-Session-Id", session ])
                         | Some r -> return JsonResponse(200, r)
                         | None -> return EmptyResponse 202
             | _ -> return Response.error 405 "Only POST is supported, this server offers no SSE stream."

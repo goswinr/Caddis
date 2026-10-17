@@ -14,7 +14,8 @@ module internal Ribbon =
     let mutable private mode: PushButton = null
     let mutable private cancel: PushButton = null
     let mutable private info: PushButton = null
-    let private infoTip = "Shows the state of the server and the F# session, and the latest messages of Caddis."
+    let private infoTip =
+        "Shows the state of the server and the F# session, the commands to add Caddis to Claude Code and Codex, and the latest messages of Caddis."
     /// Every button with its current icon, to draw them again when Revit's theme changes.
     let private icons = Collections.Generic.Dictionary<string, PushButton * RibbonIcons.Icon>()
 
@@ -70,8 +71,6 @@ module internal Ribbon =
         let server = uiApp.CreateRibbonPanel(tab, "Server")
         startStop <-
             add server "StartStop" "Start\r\nlistening" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents." RibbonIcons.start
-        add server "CopyMcp" "Copy MCP\r\nCommand" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code to the clipboard." RibbonIcons.copy
-        |> ignore
         let session = uiApp.CreateRibbonPanel(tab, "F# Session")
         mode <-
             add
@@ -120,11 +119,6 @@ type StartStopCommand() =
         match App.server with
         | Some s when s.IsRunning -> App.stop ()
         | _ -> App.start false
-
-[<Transaction(TransactionMode.Manual)>]
-type CopyMcpCommand() =
-    inherit CaddisCommand()
-    override _.Run() = App.copyMcpCommand ()
 
 [<Transaction(TransactionMode.Manual)>]
 type ModeCommand() =

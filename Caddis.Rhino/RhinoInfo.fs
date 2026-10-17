@@ -80,7 +80,6 @@ module RhinoInfo =
     let info: HostInfo = {
         appName = "Rhino"
         mcpServerName = "caddis-rhino"
-        copyMcpCommandUi = "the Rhino command 'Caddis CopyMcpCommand'"
         objectIdKind = "an object id (a GUID)"
         isObjectId = fun s -> fst (Guid.TryParse s)
         mcp = mcp

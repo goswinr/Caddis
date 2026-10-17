@@ -53,21 +53,27 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino 
 What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md) and [Caddis for Revit](Caddis.Revit/README.md).
 
 ## Connect an AI agent
-Start the server in the app, then copy the command that adds Caddis to Claude Code:
-in Rhino with the command `Caddis` and its option `CopyMcpCommand`, in Revit with the button `Copy MCP` on the `Caddis` ribbon tab.
-The panel has a `Copy MCP command` button too. Paste the command in a terminal, it looks like:
+Start the server in the app and open the Caddis panel. While the server runs, it shows for Claude Code and Codex whether they connect to Caddis in this app:
+
+- **active**: the agent connects to this app.
+- **not set up**: `Set up` adds Caddis to the agent for all your projects, with the agent's own program, e.g. `claude mcp add ...`.
+- **inactive**: the agent connects to another port, e.g. that of a second Revit with Caddis. `Activate` asks the app on that port to hand it over once it is idle, with no run in progress, and waits for that. Then this app listens on that port, and agents connected to it go on with this app. If the port can't be taken, e.g. another program uses it, `Activate` sets the agent up for this app instead.
+
+The tooltips of the buttons show the commands they run, a right-click on an agent copies them.
+Sessions of an agent that were open before it was set up see Caddis after a restart.
+
+Without the panel, run the commands yourself in a terminal. Rhino prints them to its command line when the server starts,
+Revit shows them in the `Info` dialog of the `Caddis` ribbon tab, where Ctrl+C copies its text. For Claude Code:
 ```
 claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/mcp
 ```
 
 `--scope user` makes Caddis available across your Claude Code projects.
 
-For Codex the command is:
+For Codex:
 ```
 codex mcp add caddis-rhino --url http://127.0.0.1:7810/mcp
 ```
-
-Rhino prints both commands to its command line when the server starts.
 
 Rhino and Revit have their own port and MCP name, so that both can run and stay registered in Claude Code at the same time:
 
@@ -76,7 +82,7 @@ Rhino and Revit have their own port and MCP name, so that both can run and stay 
 | Rhino | 7810 | `caddis-rhino` |
 | Revit | 7820 | `caddis-revit` |
 
-If the port is taken, the next free one is used.
+If the port is taken, the next free one is used, and the panel shows the agents set up for the port as inactive.
 
 ## MCP tools
 

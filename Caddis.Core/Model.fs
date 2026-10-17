@@ -635,8 +635,6 @@ type HostInfo = {
     appName: string
     /// The name of the MCP server, in its serverInfo and in the 'claude mcp add' command, e.g. "caddis".
     mcpServerName: string
-    /// Where the person copies the 'claude mcp add' command, e.g. "the Rhino command 'Caddis CopyMcpCommand'".
-    copyMcpCommandUi: string
     /// What object ids look like, for error messages, e.g. "an object id (a GUID)".
     objectIdKind: string
     /// True if the text is an object id of this host.

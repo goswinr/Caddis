@@ -12,7 +12,6 @@ type HeadlessHost(log: string -> unit) =
     static let info = {
         appName = "Headless"
         mcpServerName = "caddis"
-        copyMcpCommandUi = "CaddisServer.ClaudeMcpCommand"
         objectIdKind = "an object id (a GUID)"
         isObjectId = fun s -> fst (Guid.TryParse s)
         mcp = {

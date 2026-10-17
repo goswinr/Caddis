@@ -28,7 +28,6 @@ type CaddisCommand() =
             let mutable cancelWaiting = new OptionToggle(settings.cancelWaitingCommands, "Off", "On")
             let iStartStop = go.AddOption(if server.IsRunning then "Stop" else "Start")
             let iPanel = go.AddOption "Panel"
-            let iCopy = go.AddOption "CopyMcpCommand"
             let iMode = go.AddOptionList("Mode", [| "UIThread"; "Background" |], (match server.Service.Fsi.Mode with UiThread -> 0 | Background -> 1))
             let iCancel = go.AddOption "Cancel"
             let iReset = go.AddOption "Reset"
@@ -48,7 +47,6 @@ type CaddisCommand() =
                     else
                         if i = iStartStop then (if server.IsRunning then App.stop () else App.start ())
                         elif i = iPanel then Rhino.UI.Panels.OpenPanel typeof<CaddisPanel>.GUID
-                        elif i = iCopy then App.copyMcpCommand ()
                         elif i = iMode then App.setMode (if go.Option().CurrentListOptionIndex = 1 then Background else UiThread)
                         elif i = iCancel then App.cancel ()
                         elif i = iReset then App.reset ()

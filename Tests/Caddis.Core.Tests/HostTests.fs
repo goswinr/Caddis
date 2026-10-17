@@ -23,7 +23,6 @@ type OtherAppHost() =
         inner.Info with
             appName = "OtherApp"
             mcpServerName = "caddis-other"
-            copyMcpCommandUi = "the button 'Copy MCP'"
             objectIdKind = "an element id (a number)"
             isObjectId = fun s -> fst (Int64.TryParse s)
             mcp = {

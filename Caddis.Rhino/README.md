@@ -27,7 +27,6 @@ The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.40
 Run the command `Caddis`. Its options:
 - `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port. On start it prints the commands to add Caddis to Claude Code and Codex.
 - `Panel` opens the [Caddis panel](#the-caddis-panel).
-- `CopyMcpCommand` copies the command to add Caddis to Claude Code.
 - `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.
 - `Cancel` the current run, `Reset` the F# session.
 - `AutoStart` starts the server when Rhino starts.
@@ -62,7 +61,9 @@ Rhino supplies its theme colors and the additional command-line settings.
 | ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings and the output of a run](Docs/panel-light.png) |
 
 - The header shows where the server listens, and the state and thread mode of the F# session.
-- `Start` / `Stop` the server, `Copy MCP command` to add Caddis to Claude Code.
+- `Start` / `Stop` the server.
+- While it runs, whether Claude Code and Codex connect to this Rhino, with `Set up` or `Activate`,
+  see [Connect an AI agent](../README.md#connect-an-ai-agent).
 - `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
 - `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
   and `Cancel commands in scripts that wait for input`. All buttons and options have tooltips.

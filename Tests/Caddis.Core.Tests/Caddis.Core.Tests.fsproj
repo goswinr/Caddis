@@ -39,6 +39,7 @@
     <Compile Include="HttpTests.fs" />
     <Compile Include="CommandTests.fs" />
     <Compile Include="HostTests.fs" />
+    <Compile Include="AgentTests.fs" />
     <Compile Include="OutputTests.fs" />
     <Compile Include="ApiDocsTests.fs" />
   </ItemGroup>

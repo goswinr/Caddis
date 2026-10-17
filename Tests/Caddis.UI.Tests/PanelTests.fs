@@ -42,7 +42,7 @@ let host name = {
     Server = fun () -> None
     Start = ignore
     Stop = ignore
-    CopyMcpCommand = ignore
+    SetClipboard = fun _ -> true
     SetMode = ignore
     SetAutoStart = ignore
     SetEcho = if name = "Rhino" then Some ignore else None
@@ -145,6 +145,59 @@ let ``theme is scoped and subscriptions survive detaching and reopening`` () =
         Assert.Equal(ThemeVariant.Light, view.FindControl<ThemeVariantScope>("Scope").RequestedThemeVariant)
     finally window.Close()
     Assert.Equal(0, subscriptions)
+
+[<AvaloniaFact>]
+let ``while the server runs, the agents show whether they connect to it, and their commands are in tooltips`` () = task {
+    use engineHost = new HeadlessHost(ignore)
+    let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
+    store.Save { CaddisSettings.defaults with port = 27910 }
+    use server = new CaddisServer(engineHost, store)
+    let dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N")).FullName
+    let path agent = Path.Combine(dir, (match agent with ClaudeCode -> ".claude.json" | Codex -> "config.toml"))
+    server.AgentConfigs <- AgentConfigs path
+    let copied = ref ""
+    let view = PanelView({ host "Revit" with Server = (fun () -> Some server); SetClipboard = fun text -> copied.Value <- text; true })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    let state name = view.FindControl<TextBlock>(name + "State").Text
+    let action name = view.FindControl<Button>(name + "Action")
+    let tipOf (c: Control) = string (ToolTip.GetTip c)
+    try
+        window.Show()
+        view.Refresh()
+        Assert.False(view.FindControl<StackPanel>("Agents").IsVisible)
+        match server.Start() with
+        | Ok _ -> ()
+        | Error e -> failwith e
+        // the F# session that Start creates in the background, before the next test creates its own
+        do! server.Service.Fsi.Initialize()
+        File.WriteAllText(path ClaudeCode, """{"mcpServers":{"caddis":{"type":"http","url":""" + "\"" + server.McpUrl + "\"}}}")
+        File.WriteAllText(path Codex, "[mcp_servers.caddis]\nurl = \"http://127.0.0.1:27919/mcp\"\n")
+        view.Refresh()
+        Assert.True(view.FindControl<StackPanel>("Agents").IsVisible)
+        Assert.Equal("Claude Code: active", state "Claude")
+        Assert.False((action "Claude").IsVisible)
+        Assert.Contains(server.McpUrl, tipOf (view.FindControl<TextBlock> "ClaudeState"))
+        Assert.Equal("Codex: inactive", state "Codex")
+        Assert.Equal("Activate", string (action "Codex").Content)
+        Assert.Contains("http://127.0.0.1:27919/mcp", tipOf (view.FindControl<TextBlock> "CodexState"))
+        Assert.Contains("on port 27919", tipOf (action "Codex"))
+        Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
+        File.Delete(path Codex)
+        view.Refresh()
+        Assert.Equal("Codex: not set up", state "Codex")
+        Assert.Equal("Set up", string (action "Codex").Content)
+        Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
+        // a right-click on the row copies the command
+        let menu = view.FindControl<StackPanel>("CodexRow").ContextMenu
+        let copy = menu.ItemsSource |> Seq.cast<MenuItem> |> Seq.head
+        copy.RaiseEvent(RoutedEventArgs(MenuItem.ClickEvent))
+        Assert.Equal(server.CodexMcpCommand, copied.Value)
+        Assert.Contains("Copied the command", view.FindControl<TextBlock>("AgentNote").Text)
+        server.Stop()
+        view.Refresh()
+        Assert.False(view.FindControl<StackPanel>("Agents").IsVisible)
+    finally window.Close()
+}
 
 let runWithId id kind code =
     Run(id, kind, UiThread, code, "example.fsx", Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString "N"), 10000, false)

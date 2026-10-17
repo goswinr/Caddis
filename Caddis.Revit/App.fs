@@ -39,6 +39,12 @@ module App =
                 $"Auto start: {autoStart}"
                 $"Settings file: {s.Service.Store.SettingsPath}"
                 $"Log file: {RevitLog.path}"
+                // for when the panel can't be shown, where Set up runs them
+                if s.IsRunning then
+                    ""
+                    "To add Caddis to Claude Code or Codex, run one of these in a terminal. Ctrl+C copies the text of this dialog."
+                    s.ClaudeMcpCommand
+                    s.CodexMcpCommand
             ]
 
     /// Starts the server. quiet: only log, e.g. at Revit's start.
@@ -85,8 +91,9 @@ module App =
     let setAutoStart (on: bool) =
         withServer (fun s -> s.Service.UpdateSettings(fun x -> { x with autoStart = on }))
 
+    /// Puts the text on the clipboard. False if that failed.
     /// Tries a few times: another program may have the clipboard open, and while the session is locked it can't be opened.
-    let private trySetClipboard (text: string) : bool =
+    let trySetClipboard (text: string) : bool =
         let rec attempt (n: int) =
             try
                 Windows.Clipboard.SetText text
@@ -95,18 +102,6 @@ module App =
                 Threading.Thread.Sleep 100
                 attempt (n - 1)
         try attempt 5 with _ -> false
-
-    let copyMcpCommand () =
-        withServer (fun s ->
-            if not s.IsRunning then
-                show "Start the server first."
-            elif trySetClipboard s.ClaudeMcpCommand then
-                show $"Copied the command to add Caddis to Claude Code to the clipboard:{Environment.NewLine}{Environment.NewLine}{s.ClaudeMcpCommand}"
-            elif ApiContext.isActive () then
-                show
-                    $"The clipboard is in use by another program. Press Ctrl+C in this dialog to copy its text, the command is the last line:{Environment.NewLine}{Environment.NewLine}{s.ClaudeMcpCommand}"
-            else
-                log "Caddis: the clipboard is in use by another program. Try again, or use the ribbon button 'Copy MCP', which shows the command if the clipboard stays busy.")
 
     /// The last items, at most n.
     let private lastOf (n: int) (items: 'T list) = items |> List.rev |> List.truncate n |> List.rev

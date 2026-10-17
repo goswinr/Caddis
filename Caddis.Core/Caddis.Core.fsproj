@@ -25,6 +25,8 @@
     <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
     <PackageReference Include="System.Text.Json" Version="10.0.2" />
+    <!-- HttpClient, to ask another Caddis to hand over its port -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +41,7 @@
     <Compile Include="Worker.fs" />
     <Compile Include="FsiHost.fs" />
     <Compile Include="Service.fs" />
+    <Compile Include="McpAgents.fs" />
     <Compile Include="Http/Types.fs" />
     <Compile Include="Http/Rest.fs" />
     <Compile Include="Http/McpView.fs" />

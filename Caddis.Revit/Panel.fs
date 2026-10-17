@@ -32,7 +32,7 @@ module private PanelServices =
         Server = fun () -> App.server
         Start = fun () -> App.start false
         Stop = App.stop
-        CopyMcpCommand = App.copyMcpCommand
+        SetClipboard = App.trySetClipboard
         SetMode = App.setMode
         SetAutoStart = App.setAutoStart
         SetEcho = None
@@ -74,7 +74,8 @@ type CaddisPanel() as this =
         with e ->
             RevitLog.error $"Caddis: the panel could not start Avalonia: {e}"
             this.Content <- TextBlock(
-                Text = $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the Caddis ribbon buttons instead.",
+                Text =
+                    $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the Caddis ribbon buttons instead. While the server runs, Info shows the commands to add Caddis to Claude Code and Codex.",
                 TextWrapping = TextWrapping.Wrap)
 
     /// Revit stores the pane's position and visibility by this id. Keep it across UI changes.

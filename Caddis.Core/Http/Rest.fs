@@ -41,6 +41,9 @@ let private help () : JsonNode =
         "POST /dialog", Json.ofString "Press a button of a dialog of the host app. Body: {button, dialog?: id from /dialogs, default the only dialog}"
         "GET /files/{id}/{name}", Json.ofString "Download a file of a run, capture or export."
         "POST /mcp", Json.ofString "MCP endpoint (Streamable HTTP, JSON-RPC)."
+        "POST /release",
+        Json.ofString
+            "Used by another instance of the same app to take over this port, where AI agents connect. Body: {mcpServerName, by}. 409 while a run or another request is in progress, else this server moves to another port."
     ]
 
 /// Handles all requests except /mcp. Exceptions are turned into responses by the server.

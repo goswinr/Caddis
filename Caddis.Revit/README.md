@@ -52,7 +52,7 @@ Revit locks the dll while it runs, close Revit before building again. `install-d
 
 ## Ribbon
 
-The Caddis tab groups its buttons in the panels **Server** with `Start` / `Stop` and `Copy MCP`,
+The Caddis tab groups its buttons in the panels **Server** with `Start` / `Stop`,
 **F# Session** with `Mode`, `Reset F#` and `Cancel run`, and **Status** with `Panel` and `Info`.
 Each button has its own Revit-style vector icon: pale gray surfaces with subtle depth,
 blue accents and colored action markers. Icons are drawn for the screen's scale and
@@ -71,15 +71,21 @@ Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest
 ## Connect an AI agent
 Revit has its own settings file `%AppData%\Caddis\settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
 so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time.
-`Copy MCP` copies the command:
+The panel sets up Claude Code and Codex, see [Connect an AI agent](../README.md#connect-an-ai-agent).
+Without the panel, `Info` on the ribbon shows the commands while the server runs, Ctrl+C copies the text of its dialog:
 ```
 claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp
+codex mcp add caddis-revit --url http://127.0.0.1:7820/mcp
 ```
+
+With two Revits, only one listens on port 7820, where the agents connect, the other one on 7821.
+Its panel shows the agents as inactive, and its `Activate` takes over port 7820 once the first Revit is idle.
+The first Revit then listens on another port and logs that.
 
 ## Dockable panel
 
 Open the panel with **Caddis → Panel** on Revit's ribbon. It shows the server
-state, settings, recent runs, and the selected run's output and code.
+state, whether Claude Code and Codex connect to this Revit, settings, recent runs, and the selected run's output and code.
 It docks next to the Project Browser, can be moved like any Revit pane,
 and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.

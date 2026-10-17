@@ -30,7 +30,7 @@ module private PanelServices =
         Server = fun () -> App.server
         Start = App.start
         Stop = App.stop
-        CopyMcpCommand = App.copyMcpCommand
+        SetClipboard = App.trySetClipboard
         SetMode = App.setMode
         SetAutoStart = App.setAutoStart
         SetEcho = Some App.setEcho
@@ -72,6 +72,7 @@ type CaddisPanel() as this =
             RhinoLog.error $"Caddis: the panel could not start Avalonia: {e}"
             this.Content <-
                 new Label(
-                    Text = $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the command 'Caddis' instead.",
+                    Text =
+                        $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the command 'Caddis' instead. When it starts the server, it prints the commands to add Caddis to Claude Code and Codex.",
                     Wrap = WrapMode.Word
                 )

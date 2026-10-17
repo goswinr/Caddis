@@ -103,10 +103,11 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - MCP over Streamable HTTP at `/mcp`, with single JSON responses, and plain REST endpoints.
 - Localhost only, without authentication; `Origin` header rejected; request bodies up to 20 MB.
 - Its own port and MCP name per app, 7810 `caddis-rhino` and 7820 `caddis-revit`, so both can run and stay registered at the same time. The next free port if one is taken.
+- A second instance of an app, e.g. another Revit, takes over the port where the agents connect from the first one once that is idle (`POST /release`); agents connected to the port go on with it.
 - A discovery file per running server in `instances/<pid>.json`.
 
 **User interface**
-- A dockable panel in both apps, in the app's light or dark theme: server state, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
+- A dockable panel in both apps, in the app's light or dark theme: server state, whether Claude Code and Codex connect to this app with `Set up` and `Activate`, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
 - Rhino: the command `Caddis` with options, scriptable as `-Caddis`.
 - Revit: a `Caddis` ribbon tab with vector icons drawn for the theme and screen scale, native checkboxes, and an `Info` dialog that turns red on unseen errors.
 
@@ -254,11 +255,12 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [Worker.fs](Caddis.Core/Worker.fs) | `WorkerThread` | a dedicated thread with a queue: background runs, and the UI thread of the headless host |
 | [FsiHost.fs](Caddis.Core/FsiHost.fs) | `FsiState`, `BusyException`, `FsiAssemblyResolver`, `EvalRequest`, `FsiHost` | the F# session and its runs |
 | [Service.fs](Caddis.Core/Service.fs) | `EvalArgs`, `CommandArgs`, `CaddisService` | the operations behind REST and MCP |
+| [McpAgents.fs](Caddis.Core/McpAgents.fs) | `McpAgent`, `AgentState`, `AgentConfigs`, `AgentCli` | the config files and command line programs of Claude Code and Codex, for the panel's `Set up` and `Activate` |
 | [Http/Types.fs](Caddis.Core/Http/Types.fs) | `Caddis.Http.Request`, `Response`, `Args` | request and response independent of `HttpListener`, so handlers are testable without a server; argument parsing shared by REST and MCP |
 | [Http/Rest.fs](Caddis.Core/Http/Rest.fs) | module `Caddis.Http.Rest` | the REST router |
 | [Http/McpView.fs](Caddis.Core/Http/McpView.fs) | module `Caddis.Http.McpView` | results as text for the model |
 | [Http/Mcp.fs](Caddis.Core/Http/Mcp.fs) | `Caddis.Http.McpEndpoint` | JSON-RPC, the tools |
-| [Server.fs](Caddis.Core/Server.fs) | `CaddisServer` | the listener, authentication, discovery file |
+| [Server.fs](Caddis.Core/Server.fs) | `ReleaseAnswer` (internal), `CaddisServer` | the listener, the discovery file, handing the port over between instances, setting up agents |
 | [HeadlessHost.fs](Caddis.Core/HeadlessHost.fs) | `HeadlessHost` | an `ICaddisHost` without an app, for the tests |
 
 ### Caddis.UI: namespace `Caddis.UI`
@@ -271,7 +273,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [FSharpHighlighting.fs](Caddis.UI/FSharpHighlighting.fs) | `FSharpHighlighting` (internal) | light and dark colors for the rules in [FSharp.xshd](Caddis.UI/FSharp.xshd) |
 | [RunDetails.fs](Caddis.UI/RunDetails.fs) | `RunDetails` | the text of the `Output` tab |
 | [ScriptExport.fs](Caddis.UI/ScriptExport.fs) | `ScriptExport` | `Export all` as one `.fsx` |
-| [PanelView.fs](Caddis.UI/PanelView.fs), [PanelView.axaml](Caddis.UI/PanelView.axaml), [PanelStyles.axaml](Caddis.UI/PanelStyles.axaml) | `RunRow`, `PanelView` | the panel |
+| [PanelView.fs](Caddis.UI/PanelView.fs), [PanelView.axaml](Caddis.UI/PanelView.axaml), [PanelStyles.axaml](Caddis.UI/PanelStyles.axaml) | `RunRow`, `AgentRow` (internal), `PanelView` | the panel |
 
 ### Caddis.Rhino: namespace `Caddis.Rhino`
 
@@ -336,6 +338,7 @@ a `CaddisService` (which loads the settings and creates the `FsiHost` and `ApiDo
 
 - `Start()` listens, starts the accept loop, writes the discovery file, warns if it had to take another port, and starts creating the F# session in the background.
 - `Stop()` closes the listener and deletes the discovery file. The session and its values are kept.
+- `TakeOverPort(port)` moves the listener to another port, after the Caddis listening there handed it over, see [7.9](#79-http-server). `ActivateAgent` and `SetUpAgent` use it and the agents' programs, see [9](#9-the-shared-panel-caddisui).
 - When the app closes, `App.shutdown` cancels a background run and stops the server.
 
 There is one `CaddisServer` per app process. A second load of the Rhino plugin is refused in `OnLoad`.
@@ -497,7 +500,9 @@ Missing or invalid values fall back to the defaults; a file that can't be parsed
 | `revit.log` | Caddis' messages in Revit, and those of its bootstrapper |
 | `%TEMP%/Caddis/<pid>/` | output folders of runs, captures and exports, and `logs/` |
 
-**Discovery file**: `{pid, port, url, mcpUrl, app, mcpServerName, host, startedAt}`. It is deleted on stop; files of processes that are no longer running are deleted when a server starts.
+**Discovery file**: `{pid, port, url, mcpUrl, app, mcpServerName, host, startedAt}`. It is written again when the server moves to another port, and deleted on stop; files of processes that are no longer running are deleted when a server starts. The panel reads them to name the other instance that listens on an agent's port.
+
+**The agents' config files**, read by the panel to show whether an agent connects to this app: Claude Code keeps its MCP servers of user scope in the top-level `mcpServers` of `~/.claude.json` (in `CLAUDE_CONFIG_DIR` if set), Codex in the tables `[mcp_servers.<name>]` of `~/.codex/config.toml` (in `CODEX_HOME` if set). [`AgentConfigs`](Caddis.Core/McpAgents.fs) reads a file again only when its time or length changed, and keeps the URL found before while a file can't be parsed, e.g. half written. It reads only the server's `url`, not all of TOML.
 
 ### 7.9 HTTP server
 
@@ -506,9 +511,21 @@ It tries up to 20 ports from the preferred one. There is no authentication.
 
 Each request goes through:
 
-1. An `Origin` header: 403, so web pages can't call it.
-2. A declared body over 20 MB: 413. The body is read up to that limit, also without a length, and a UTF-8 BOM is dropped.
-3. `/mcp` goes to `McpEndpoint`, everything else to `Rest.handle`.
+1. While the port is being handed over: 503. While it checks whether it is idle, for a moment, requests wait up to 100 ms.
+2. An `Origin` header: 403, so web pages can't call it.
+3. A declared body over 20 MB: 413. The body is read up to that limit, also without a length, and a UTF-8 BOM is dropped.
+4. `/mcp` goes to `McpEndpoint`, `POST /release` to the server itself, everything else to `Rest.handle`.
+
+**Handing the port over.** Agents are set up with a fixed URL, so with two instances of an app, e.g. two Revits, the agents reach the one on that port.
+The other one takes the port over with `TakeOverPort`, which the panel's `Activate` calls:
+
+1. It sends `POST /release` with its MCP name to the port. Nothing answers: the port is free. 404: another program, or a Caddis without `/release`. 403: Caddis of another app, whose port is not taken.
+2. The holder answers 409 while a run is in progress or another request is being handled; the new one asks again every second until it gets 200 or is cancelled.
+   The holder checks twice, before and after holding back new requests, so that one that came in between is counted.
+3. After sending the 200, the holder listens on the next free port from the one of its settings, but not the one it handed over, and logs that.
+4. The new one listens on the port instead of its own, trying 30 times 100 ms apart while the holder closes it, and writes its discovery file again.
+
+Agents connected to the port go on with the new one: their session id isn't checked. Their first tool result says that another Caddis answers now, see [7.10](#710-mcp-endpoint).
 
 | Exception | Status |
 |---|---|
@@ -528,7 +545,7 @@ JSON is written indented with relaxed escaping, so code and output stay readable
 - **Protocol versions**: `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`. `initialize` answers with the client's version if supported, otherwise the newest. A request with an unsupported `MCP-Protocol-Version` header gets 400.
 - **Methods**: `initialize`, `ping`, `tools/list`, `tools/call`, `notifications/cancelled`. Other notifications get 202 without a body. Unknown methods get `-32601`, unknown tools `-32602`, invalid JSON `-32700` with HTTP 400, a message without `method` `-32600`. JSON-RPC batches are answered too, although protocol 2025-06-18 removed them.
 - **Capabilities**: only `tools`, with `listChanged: false`. `serverInfo` has the host's MCP name, the title `Caddis` and the version. `instructions` is the host's text for the model.
-- **Session id**: `initialize` returns a random `Mcp-Session-Id`. It is not required or checked; it only keeps the request ids of different clients apart for `notifications/cancelled`.
+- **Session id**: `initialize` returns a random `Mcp-Session-Id`. It is not required or checked; it keeps the request ids of different clients apart for `notifications/cancelled`. The first `tools/call` with a session id this server didn't hand out gets a note before its result: another instance of the app took over the port, or the app was restarted, so values of earlier runs, run ids and the document may differ.
 - **Tool results**: `content` is a text item followed by image items, and `isError` is true for failed runs and for errors. A tool error is a result, not a JSON-RPC error.
 
 [`McpView`](Caddis.Core/Http/McpView.fs) writes a run as text in this order: a status line such as `Run r12: ok after 830 ms, its changes can be undone with caddis_undo.`, or while it runs what to do next; the message and notes, including any open dialog of the app; then sections `--- value: <type> ---` (left out if FSI's output already shows `val it`), `--- commands ---`, `--- objects ---`, `--- F# Interactive ---`, `--- stdout ---`, `--- <app> command line ---`, `--- stderr ---`, `--- diagnostics ---`, `--- exception ---` and `--- files ---`.
@@ -607,6 +624,7 @@ Bodies are JSON.
 | `GET /dialogs` | none | 200, `{dialogs: [{id, title, text, buttons}]}` | |
 | `POST /dialog` | `{button, dialog?}` | 200 | 400 without button, 409 |
 | `POST /mcp` | JSON-RPC | see [7.10](#710-mcp-endpoint) | |
+| `POST /release` | `{mcpServerName, by}`, from another instance of the app | 200, `{message, host}`, then this server moves to another port | 403 another MCP name, 409 `{error, host}` while not idle |
 
 Without `waitMs`, `/eval`, `/command` and `/export` wait until the run has finished, however long that takes. Other paths get 404 with a hint to `GET /help`.
 
@@ -702,11 +720,16 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
 
 - **Avalonia start**: [`AvaloniaSetup.ensure`](Caddis.UI/AvaloniaSetup.fs) configures `PanelApp` with the app's backend and `SetupWithoutStarting`, so the app keeps its own message loop. If another plugin already started Avalonia, the panel adds the Fluent theme to itself instead. Rendering is in software everywhere, so no ANGLE libraries are shipped.
 - **Native libraries**: apps don't read the plugin's `deps.json`, so SkiaSharp's and HarfBuzzSharp's natives are found by a `DllImportResolver` in `runtimes/<rid>/native`, or on .NET Framework loaded with `LoadLibrary` from `x64` or `arm64`.
-- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, optional settings that only Rhino has, a save-file dialog, a message line (Revit), the `ErrorLog`, the palette, and a theme-change subscription.
+- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, the clipboard, optional settings that only Rhino has, a save-file dialog, a message line (Revit), the `ErrorLog`, the palette, and a theme-change subscription.
 - **Theme**: the app supplies 16 named colors, applied as `Caddis.*` brushes within the panel's own `ThemeVariantScope`, so styles never leak into the app. Rhino takes them from `ThemeSettings`, Revit from fixed light and dark palettes.
 - **Refresh**: a 1 s timer of the app calls `Refresh`, which reads the server's state. The run list is rebuilt only when ids or statuses changed.
-- **Contents**: server and session state; Start or Stop, Copy MCP command, Cancel run (only for background runs), Reset; Settings with the mode, autostart, echo and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.
+- **Contents**: server and session state; Start or Stop, Cancel run (only for background runs), Reset; while the server runs, a row per AI agent; Settings with the mode, autostart, echo and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.
 - **Code actions**: `Formatted` formats with Fantomas on the thread pool, cached per run; code Fantomas can't parse is shown as it was run. `Run again` starts the selected F# run's code as a new run, keeping a user's script path for its relative `#load`. `Export` and `Export all` save `.fsx` files as shown, via the app's save dialog; `Export all` takes the successful F# runs, oldest first, each after a comment with its id and time ([`ScriptExport`](Caddis.UI/ScriptExport.fs)).
+- **AI agents**: a row each for Claude Code and Codex, with a dot and their state from their config files, see [7.8](#78-settings-and-files):
+  `active` (green) if the agent's URL for the app's MCP name has this server's port, `not set up` (gray) with `Set up`, or `inactive` (amber) with `Activate`, whose tooltip names the other instance on that port from its discovery file and its main window's title.
+  `Set up` runs the agent's program, found on PATH as the process has it and as it is now in the registry, and in the folders the agents install to: `claude mcp add --transport http --scope user <name> <url>`, after `claude mcp remove --scope user <name>` if the name exists, since Claude Code's `add` fails then; `codex mcp add <name> --url <url>`, which replaces.
+  `Activate` calls `ActivateAgent`: it takes over the port of the agent's URL, see [7.9](#79-http-server), and while it waits the button cancels it; if the port can't be taken, or the URL isn't one of Caddis on this computer, it sets the agent up instead.
+  Only one button works at a time, both agents may use the same port. The commands are only in the tooltips, a right-click on a row copies them. A note below the rows says what the last click did.
 - **Failure**: if Avalonia can't start, the panel shows the error as plain text and the command or ribbon still works.
 
 ---
@@ -729,7 +752,7 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
 - *Commands that wait for input*: a background loop runs a check on the UI thread every 200 ms. The UI thread only gets to it while a command waits in a message loop. After `inputTimeoutMs`, or on cancel, it reads `RhinoApp.CommandPrompt` and posts `RhinoApp.PostCancelEvent`. A command still running 2 s later is held by a dialog or window, which Caddis can't close. With `cancelWaitingCommands`, F# runs get the same watchdog for commands their script started: those that begin while Caddis is inside `invokeOnUi`, i.e. the whole run in UI-thread mode, or an `OnUi` call in background mode. Commands typed by the person are never cancelled.
 - *Status*: read on the request's thread, never the UI thread, which may be busy.
 
-**User interface**: the command [`Caddis`](Caddis.Rhino/Commands.fs) with the options `Start` or `Stop`, `Panel`, `CopyMcpCommand`, `Mode`, `Cancel`, `Reset`, and the toggles `AutoStart`, `EchoOutput` and `CancelWaitingCommands`. The toggles keep the prompt open. The [panel](Caddis.Rhino/Panel.fs) is an Eto `Panel` whose content is the Avalonia view; Avalonia uses Win32, or Avalonia.Native on Mac with its app delegate, menus and process name turned off.
+**User interface**: the command [`Caddis`](Caddis.Rhino/Commands.fs) with the options `Start` or `Stop`, `Panel`, `Mode`, `Cancel`, `Reset`, and the toggles `AutoStart`, `EchoOutput` and `CancelWaitingCommands`. The toggles keep the prompt open. The [panel](Caddis.Rhino/Panel.fs) is an Eto `Panel` whose content is the Avalonia view; Avalonia uses Win32, or Avalonia.Native on Mac with its app delegate, menus and process name turned off.
 
 ---
 
@@ -756,10 +779,10 @@ The ribbon commands enter API context too, so `Script.UiApp` works there.
 
 ### User interface and messages
 
-- **Ribbon** ([Addin.fs](Caddis.Revit/Addin.fs)): the tab `Caddis` with the panels Server (Start/Stop, Copy MCP), F# Session (Mode, Reset, Cancel), Status (Panel, Info) and Settings (the checkbox Start with Revit, via AdWindows). Button texts show the state. Icons are drawn with WPF at 16 and 32 px for the theme and screen scale ([RibbonIcons.fs](Caddis.Revit/RibbonIcons.fs)) and redrawn on `ThemeChanged`. The ribbon is updated on Revit's `Idling` event and by the panel.
+- **Ribbon** ([Addin.fs](Caddis.Revit/Addin.fs)): the tab `Caddis` with the panels Server (Start/Stop), F# Session (Mode, Reset, Cancel), Status (Panel, Info) and Settings (the checkbox Start with Revit, via AdWindows). Button texts show the state. Icons are drawn with WPF at 16 and 32 px for the theme and screen scale ([RibbonIcons.fs](Caddis.Revit/RibbonIcons.fs)) and redrawn on `ThemeChanged`. The ribbon is updated on Revit's `Idling` event and by the panel.
 - **Info** shows the server, session, file paths, the latest 5 errors and 12 messages in a `TaskDialog`. Unseen errors turn the button red with their count.
 - **Messages** go to `%AppData%\Caddis\revit.log`, deleted at start when larger than 1 MB; errors are marked `ERROR`. Actions started from the panel run outside API context, so they only log, and the pane shows the latest line.
-- **Clipboard**: Copy MCP retries five times; if the clipboard stays busy, a dialog shows the command for Ctrl+C.
+- **Clipboard**: the panel's copy of an agent's commands retries five times. While the server runs, `Info` shows the commands to add Caddis to Claude Code and Codex, for when the panel can't be shown; Ctrl+C copies the text of the dialog.
 - **Pane** ([Panel.fs](Caddis.Revit/Panel.fs)): registered at start with a fixed `DockablePaneId`, hidden by default, tabbed behind the Project Browser. [`AvaloniaHost`](Caddis.Revit/AvaloniaHost.fs) parents the Avalonia window with `SetParent`, forwards keyboard messages before WPF treats them as shortcuts, handles tab focus, and forwards DPI changes.
 
 ### Loader
@@ -803,19 +826,20 @@ For development, [install-dev.ps1](Caddis.Revit/install-dev.ps1) writes a `Caddi
 
 | Project | Frameworks | Tests | Runner |
 |---|---|---|---|
-| [Caddis.Core.Tests](Tests/Caddis.Core.Tests) | net8.0, net10.0, net48 | 97 test methods | xUnit 2, not in parallel: output capture redirects `Console.Out` for the whole process |
-| [Caddis.UI.Tests](Tests/Caddis.UI.Tests) | net8.0, net10.0 | 8 test methods, two of them run for both Rhino and Revit | xUnit v3 with Avalonia's headless platform, not in parallel |
+| [Caddis.Core.Tests](Tests/Caddis.Core.Tests) | net8.0, net10.0, net48 | 105 test methods | xUnit 2, not in parallel: output capture redirects `Console.Out` for the whole process |
+| [Caddis.UI.Tests](Tests/Caddis.UI.Tests) | net8.0, net10.0 | 9 test methods, two of them run for both Rhino and Revit | xUnit v3 with Avalonia's headless platform, not in parallel |
 
 | File | Covers |
 |---|---|
 | EvalTests (20) | values, output, definitions across runs, compile and runtime errors with lines, files, script paths, type-checks, the MCP view, the resolver with a host resolver like Rhino's, symbols, line numbers on .NET Framework, filtered FSI arguments |
 | HttpTests (26) | Origin, REST, MCP initialize and versions, tools, errors, running runs, images, describe, cancel notifications, body limit, discovery file, requests during a run on the UI thread |
 | HostTests (14) | host texts and names, hosts without commands, id formats, settings per host, exports as runs, dialogs, grouped changes, runs that have not started, finalization failures |
+| AgentTests (8) | the agents' config files and commands, their state, re-reading changed configs; two servers handing the port over once idle, cancelled and done, with the note to a moved session; another app's port refused, a free one taken; `Set up` with the real `claude` and `codex` in a temporary config folder, where they are installed |
 | CommandTests (10) | command runs, input timeouts, argument checks, cancellation, notes and objects in MCP |
 | BackgroundTests (9) | background evaluation, `OnUi`, 409, cancel, timeout, `OnUi` callbacks during cancellation |
 | ApiDocsTests (11) | signatures, docs, short names, curried functions, filters, out parameters, enums, large types, suggestions, namespaces, search |
 | OutputTests (7) | the capture buffer and clipping |
-| PanelTests (8) | XAML loads with the host's options, Errors, theme scope, code view, Run again, output with commands and grouped changes, Export and Export all |
+| PanelTests (9) | XAML loads with the host's options, Errors, theme scope, code view, Run again, output with commands and grouped changes, Export and Export all, the agents' states, buttons, tooltips and copied commands |
 
 Tests use [`HeadlessHost`](Caddis.Core/HeadlessHost.fs), whose UI thread is a `WorkerThread`, and `QueuedHost` in [Helpers.fs](Tests/Caddis.Core.Tests/Helpers.fs), which holds UI calls back like Revit holds its external event during a dialog.
 Rhino and Revit themselves are tested by hand.
@@ -833,7 +857,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | MCP resources, prompts, sampling, elicitation, logging, completions | Not offered. Only tools. |
 | Progress notifications, server-initiated messages, SSE | Not offered. Every request gets one JSON response, `GET /mcp` is 405. Long runs return `running` and are polled with `caddis_get_run`. |
 | `structuredContent` and `outputSchema` in tool results | Left out on purpose, see [Design decisions](#design-decisions). REST has the structured JSON. |
-| MCP sessions that are validated and can be ended | `Mcp-Session-Id` is handed out but never required or checked, and `DELETE /mcp` is not supported. |
+| MCP sessions that are validated and can be ended | `Mcp-Session-Id` is handed out but never required or checked, so that agents go on after another instance took over the port. `DELETE /mcp` is not supported. |
 | Streaming of output while a run is in progress | Not available. Poll `caddis_get_run` with `stdoutOffset`. |
 | An OpenAPI description | Not available. `GET /help` lists the endpoints in short. |
 
@@ -860,7 +884,6 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | `caddis_describe` with F# names such as `List.map` | Only compiled names, e.g. `Microsoft.FSharp.Collections.ListModule.Map`. The search leaves out .NET and FSharp.Core. Assemblies loaded with `#r` are found after the run that loads them. |
 | Sending files to Caddis | Only downloads via `/files`. Clients run on the same computer, so `path` refers to a file there. |
 | Changing the port, `maxOutputChars` or `extraFsiArgs` in the app | Only in the settings file. |
-| A program that reads the discovery files | Caddis writes `instances/<pid>.json`, but nothing in this repository reads them. |
 | Running Caddis without an app | `HeadlessHost` exists for the tests, but there is no executable that runs the server on its own. |
 
 ### Apps and platforms
@@ -874,6 +897,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | STEP export in Revit 2024 | Needs Revit 2025. |
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, AutoCAD, other apps | None. `ICaddisHost` is the extension point. |
+| Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user. Others are set up by hand with the URL. |
 | A NuGet package of Caddis.Core | Not published. |
 
 ### Testing and docs
@@ -903,7 +927,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Stack trace lines**: an exception in a top-level statement is reported at line 1, a limitation of FSI's debug info; inside functions the line is right.
 - **NuGet references** with `#r "nuget:"` need the .NET SDK.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
-- **Not tested yet**: Mac, Windows on ARM64, the port-change warning in Rhino, several Revit ribbon buttons, the Revit pane's Start/Stop and Cancel.
+- **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs.
+- **Not tested yet**: Mac, Windows on ARM64, the port-change warning in Rhino, several Revit ribbon buttons, the Revit pane's Start/Stop and Cancel. Handing the port over is tested with two servers in one process, not yet with two Revits, nor with open sessions of Claude Code and Codex.
 
 ---
 
@@ -919,6 +944,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | Default ports | Rhino 7810, Revit 7820, the headless host 7810 |
 | MCP server names | `caddis-rhino`, `caddis-revit`, `caddis` for the headless host |
 | Settings folder | `%AppData%\Caddis`, `~/.config/Caddis` on Mac |
+| The agents' config files | `~/.claude.json` or `$CLAUDE_CONFIG_DIR/.claude.json`, `~/.codex/config.toml` or `$CODEX_HOME/config.toml` |
 | Output folders | `%TEMP%\Caddis\<pid>\<run id>`, `%TEMP%\Caddis\<pid>\logs` |
 | Revit installation | `%LocalAppData%\Caddis.Revit\current` |
 | Revit add-in files | `%AppData%\Autodesk\Revit\Addins\<year>\Caddis.addin` |

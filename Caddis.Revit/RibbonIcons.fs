@@ -12,7 +12,6 @@ module internal RibbonIcons =
     type Icon =
         | ServerStart
         | ServerStop
-        | CopyMcp
         | ThreadMode
         | ResetSession
         | CancelRun
@@ -23,7 +22,6 @@ module internal RibbonIcons =
 
     let start = ServerStart
     let stop = ServerStop
-    let copy = CopyMcp
     let mode = ThreadMode
     let reset = ResetSession
     let cancel = CancelRun
@@ -130,15 +128,6 @@ module internal RibbonIcons =
             server ()
             rect p.RedShade 18.0 18.0 12.0 12.0
             rect p.Red 18.0 18.0 10.0 10.0
-        | CopyMcp ->
-            sheet 2.0 2.0
-            // The offset blue sheet makes the copy silhouette legible without a text glyph.
-            rect p.Side 8.0 4.0 2.0 22.0
-            sheet 10.0 4.0
-            rect p.Blue 10.0 14.0 18.0 14.0
-            rect p.BlueShade 10.0 26.0 18.0 2.0
-            rect p.Top 14.0 18.0 10.0 2.0
-            if not compact then rect p.Top 14.0 22.0 6.0 2.0
         | ThreadMode ->
             rect p.Edge 2.0 4.0 16.0 14.0
             rect p.Face 2.0 4.0 14.0 12.0

@@ -20,7 +20,8 @@ type PanelHost = {
     Server: unit -> CaddisServer option
     Start: unit -> unit
     Stop: unit -> unit
-    CopyMcpCommand: unit -> unit
+    /// Puts the text on the clipboard. False if that failed, e.g. because another program has the clipboard open.
+    SetClipboard: string -> bool
     SetMode: ThreadMode -> unit
     SetAutoStart: bool -> unit
     SetEcho: (bool -> unit) option

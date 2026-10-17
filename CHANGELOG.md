@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The panel's code view has `Run again` to run the code of the selected F# run again, as a new run in the current F# session.
 - When the server starts, Rhino prints the commands to add Caddis to Claude Code (`claude mcp add ...`) and Codex (`codex mcp add ...`) to its command line.
 - In Revit, unseen errors also turn the ribbon's `Info` button red with an exclamation mark and their number, and the Info dialog lists the latest ones above the other messages. In `revit.log` they are marked with `ERROR`.
+- While the server runs, the panel shows whether Claude Code and Codex connect to this app: `active`, `not set up` with a `Set up` button that runs `claude mcp add ...` or `codex mcp add ...`, or `inactive` with an `Activate` button. The commands are in the buttons' tooltips, a right-click on an agent copies them.
+- With two instances of an app, e.g. two Revits, `Activate` in the second one takes over the port where the agents connect, once the first one is idle with no run in progress. The first one moves to another port and logs that. Agents connected to the port go on with the second one, and their next tool result says that another Caddis answers now. `POST /release` asks for the port.
 
 ### Changed
 - Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once.
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - The token: requests need no `Authorization` header anymore, and the copied `claude mcp add` command has no `--header`. MCP clients registered with the token keep working, the header is ignored. `token.txt` is not used anymore and can be deleted.
 - `NewToken` in Rhino's `Caddis` command, `New token` on Revit's ribbon and `Copy token` in the panel.
+- `Copy MCP command` in the panel, `CopyMcpCommand` in Rhino's `Caddis` command and `Copy MCP` on Revit's ribbon: the panel's agents replace them. Without the panel, Rhino prints the commands for Claude Code and Codex when the server starts, and Revit's `Info` dialog shows them.
 - Listening on the network: the setting `listenOnLan`, the option `ListenOnLan` in Rhino and the checkbox `Listen on the network (LAN)` in the panel and on Revit's ribbon. Caddis listens on localhost only.
 - `listenOnLan` and `tokenFile` in the status and in the discovery files.
 
