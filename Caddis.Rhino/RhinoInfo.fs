@@ -9,7 +9,7 @@ module RhinoInfo =
     let private mcp: McpTexts = {
         instructions =
             String.concat "\n" [
-                "Caddis runs F# code inside a running Rhino 8 in a persistent F# Interactive session. A person is usually working in the same Rhino window."
+                "Caddis runs F# code inside a running Rhino in a persistent F# Interactive session. A person is usually working in the same Rhino window."
                 "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
                 "RhinoCommon is referenced, e.g. use Rhino.RhinoDoc.ActiveDoc for the current document. caddis_status shows its units and tolerance, check them before creating geometry."
                 "The result shows F# Interactive's output, with the types of new definitions and the value of the last expression, printfn output as stdout, and what was printed to the Rhino command line, e.g. by RhinoApp.WriteLine or commands run via RhinoApp.RunScript. Long output is shortened and saved to a file."
