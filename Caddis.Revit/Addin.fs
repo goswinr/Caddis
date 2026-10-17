@@ -70,9 +70,7 @@ module internal Ribbon =
         let server = uiApp.CreateRibbonPanel(tab, "Server")
         startStop <-
             add server "StartStop" "Start\r\nlistening" "StartStopCommand" "Starts or stops the Caddis HTTP server with its MCP endpoint for AI agents." RibbonIcons.start
-        add server "CopyMcp" "Copy MCP\r\nCommand" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code, including the token, to the clipboard." RibbonIcons.copy
-        |> ignore
-        add server "NewToken" "New\r\ntoken" "NewTokenCommand" "Replaces the token that MCP clients need, the old one stops working." RibbonIcons.newToken
+        add server "CopyMcp" "Copy MCP\r\nCommand" "CopyMcpCommand" "Copies the command to add Caddis to Claude Code to the clipboard." RibbonIcons.copy
         |> ignore
         let session = uiApp.CreateRibbonPanel(tab, "F# Session")
         mode <-
@@ -160,11 +158,6 @@ type AutoStartCommand() =
 type InfoCommand() =
     inherit CaddisCommand()
     override _.Run() = App.showInfo ()
-
-[<Transaction(TransactionMode.Manual)>]
-type NewTokenCommand() =
-    inherit CaddisCommand()
-    override _.Run() = App.newToken ()
 
 [<Transaction(TransactionMode.Manual)>]
 type PanelCommand() =

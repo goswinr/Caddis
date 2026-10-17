@@ -43,13 +43,6 @@ module Compat =
             if overwrite && File.Exists destination then File.Replace(source, destination, null)
             else File.Move(source, destination)
 
-    type CryptographicOperations =
-        static member FixedTimeEquals(left: ReadOnlySpan<byte>, right: ReadOnlySpan<byte>) =
-            let mutable diff = left.Length ^^^ right.Length
-            for i in 0 .. min left.Length right.Length - 1 do
-                diff <- diff ||| (int left[i] ^^^ int right[i])
-            diff = 0
-
 
 /// Settings for F# Interactive on .NET Framework.
 module NetFramework =

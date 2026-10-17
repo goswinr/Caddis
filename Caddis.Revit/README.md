@@ -52,7 +52,7 @@ Revit locks the dll while it runs, close Revit before building again. `install-d
 
 ## Ribbon
 
-The Caddis tab groups its buttons in the panels **Server** with `Start` / `Stop`, `Copy MCP` and `New token`,
+The Caddis tab groups its buttons in the panels **Server** with `Start` / `Stop` and `Copy MCP`,
 **F# Session** with `Mode`, `Reset F#` and `Cancel run`, and **Status** with `Panel` and `Info`.
 Each button has its own Revit-style vector icon: pale gray surfaces with subtle depth,
 blue accents and colored action markers. Icons are drawn for the screen's scale and
@@ -63,20 +63,17 @@ Revit's light or dark theme, with simplified details at 16 pixels. They need no 
 | --- | --- |
 | ![The Caddis tab on Revit's ribbon in its dark theme](Docs/ribbon-dark.png) | ![The Caddis tab on Revit's ribbon in its light theme](Docs/ribbon-light.png) |
 
-The **Settings** panel has native checkboxes for **Start with Revit** and
-**Listen on the network (LAN)**. They share the panel's settings and stay in sync
-even while the panel is hidden. Changing the LAN setting takes effect after
-stopping and starting the server.
+The **Settings** panel has a native checkbox for **Start with Revit**. It shares the panel's setting and stays in sync
+even while the panel is hidden.
 
 Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest ones.
 
 ## Connect an AI agent
 Revit has its own settings file `%AppData%\Caddis\settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
-so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time. The token is shared.
-`New token` in either app replaces it for every running instance immediately; update all clients with the new token.
+so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time.
 `Copy MCP` copies the command:
 ```
-claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp
 ```
 
 ## Dockable panel
@@ -98,8 +95,8 @@ The code viewer is read-only, with F# highlighting, line numbers and Ctrl+F sear
 The `Formatted` check box switches between Fantomas formatting and the original script, whose line
 numbers match the diagnostics. `Export` saves the code of the run to an `.fsx` file,
 `Export all` saves all successful F# runs to one, oldest first, each after a comment
-with its id and time, both as the code is shown, formatted or not. `Settings` unfolds the thread mode, **Start with Revit**
-and **Listen on the network (LAN)**. Revit's latest status message and grouped
+with its id and time, both as the code is shown, formatted or not. `Settings` unfolds the thread mode
+and **Start with Revit**. Revit's latest status message and grouped
 element changes are preserved; Rhino's command-line options are hidden.
 
 The shared view is covered by headless tests on .NET 8 and .NET 10. The WPF wrapper

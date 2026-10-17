@@ -27,7 +27,7 @@ module App =
         | Some s -> f s
         | None -> show "Caddis is not loaded."
 
-    /// A few lines about the server and session. Without the token.
+    /// A few lines about the server and session.
     let info (s: CaddisServer) =
         let autoStart = if s.Service.Settings.autoStart then "on" else "off"
         String.concat
@@ -37,7 +37,6 @@ module App =
                 if s.IsRunning then $"Caddis is listening on {s.Url} , MCP endpoint: {s.McpUrl}" else "Caddis is stopped."
                 $"F# session: {FsiState.toString s.Service.Fsi.State}, runs on: {ThreadMode.toString s.Service.Fsi.Mode} thread"
                 $"Auto start: {autoStart}"
-                $"Token file: {s.TokenPath}"
                 $"Settings file: {s.Service.Store.SettingsPath}"
                 $"Log file: {RevitLog.path}"
             ]
@@ -102,34 +101,12 @@ module App =
             if not s.IsRunning then
                 show "Start the server first."
             elif trySetClipboard s.ClaudeMcpCommand then
-                show
-                    $"Copied the command to add Caddis to Claude Code, with the token, to the clipboard:{Environment.NewLine}{Environment.NewLine}claude mcp add --transport http --scope user {RevitInfo.info.mcpServerName} {s.McpUrl} ..."
+                show $"Copied the command to add Caddis to Claude Code to the clipboard:{Environment.NewLine}{Environment.NewLine}{s.ClaudeMcpCommand}"
             elif ApiContext.isActive () then
-                // not with show: the token stays out of the log
-                log "Caddis: the clipboard could not be opened, the MCP command is shown in a dialog."
-                TaskDialog.Show(
-                    "Copy MCP Command",
+                show
                     $"The clipboard is in use by another program. Press Ctrl+C in this dialog to copy its text, the command is the last line:{Environment.NewLine}{Environment.NewLine}{s.ClaudeMcpCommand}"
-                )
-                |> ignore
             else
                 log "Caddis: the clipboard is in use by another program. Try again, or use the ribbon button 'Copy MCP', which shows the command if the clipboard stays busy.")
-
-    let copyToken () =
-        withServer (fun s ->
-            if trySetClipboard s.Token then log "Caddis: copied the token to the clipboard."
-            else log "Caddis: the clipboard is in use by another program, try again.")
-
-    let setListenOnLan (on: bool) =
-        withServer (fun s ->
-            if s.Service.Settings.listenOnLan <> on then
-                s.Service.UpdateSettings(fun x -> { x with listenOnLan = on })
-                if s.IsRunning then log "Caddis: stop and start the server to apply the network setting.")
-
-    let newToken () =
-        withServer (fun s ->
-            s.NewToken() |> ignore
-            show "Created a new token, the old one does not work anymore. Copy the MCP command again and update your MCP client.")
 
     /// The last items, at most n.
     let private lastOf (n: int) (items: 'T list) = items |> List.rev |> List.truncate n |> List.rev

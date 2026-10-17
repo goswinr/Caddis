@@ -293,7 +293,7 @@ type McpEndpoint(svc: CaddisService) =
     static let toolResult (isError: bool) (content: JsonNode list) : JsonNode =
         Json.obj [ "content", Json.arr content; "isError", Json.ofBool isError ]
 
-    let runResult (req: Request) (notes: string list) (stdoutFrom: int64) (run: Run) : JsonNode =
+    let runResult (notes: string list) (stdoutFrom: int64) (run: Run) : JsonNode =
         let isError =
             match run.Status with
             | Running
@@ -312,7 +312,7 @@ type McpEndpoint(svc: CaddisService) =
                 |> List.map (fun d ->
                     let how = if info.mcp.dialog.IsSome then "Press a button with caddis_dialog, or ask the person" else "Ask the person"
                     $"{info.appName} shows a dialog, which blocks it until it is closed: {HostDialog.describe d} {how} to close it in {info.appName}.")
-        let summary, images = McpView.run info.appName svc.Runs req.baseUrl (notes @ dialogNotes) stdoutFrom run
+        let summary, images = McpView.run info.appName svc.Runs (notes @ dialogNotes) stdoutFrom run
         toolResult isError (text summary :: images)
 
     static let messageResult (result: Result<string, string>) : JsonNode =
@@ -338,7 +338,7 @@ type McpEndpoint(svc: CaddisService) =
                         if a.timeoutMs.IsSome && run.Mode = UiThread then
                             "timeoutMs was ignored: runs on the UI thread can't be cancelled. Switch to background mode with caddis_set_mode for runs that can time out."
                     ]
-                    return runResult req notes 0L run
+                    return runResult notes 0L run
 
                 | "caddis_command" ->
                     let a = Args.commands info args
@@ -349,7 +349,7 @@ type McpEndpoint(svc: CaddisService) =
                         do! svc.WaitFor(run, Some(a.waitMs |> Option.defaultValue defaultWaitMs))
                     finally
                         runsByRequest.TryRemove key |> ignore
-                    return runResult req [] 0L run
+                    return runResult [] 0L run
 
                 | "caddis_get_run" ->
                     let runId = Json.tryString "runId" args |> Option.defaultValue ""
@@ -357,7 +357,7 @@ type McpEndpoint(svc: CaddisService) =
                     | Some run ->
                         do! svc.WaitFor(run, Some(Json.tryInt "waitMs" args |> Option.defaultValue defaultWaitMs))
                         let from = Json.tryInt "stdoutOffset" args |> Option.defaultValue 0
-                        return runResult req [] (int64 from) run
+                        return runResult [] (int64 from) run
                     | None -> return toolResult true [ text $"Run '{runId}' not found. Only the latest runs are kept." ]
 
                 | "caddis_check" ->
@@ -387,20 +387,20 @@ type McpEndpoint(svc: CaddisService) =
                     return messageResult result
 
                 | "caddis_capture_viewport" ->
-                    let! id, file =
+                    let! _, file =
                         svc.CaptureViewport(
                             Json.tryString "view" args |> Option.toObj,
                             Json.tryInt "width" args |> Option.defaultValue 0,
                             Json.tryInt "height" args |> Option.defaultValue 0,
                             Json.tryString "displayMode" args |> Option.toObj
                         )
-                    return toolResult false [ McpView.image file; text (McpView.files req.baseUrl id "Saved to:" [ file ]) ]
+                    return toolResult false [ McpView.image file; text (McpView.files "Saved to:" [ file ]) ]
 
                 | "caddis_export" ->
                     let format = Json.tryString "format" args |> Option.toObj
                     let run = svc.StartExport(format, Json.tryString "name" args, Args.exportSelection info args)
                     do! svc.WaitFor(run, Some(Json.tryInt "waitMs" args |> Option.defaultValue defaultWaitMs))
-                    return runResult req [] 0L run
+                    return runResult [] 0L run
 
                 | "caddis_dialog" ->
                     match Json.tryString "button" args with

@@ -21,10 +21,8 @@ type PanelHost = {
     Start: unit -> unit
     Stop: unit -> unit
     CopyMcpCommand: unit -> unit
-    CopyToken: unit -> unit
     SetMode: ThreadMode -> unit
     SetAutoStart: bool -> unit
-    SetListenOnLan: bool -> unit
     SetEcho: (bool -> unit) option
     SetCancelWaitingCommands: (bool -> unit) option
     Cancel: unit -> unit

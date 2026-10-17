@@ -27,7 +27,7 @@ The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.40
 Run the command `Caddis`. Its options:
 - `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port.
 - `Panel` opens the [Caddis panel](#the-caddis-panel).
-- `CopyMcpCommand` copies the command to add Caddis to Claude Code, including the token.
+- `CopyMcpCommand` copies the command to add Caddis to Claude Code.
 - `Mode` runs scripts on the `UIThread` or in the `Background`. Changing it resets the F# session.
 - `Cancel` the current run, `Reset` the F# session.
 - `AutoStart` starts the server when Rhino starts.
@@ -36,11 +36,9 @@ Run the command `Caddis`. Its options:
   when they wait 3 s for input that the macro doesn't give. The script goes on, the result has a note with the prompt.
   Without it such a command waits until someone gives the input in Rhino. In background mode only commands started via `Caddis.Script.OnUi` are watched,
   so commands you type in Rhino while a script runs are never cancelled.
-- `ListenOnLan` makes the server reachable from other machines.
-- `NewToken` replaces the token.
 
 It is scriptable, e.g. `-Caddis Start`.
-The settings are saved in `%AppData%\Caddis\settings-rhino.json` on Windows and `~/.config/Caddis/settings-rhino.json` on Mac, next to the token in `token.txt`.
+The settings are saved in `%AppData%\Caddis\settings-rhino.json` on Windows and `~/.config/Caddis/settings-rhino.json` on Mac.
 
 ## While a run is in progress
 
@@ -64,10 +62,10 @@ Rhino supplies its theme colors and the additional command-line settings.
 | ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings and the output of a run](Docs/panel-light.png) |
 
 - The header shows where the server listens, and the state and thread mode of the F# session.
-- `Start` / `Stop` the server, `Copy MCP command` to add Caddis to Claude Code, `Copy token` for other clients.
+- `Start` / `Stop` the server, `Copy MCP command` to add Caddis to Claude Code.
 - `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
-- `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`,
-  `Listen on the network (LAN)` and `Cancel commands in scripts that wait for input`. All buttons and options have tooltips.
+- `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
+  and `Cancel commands in scripts that wait for input`. All buttons and options have tooltips.
 - The recent runs are listed newest first, with their id, status, duration and first line of code:
   `r` for F# code, `c` for Rhino commands, `x` for exports.
 - `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run.

@@ -43,10 +43,8 @@ let host name = {
     Start = ignore
     Stop = ignore
     CopyMcpCommand = ignore
-    CopyToken = ignore
     SetMode = ignore
     SetAutoStart = ignore
-    SetListenOnLan = ignore
     SetEcho = if name = "Rhino" then Some ignore else None
     SetCancelWaitingCommands = if name = "Rhino" then Some ignore else None
     Cancel = ignore

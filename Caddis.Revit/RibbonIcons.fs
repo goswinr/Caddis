@@ -13,7 +13,6 @@ module internal RibbonIcons =
         | ServerStart
         | ServerStop
         | CopyMcp
-        | NewToken
         | ThreadMode
         | ResetSession
         | CancelRun
@@ -25,7 +24,6 @@ module internal RibbonIcons =
     let start = ServerStart
     let stop = ServerStop
     let copy = CopyMcp
-    let newToken = NewToken
     let mode = ThreadMode
     let reset = ResetSession
     let cancel = CancelRun
@@ -46,8 +44,6 @@ module internal RibbonIcons =
         GreenShade: Brush
         Red: Brush
         RedShade: Brush
-        Gold: Brush
-        GoldShade: Brush
     }
 
     let private brush color : Brush =
@@ -69,8 +65,6 @@ module internal RibbonIcons =
         GreenShade = brush "#2D8755"
         Red = brush (if dark then "#EE8990" else "#DE6D77")
         RedShade = brush "#B34350"
-        Gold = brush "#F0CF8B"
-        GoldShade = brush "#BB914A"
     }
 
     let private lightPalette = palette false
@@ -86,7 +80,7 @@ module internal RibbonIcons =
         { Face = gray p.Face; Top = gray p.Top; Side = gray p.Side; Edge = gray p.Edge
           Ink = gray p.Ink; Blue = gray p.Blue; BlueShade = gray p.BlueShade
           Green = gray p.Green; GreenShade = gray p.GreenShade
-          Red = gray p.Red; RedShade = gray p.RedShade; Gold = gray p.Gold; GoldShade = gray p.GoldShade }
+          Red = gray p.Red; RedShade = gray p.RedShade }
 
     let private lightGrayscalePalette = grayscalePalette lightPalette
     let private darkGrayscalePalette = grayscalePalette darkPalette
@@ -145,13 +139,6 @@ module internal RibbonIcons =
             rect p.BlueShade 10.0 26.0 18.0 2.0
             rect p.Top 14.0 18.0 10.0 2.0
             if not compact then rect p.Top 14.0 22.0 6.0 2.0
-        | NewToken ->
-            // A straight diagonal key with two teeth, an open bow and a separate new-token glint.
-            // Both gold layers share the cutout so the bow stays transparent.
-            path p.GoldShade "F0 M6,4 H12 L16,8 V14 L28,26 L24,30 L22,28 L20,30 L18,28 L20,26 L18,24 L16,26 L14,24 L16,22 L12,18 H6 L2,14 V8 Z M6,6 H12 V12 H6 Z"
-            path p.Gold "F0 M6,2 H12 L16,6 V12 L28,24 L24,28 L22,26 L20,28 L18,26 L20,24 L18,22 L16,24 L14,22 L16,20 L12,16 H6 L2,12 V6 Z M6,6 H12 V12 H6 Z"
-            path p.Top "M2,6 L6,2 H12 L14,4 H6 L4,6 Z"
-            path p.Blue "M26,2 L28,6 L30,8 L28,10 L26,14 L24,10 L22,8 L24,6 Z"
         | ThreadMode ->
             rect p.Edge 2.0 4.0 16.0 14.0
             rect p.Face 2.0 4.0 14.0 12.0

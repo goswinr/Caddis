@@ -37,7 +37,7 @@ type PanelView(host: PanelHost) as this =
     let startTip =
         tip [
             $"Start the server, so that AI agents and scripts can run F# code in this {host.Name}."
-            "It listens on localhost only, unless 'Listen on the network' is on."
+            "It listens on localhost only."
         ]
 
     let stopTip = tip [ $"Stop the server. Connected AI agents can't reach {host.Name} until it is started again." ]
@@ -60,7 +60,6 @@ type PanelView(host: PanelHost) as this =
     let message: TextBlock = find "Message"
     let startStop: Button = find "StartStop"
     let copyMcp: Button = find "CopyMcp"
-    let copyToken: Button = find "CopyToken"
     let modeLabel: TextBlock = find "ModeLabel"
     let mode: ComboBox = find "Mode"
     let cancel: Button = find "Cancel"
@@ -72,7 +71,6 @@ type PanelView(host: PanelHost) as this =
     let clearErrors: Button = find "ClearErrors"
     let autoStart: CheckBox = find "AutoStart"
     let echo: CheckBox = find "Echo"
-    let lan: CheckBox = find "Lan"
     let cancelWaiting: CheckBox = find "CancelWaiting"
     let runtimeInfo: TextBlock = find "RuntimeInfo"
     let runs: ListBox = find "Runs"
@@ -265,7 +263,6 @@ type PanelView(host: PanelHost) as this =
                 mode.SelectedIndex <- (match svc.Fsi.Mode with UiThread -> 0 | Background -> 1)
                 autoStart.IsChecked <- Nullable svc.Settings.autoStart
                 echo.IsChecked <- Nullable svc.Settings.echoOutput
-                lan.IsChecked <- Nullable svc.Settings.listenOnLan
                 cancelWaiting.IsChecked <- Nullable svc.Settings.cancelWaitingCommands
                 runtimeInfo.Text <- svc.RuntimeInfo
                 cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
@@ -297,14 +294,7 @@ type PanelView(host: PanelHost) as this =
         ToolTip.SetTip(startStop, startTip)
         ToolTip.SetTip(
             copyMcp,
-            tip [ "Copy the command that adds Caddis to Claude Code, including the token."; "Paste it into a terminal. Only while the server is running." ]
-        )
-        ToolTip.SetTip(
-            copyToken,
-            tip [
-                "Copy the access token. Every request to Caddis needs it in the header"
-                "'Authorization: Bearer <token>'. Keep it private: it allows running any code on this computer."
-            ]
+            tip [ "Copy the command that adds Caddis to Claude Code."; "Paste it into a terminal. Only while the server is running." ]
         )
         ToolTip.SetTip(modeLabel, modeTip)
         ToolTip.SetTip(mode, modeTip)
@@ -326,15 +316,6 @@ type PanelView(host: PanelHost) as this =
         ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])
-        ToolTip.SetTip(
-            lan,
-            tip [
-                "Make the server reachable from other computers, not only from this one."
-                "The token is sent unencrypted over the network, so only use it on a network you trust."
-                "Takes effect when the server is started again. On Windows this needs a one-time"
-                "'netsh http add urlacl' as administrator, Caddis prints the exact command."
-            ]
-        )
         ToolTip.SetTip(
             cancelWaiting,
             tip [
@@ -389,12 +370,10 @@ type PanelView(host: PanelHost) as this =
                 e.Handled <- true
                 host.OpenUrl repoUrl)
         copyMcp.Click.Add(fun _ -> host.CopyMcpCommand (); refresh ())
-        copyToken.Click.Add(fun _ -> host.CopyToken (); refresh ())
         mode.SelectionChanged.Add(fun _ -> if not updating then host.SetMode (if mode.SelectedIndex = 1 then Background else UiThread))
         // Click is only raised by the user, not when refresh sets IsChecked.
         autoStart.Click.Add(fun _ -> host.SetAutoStart (autoStart.IsChecked.GetValueOrDefault()))
         echo.Click.Add(fun _ -> host.SetEcho |> Option.iter (fun set -> set (echo.IsChecked.GetValueOrDefault())))
-        lan.Click.Add(fun _ -> host.SetListenOnLan (lan.IsChecked.GetValueOrDefault()); refresh ())
         cancelWaiting.Click.Add(fun _ -> host.SetCancelWaitingCommands |> Option.iter (fun set -> set (cancelWaiting.IsChecked.GetValueOrDefault())))
         cancel.Click.Add(fun _ -> host.Cancel (); refresh ())
         reset.Click.Add(fun _ -> host.Reset (); refresh ())

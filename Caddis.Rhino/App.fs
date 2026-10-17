@@ -16,14 +16,13 @@ module App =
         | Some s -> f s
         | None -> log "Caddis is not loaded."
 
-    /// A few lines about the server and session. Without the token, the command history might be shared.
+    /// A few lines about the server and session.
     let info (s: CaddisServer) =
         String.concat
             Environment.NewLine
             [
                 if s.IsRunning then $"Caddis is listening on {s.Url} , MCP endpoint: {s.McpUrl}" else "Caddis is stopped."
                 $"F# session: {FsiState.toString s.Service.Fsi.State}, runs on: {ThreadMode.toString s.Service.Fsi.Mode} thread"
-                $"Token file: {s.TokenPath}"
             ]
 
     let start () =
@@ -72,12 +71,6 @@ module App =
     let setCancelWaitingCommands (on: bool) =
         withServer (fun s -> s.Service.UpdateSettings(fun x -> { x with cancelWaitingCommands = on }))
 
-    let setListenOnLan (on: bool) =
-        withServer (fun s ->
-            if s.Service.Settings.listenOnLan <> on then
-                s.Service.UpdateSettings(fun x -> { x with listenOnLan = on })
-                if s.IsRunning then log "Caddis: stop and start the server to apply the network setting.")
-
     let private copyToClipboard (text: string) =
         use clipboard = new Eto.Forms.Clipboard()
         clipboard.Text <- text
@@ -86,19 +79,9 @@ module App =
         withServer (fun s ->
             if s.IsRunning then
                 copyToClipboard s.ClaudeMcpCommand
-                log "Caddis: copied the 'claude mcp add ...' command with the token to the clipboard."
+                log $"Caddis: copied the command to add Caddis to Claude Code to the clipboard: {s.ClaudeMcpCommand}"
             else
                 log "Caddis: start the server first.")
-
-    let copyToken () =
-        withServer (fun s ->
-            copyToClipboard s.Token
-            log "Caddis: copied the token to the clipboard.")
-
-    let newToken () =
-        withServer (fun s ->
-            s.NewToken() |> ignore
-            log "Caddis: created a new token, the old one does not work anymore. Update your MCP client config.")
 
     /// Cancels a background run and stops the server, when Rhino closes.
     let shutdown () =

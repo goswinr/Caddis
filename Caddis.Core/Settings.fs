@@ -2,8 +2,6 @@ namespace Caddis
 
 open System
 open System.IO
-open System.Security.Cryptography
-open System.Text
 open System.Text.Json.Nodes
 
 /// On which thread F# scripts are evaluated.
@@ -30,8 +28,6 @@ module ThreadMode =
 type CaddisSettings = {
     /// The preferred port. If it is taken the next free one is used.
     port: int
-    /// Listen on all network interfaces instead of only on localhost.
-    listenOnLan: bool
     /// Start the server when the host app starts.
     autoStart: bool
     /// The thread mode a new session starts in.
@@ -53,7 +49,6 @@ module CaddisSettings =
 
     let defaults = {
         port = 7810
-        listenOnLan = false
         autoStart = false
         threadMode = UiThread
         echoOutput = true
@@ -65,7 +60,6 @@ module CaddisSettings =
     let toJson (s: CaddisSettings) : JsonObject =
         Json.obj [
             "port", Json.ofInt s.port
-            "listenOnLan", Json.ofBool s.listenOnLan
             "autoStart", Json.ofBool s.autoStart
             "threadMode", Json.ofString (ThreadMode.toString s.threadMode)
             "echoOutput", Json.ofBool s.echoOutput
@@ -78,7 +72,6 @@ module CaddisSettings =
     let ofJson (d: CaddisSettings) (n: JsonNode) : CaddisSettings =
         {
             port = Json.tryInt "port" n |> Option.filter (fun p -> p > 0 && p < 65536) |> Option.defaultValue d.port
-            listenOnLan = Json.tryBool "listenOnLan" n |> Option.defaultValue d.listenOnLan
             autoStart = Json.tryBool "autoStart" n |> Option.defaultValue d.autoStart
             threadMode = Json.tryString "threadMode" n |> Option.bind ThreadMode.tryParse |> Option.defaultValue d.threadMode
             echoOutput = Json.tryBool "echoOutput" n |> Option.defaultValue d.echoOutput
@@ -88,49 +81,12 @@ module CaddisSettings =
         }
 
 
-/// Reads and writes the settings, the auth token and the discovery files, all in one folder.
-/// Each host app has its own settings file and defaults, e.g. its own port, the token is shared.
+/// Reads and writes the settings and the discovery files, all in one folder.
+/// Each host app has its own settings file and defaults, e.g. its own port.
 type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSettings) =
 
     let settingsPath = Path.Combine(folder, settingsFileName)
-    let tokenPath = Path.Combine(folder, "token.txt")
     let instancesFolder = Path.Combine(folder, "instances")
-
-    /// On Mac and Linux make the file readable for the current user only.
-    let restrictToUser (path: string) =
-#if NETFRAMEWORK
-        ignore path // .NET Framework runs on Windows only
-#else
-        if not (OperatingSystem.IsWindows()) then
-            try File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite) with _ -> ()
-#endif
-
-    /// Creates a new file, on Mac and Linux readable for the current user only.
-    let createNew (path: string) : FileStream =
-#if NETFRAMEWORK
-        new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)
-#else
-        let options = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None)
-        if not (OperatingSystem.IsWindows()) then
-            options.UnixCreateMode <- UnixFileMode.UserRead ||| UnixFileMode.UserWrite
-        new FileStream(path, options)
-#endif
-
-    /// Publish a complete token atomically, so readers never see an empty or partial replacement.
-    let writeToken (overwrite: bool) =
-        Directory.CreateDirectory folder |> ignore
-        let token = Convert.ToHexString(RandomNumberGenerator.GetBytes 24).ToLowerInvariant()
-        let tempPath = Path.Combine(folder, $"token-{Guid.NewGuid():N}.tmp")
-        try
-            do
-                use stream = createNew tempPath
-                use writer = new StreamWriter(stream, UTF8Encoding(false))
-                writer.Write token
-            restrictToUser tempPath
-            File.Move(tempPath, tokenPath, overwrite)
-            token
-        finally
-            if File.Exists tempPath then File.Delete tempPath
 
     /// %AppData%/Caddis on Windows, ~/.config/Caddis on Mac (.NET's ApplicationData folder).
     static member DefaultFolder =
@@ -144,8 +100,6 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
     member _.Folder = folder
 
     member _.SettingsPath = settingsPath
-
-    member _.TokenPath = tokenPath
 
     /// Contains one JSON file per running server, named by process id.
     member _.InstancesFolder = instancesFolder
@@ -165,24 +119,3 @@ type SettingsStore(folder: string, settingsFileName: string, defaults: CaddisSet
     member _.Save(s: CaddisSettings) =
         Directory.CreateDirectory folder |> ignore
         File.WriteAllText(settingsPath, CaddisSettings.toJson s |> Json.toText)
-
-    /// Reads the shared token without creating or repairing it. Authentication fails closed on read errors.
-    member _.ReadToken() : string =
-        use stream = new FileStream(tokenPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite ||| FileShare.Delete)
-        use reader = new StreamReader(stream)
-        let token = reader.ReadToEnd().Trim()
-        if token.Length < 16 then raise (InvalidDataException "The Caddis token file is invalid.")
-        token
-
-    /// Creates a new random token and atomically replaces the shared token file.
-    member _.NewToken() : string = writeToken true
-
-    /// Returns the saved token, or creates one if there is none.
-    member this.GetOrCreateToken() : string =
-        if File.Exists tokenPath then
-            try this.ReadToken()
-            with :? InvalidDataException -> this.NewToken()
-        else
-            try writeToken false
-            // Another instance may have created the token while this one was starting.
-            with :? IOException when File.Exists tokenPath -> this.ReadToken()

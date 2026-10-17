@@ -9,16 +9,13 @@ open Autodesk.Windows
 module internal RibbonSettings =
 
     let mutable private autoStart: RibbonCheckBox = null
-    let mutable private lan: RibbonCheckBox = null
 
     let update () =
         let set (control: RibbonCheckBox) value =
             if not (isNull control) && control.IsChecked <> Nullable value then
                 control.IsChecked <- Nullable value
         match App.server with
-        | Some s ->
-            set autoStart s.Service.Settings.autoStart
-            set lan s.Service.Settings.listenOnLan
+        | Some s -> set autoStart s.Service.Settings.autoStart
         | None -> ()
 
     let private checkBox id text toolTip (set: bool -> unit) =
@@ -41,15 +38,7 @@ module internal RibbonSettings =
         let tab = ComponentManager.Ribbon.Tabs |> Seq.find (fun tab -> tab.Id = tabName)
         let panel = tab.Panels |> Seq.find (fun panel -> panel.Source.Title = panelTitle)
         autoStart <- checkBox "CaddisAutoStartCheckBox" "Start with Revit" "Start the server when Revit starts." App.setAutoStart
-        lan <-
-            checkBox
-                "CaddisListenOnLanCheckBox"
-                "Listen on the network (LAN)"
-                "Allow connections from other computers. The token is sent unencrypted; use only on a trusted network. Stop and start the server to apply changes."
-                App.setListenOnLan
         let row = RibbonRowPanel(Id = "CaddisSettings")
         row.Items.Add autoStart
-        row.Items.Add(RibbonRowBreak())
-        row.Items.Add lan
         panel.Source.Items.Add row
         update ()

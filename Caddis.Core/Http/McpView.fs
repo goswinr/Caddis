@@ -93,15 +93,11 @@ let exceptionText (scriptPath: string) (x: ExceptionInfo) : string =
     let text = if String.IsNullOrEmpty scriptPath then text else text.Replace(scriptPath, fileName)
     clip maxException text
 
-let private isLocal (baseUrl: string) =
-    baseUrl.Contains "://127.0.0.1" || baseUrl.Contains "://localhost" || baseUrl.Contains "://[::1]"
-
-/// One line per file. The URL only for remote clients, a local one reads the path.
-let private fileLines (baseUrl: string) (id: string) (shownInline: FileItem list) (files: FileItem seq) : string list = [
+/// One line per file, with its path.
+let private fileLines (shownInline: FileItem list) (files: FileItem seq) : string list = [
     for f in files do
-        let url = if isLocal baseUrl then "" else $", {FileItem.url baseUrl id f}"
         let shown = if List.contains f shownInline then ", shown below" else ""
-        $"{f.name} ({formatSize f.size}, {f.mime}{shown}): {f.path}{url}"
+        $"{f.name} ({formatSize f.size}, {f.mime}{shown}): {f.path}"
 ]
 
 /// The images among the files that are returned inline: png, jpeg, gif or webp, up to maxImages, each up to maxImageBytes.
@@ -160,7 +156,7 @@ let private objectLines (runs: RunRegistry) (runId: string) (c: CommandReport) :
 /// A run as text for the model, and the images it saved as image content items.
 /// appName: the host app, e.g. "Rhino".
 /// stdoutFrom: only show stdout from this character offset on, e.g. to poll a running run for new output.
-let run (appName: string) (runs: RunRegistry) (baseUrl: string) (notes: string list) (stdoutFrom: int64) (r: Run) : string * JsonNode list =
+let run (appName: string) (runs: RunRegistry) (notes: string list) (stdoutFrom: int64) (r: Run) : string * JsonNode list =
     let o = r.Outcome
     let sb = StringBuilder()
     let line (s: string) = sb.Append(s).Append('\n') |> ignore
@@ -222,7 +218,7 @@ let run (appName: string) (runs: RunRegistry) (baseUrl: string) (notes: string l
     section "stderr" stderr
     section "diagnostics" (diagnosticLines r.ScriptPath (relevant o.diagnostics) |> String.concat "\n")
     o.exn |> Option.iter (fun x -> section "exception" (exceptionText r.ScriptPath x))
-    section "files" (fileLines baseUrl r.Id (List.map fst images) r.Files |> String.concat "\n")
+    section "files" (fileLines (List.map fst images) r.Files |> String.concat "\n")
     for name, f in saved do
         line $"The {name} output was shortened, all captured {name} output is in {f.path}"
     if not r.IsFinished && r.StdOut.Length > 0L then
@@ -236,5 +232,5 @@ let check (diagnostics: Diagnostic[]) : string =
     | shown -> diagnosticLines "" shown |> String.concat "\n"
 
 /// Files of an export or capture, one per line after the title.
-let files (baseUrl: string) (id: string) (title: string) (items: FileItem seq) : string =
-    title + "\n" + (fileLines baseUrl id [] items |> String.concat "\n")
+let files (title: string) (items: FileItem seq) : string =
+    title + "\n" + (fileLines [] items |> String.concat "\n")

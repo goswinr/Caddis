@@ -3,7 +3,6 @@ namespace Caddis
 open System
 open System.IO
 open System.Net
-open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -11,7 +10,7 @@ open System.Threading.Tasks
 open Caddis.Http
 
 /// The HTTP server: owns the CaddisService and serves the REST and MCP endpoints.
-/// Every request needs the header 'Authorization: Bearer <token>'. Requests from web pages, with an Origin header, are rejected.
+/// It listens on localhost only. Requests from web pages, with an Origin header, are rejected.
 type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     do RunRegistry.DeleteStaleFolders()
@@ -23,8 +22,6 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
     let sync = obj ()
     let mutable listener: HttpListener option = None
     let mutable port = 0
-    let mutable listenOnLan = false
-    do store.GetOrCreateToken() |> ignore
 
     let maxBodyBytes = 20L * 1024L * 1024L
 
@@ -33,8 +30,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
     let discoveryPath () =
         Path.Combine(store.InstancesFolder, $"{Environment.ProcessId}.json")
 
-    let url () =
-        if listenOnLan then $"http://{Dns.GetHostName()}:{port}" else $"http://127.0.0.1:{port}"
+    let url () = $"http://127.0.0.1:{port}"
 
     let serverInfo () : (string * JsonNode) list = [
         "server",
@@ -42,21 +38,8 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
             "running", Json.ofBool listener.IsSome
             "url", Json.ofString (url ())
             "mcpUrl", Json.ofString (url () + "/mcp")
-            "listenOnLan", Json.ofBool listenOnLan
-            "tokenFile", Json.ofString store.TokenPath
         ]
     ]
-
-    let isAuthorized (r: HttpListenerRequest) =
-        match r.Headers["Authorization"] with
-        | null -> false
-        | h when h.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ->
-            let given = Encoding.UTF8.GetBytes(h.Substring(7).Trim())
-            try
-                let expected = Encoding.UTF8.GetBytes(store.ReadToken())
-                CryptographicOperations.FixedTimeEquals(ReadOnlySpan<byte>(given), ReadOnlySpan<byte>(expected))
-            with _ -> false
-        | _ -> false
 
     let rec write (r: HttpListenerResponse) (resp: Response) : Task =
         task {
@@ -124,11 +107,6 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     try
                         if not (isNull r.Headers["Origin"]) then
                             return Response.error 403 "Requests from web pages (with an Origin header) are not allowed."
-                        elif not (isAuthorized r) then
-                            return
-                                Response.error
-                                    401
-                                    $"Missing or wrong token. Send the header 'Authorization: Bearer <token>'. The token is in {store.TokenPath}, {host.Info.copyMcpCommandUi} copies the MCP command with it."
                         elif r.ContentLength64 > maxBodyBytes then
                             return tooLarge
                         else
@@ -196,41 +174,26 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     "port", Json.ofInt port
                     "url", Json.ofString (url ())
                     "mcpUrl", Json.ofString (url () + "/mcp")
-                    "listenOnLan", Json.ofBool listenOnLan
                     "app", Json.ofString host.Info.appName
                     "mcpServerName", Json.ofString host.Info.mcpServerName
                     "host", Json.ofString host.Description
                     "startedAt", Json.ofString (DateTime.UtcNow.ToString "o")
-                    "tokenFile", Json.ofString store.TokenPath
                 ]
             File.WriteAllText(discoveryPath (), Json.toText info)
         with e ->
             host.LogError $"Caddis: writing the discovery file failed: {e.Message}"
 
     /// Tries the port and the next ones until one is free.
-    let rec tryListen (lan: bool) (firstPort: int) (p: int) (attemptsLeft: int) : Result<HttpListener * int, string> =
+    let rec tryListen (firstPort: int) (p: int) (attemptsLeft: int) : Result<HttpListener * int, string> =
         let l = new HttpListener()
-        if lan then
-            l.Prefixes.Add $"http://+:{p}/"
-        else
-            l.Prefixes.Add $"http://127.0.0.1:{p}/"
-            l.Prefixes.Add $"http://localhost:{p}/"
+        l.Prefixes.Add $"http://127.0.0.1:{p}/"
+        l.Prefixes.Add $"http://localhost:{p}/"
         try
             l.Start()
             Ok(l, p)
-        with
-        | :? HttpListenerException as e when lan && e.ErrorCode = 5 -> // access denied
+        with e ->
             l.Close()
-            Error(
-                String.concat "\n" [
-                    "Listening on the network needs a one-time permission from an administrator."
-                    "Run this in a terminal as administrator, then start Caddis again:"
-                    $"netsh http add urlacl url=http://+:{p}/ user=\"{Environment.UserDomainName}\\{Environment.UserName}\""
-                ]
-            )
-        | e ->
-            l.Close()
-            if attemptsLeft > 1 then tryListen lan firstPort (p + 1) (attemptsLeft - 1)
+            if attemptsLeft > 1 then tryListen firstPort (p + 1) (attemptsLeft - 1)
             else Error $"Could not listen on any port from {firstPort} to {p}: {e.Message}"
 
     member _.Service = svc
@@ -244,13 +207,9 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     member _.McpUrl = url () + "/mcp"
 
-    member _.Token = store.ReadToken()
-
-    member _.TokenPath = store.TokenPath
-
     /// The command line to add this server to Claude Code for all projects of the current user.
     member this.ClaudeMcpCommand =
-        $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl} --header \"Authorization: Bearer {this.Token}\""
+        $"claude mcp add --transport http --scope user {host.Info.mcpServerName} {this.McpUrl}"
 
     /// Starts listening and creating the F# session. Returns the URL, or an error message.
     member this.Start() : Result<string, string> =
@@ -259,12 +218,11 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
             | Some _ -> Ok(url ())
             | None ->
                 let s = svc.Settings
-                match tryListen s.listenOnLan s.port s.port 20 with
+                match tryListen s.port s.port 20 with
                 | Error msg -> Error msg
                 | Ok(l, p) ->
                     listener <- Some l
                     port <- p
-                    listenOnLan <- s.listenOnLan
                     acceptLoop l
                     writeDiscoveryFile ()
                     if p <> s.port then
@@ -287,9 +245,6 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     ()
                 try File.Delete(discoveryPath ()) with _ -> ()
             | None -> ())
-
-    /// Creates and saves a new token, the old one stops working.
-    member _.NewToken() = store.NewToken()
 
     interface IDisposable with
         member this.Dispose() = this.Stop()

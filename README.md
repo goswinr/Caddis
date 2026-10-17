@@ -57,7 +57,7 @@ Start the server in the app, then copy the command that adds Caddis to Claude Co
 in Rhino with the command `Caddis` and its option `CopyMcpCommand`, in Revit with the button `Copy MCP` on the `Caddis` ribbon tab.
 The panel has a `Copy MCP command` button too. Paste the command in a terminal, it looks like:
 ```
-claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/mcp
 ```
 
 `--scope user` makes Caddis available across your Claude Code projects.
@@ -70,11 +70,6 @@ Rhino and Revit have their own port and MCP name, so that both can run and stay 
 | Revit | 7820 | `caddis-revit` |
 
 If the port is taken, the next free one is used.
-
-The token is created on the first start and saved in `token.txt`, see [Files](#files). It is shared by both apps and
-stays the same across restarts of the server, Rhino and Revit, so a registered MCP command keeps working.
-It only changes when you replace it: `New token` in either app replaces it for every running instance immediately;
-update all clients with the new token.
 
 ## MCP tools
 
@@ -115,9 +110,8 @@ MCP results are text written for the model, without `structuredContent`:
 Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
 
 ## REST
-Every request needs the header `Authorization: Bearer <token>`.
 ```
-curl -H "Authorization: Bearer <token>" http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
+curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
 ```
 
 | Endpoint | |
@@ -166,19 +160,16 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 
 | File | |
 |---|---|
-| `token.txt` | The token, shared by Rhino and Revit |
 | `settings-rhino.json` | The settings of Caddis in Rhino |
 | `settings-revit.json` | The settings of Caddis in Revit |
 | `instances\<process id>.json` | The port of each running server |
 | `revit.log` | Caddis' own messages in Revit |
 
 ## Security
-Anyone who can send requests to Caddis can run any code on your computer.
-- Every request needs the token.
-- By default the server only listens on localhost.
+Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.
+- The server only listens on localhost, so other computers can't reach it.
+- Every program on this computer can reach it, also programs of other users signed in to it.
 - Requests from web pages, with an `Origin` header, are rejected.
-- When it listens on the network (LAN), the token is sent unencrypted over the network.
-  On Windows this needs a one-time `netsh http add urlacl ...` as administrator, Caddis prints the exact command.
 
 ## Development
 ```

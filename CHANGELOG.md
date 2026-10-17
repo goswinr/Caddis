@@ -12,7 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In Revit, unseen errors also turn the ribbon's `Info` button red with an exclamation mark and their number, and the Info dialog lists the latest ones above the other messages. In `revit.log` they are marked with `ERROR`.
 
 ### Changed
-- Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once. The token is kept.
+- Rhino's settings file is now `settings-rhino.json`, like `settings-revit.json` for Revit. Settings saved in `settings.json` by an earlier version are not read anymore, Rhino starts with the default settings once.
+
+### Removed
+- The token: requests need no `Authorization` header anymore, and the copied `claude mcp add` command has no `--header`. MCP clients registered with the token keep working, the header is ignored. `token.txt` is not used anymore and can be deleted.
+- `NewToken` in Rhino's `Caddis` command, `New token` on Revit's ribbon and `Copy token` in the panel.
+- Listening on the network: the setting `listenOnLan`, the option `ListenOnLan` in Rhino and the checkbox `Listen on the network (LAN)` in the panel and on Revit's ribbon. Caddis listens on localhost only.
+- `listenOnLan` and `tokenFile` in the status and in the discovery files.
 
 ## [0.2.1] - 2026-10-11
 

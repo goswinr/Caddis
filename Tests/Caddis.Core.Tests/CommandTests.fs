@@ -70,7 +70,7 @@ let ``a command run reports its steps and leaves out a leading exclamation mark`
     let req = received.Value
     Assert.Equal<string[]>([| "-_Line 0,0,0 10,0,0" |], req.macros)
     Assert.Equal(Some(TimeSpan.FromMilliseconds(float CaddisService.DefaultInputTimeoutMs)), req.inputTimeout)
-    let text, _ = McpView.run "Headless" svc.Runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" svc.Runs [] 0L run
     Assert.Contains("--- commands ---\n-_Line 0,0,0 10,0,0 -> Line: Success", text)
     Assert.Contains("--- Headless command line ---\nCommand: -_Line", text)
 
@@ -152,7 +152,7 @@ let ``MCP shows the notes of a run`` () =
     let run = Run("r1", FSharpCode, UiThread, "1", "", runs.CreateFolder "r1", 10_000, true)
     run.AddNote "Caddis cancelled the command Length that the script started."
     run.Complete(RunOutcome.ofStatus Succeeded) |> ignore
-    let text, _ = McpView.run "Headless" runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" runs [] 0L run
     Assert.Contains("ok after", text)
     Assert.Contains("\nCaddis cancelled the command Length that the script started.", text)
 
@@ -178,7 +178,7 @@ let ``MCP shows the objects of a command run and saves long id lists`` () =
     run.UndoSerial <- Some 7u
     run.UndoSteps <- 2
     run.Complete(RunOutcome.withMessage Cancelled "Caddis cancelled Loft.") |> ignore
-    let text, _ = McpView.run "Headless" runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = McpView.run "Headless" runs [] 0L run
     Assert.Contains("its changes can be undone with caddis_undo (2 undo steps)", text)
     Assert.Contains("-_Loft -> Loft: Cancel (cancelled while waiting at the prompt 'Select curves to loft ( Point )')\n_Zoom -> not run", text)
     Assert.Contains($"created (1): {created}", text)

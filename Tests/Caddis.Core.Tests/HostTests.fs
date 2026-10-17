@@ -83,7 +83,6 @@ let server =
 
 let post (path: string) (json: string) =
     use c = new HttpClient(BaseAddress = Uri server.Value.Url)
-    c.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", server.Value.Token)
     use req = new HttpRequestMessage(HttpMethod.Post, path, Content = new StringContent(json, Encoding.UTF8, "application/json"))
     let resp = c.Send req
     resp.StatusCode, resp.Content.ReadAsStringAsync().Result
@@ -99,7 +98,7 @@ let ``MCP uses the name and instructions of the host`` () =
     let result = at [ "result" ] (mcp """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}""")
     Assert.Equal("caddis-other", str [ "serverInfo"; "name" ] result)
     Assert.Equal("Caddis runs F# code inside OtherApp.", str [ "instructions" ] result)
-    Assert.StartsWith("claude mcp add --transport http --scope user caddis-other http://", server.Value.ClaudeMcpCommand)
+    Assert.Equal($"claude mcp add --transport http --scope user caddis-other {server.Value.McpUrl}", server.Value.ClaudeMcpCommand)
 
 [<Fact>]
 let ``MCP does not offer commands if the host has none`` () =
@@ -115,14 +114,6 @@ let ``REST commands on a host without commands are a bad request`` () =
     let status, body = post "/command" """{"commands": ["x"]}"""
     Assert.Equal(HttpStatusCode.BadRequest, status)
     Assert.Contains("OtherApp has no commands to run, use /eval instead.", body)
-
-[<Fact>]
-let ``the token error names where the host copies the MCP command`` () =
-    use c = new HttpClient(BaseAddress = Uri server.Value.Url)
-    use req = new HttpRequestMessage(HttpMethod.Get, "/status")
-    let resp = c.Send req
-    Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode)
-    Assert.Contains("the button 'Copy MCP' copies the MCP command", resp.Content.ReadAsStringAsync().Result)
 
 [<Fact>]
 let ``export ids are checked with the id format of the host`` () =
@@ -147,7 +138,7 @@ let ``AfterRun gets the status of the run`` () =
     Assert.Equal(CompileError, statusOf notCompiled)
 
 [<Fact>]
-let ``each host has its own settings file and default port, the token is shared`` () =
+let ``each host has its own settings file and default port`` () =
     let folder = Path.Combine(Path.GetTempPath(), "CaddisTests", Guid.NewGuid().ToString "N")
     let rhino = SettingsStore(folder)
     let other = SettingsStore(folder, "settings-other.json", { CaddisSettings.defaults with port = 7820 })
@@ -158,7 +149,6 @@ let ``each host has its own settings file and default port, the token is shared`
     File.WriteAllText(other.SettingsPath, """{"autoStart": true}""")
     Assert.Equal(7820, other.Load().port)
     Assert.True(other.Load().autoStart)
-    Assert.Equal(rhino.GetOrCreateToken(), other.GetOrCreateToken())
 
 /// Calls an MCP tool and returns whether the result is an error, and its text.
 let callTool (name: string) (arguments: string) =
@@ -203,7 +193,6 @@ let ``open dialogs are in the status and in results of runs that are still runni
     host.OpenDialogs <- [ { id = "0x1"; title = "Project Not Saved Recently"; text = "Save now?"; buttons = [ "Save"; "Cancel" ] } ]
     try
         use c = new HttpClient(BaseAddress = Uri server.Value.Url)
-        c.DefaultRequestHeaders.Authorization <- Headers.AuthenticationHeaderValue("Bearer", server.Value.Token)
         let dialogs = (at [ "dialogs" ] (JsonNode.Parse(c.GetStringAsync("/status").Result))).AsArray()
         Assert.Equal("Project Not Saved Recently", str [ "title" ] dialogs[0])
         let _, text = callTool "caddis_export" """{"format": "obj", "name": "slow", "waitMs": 0}"""
@@ -248,7 +237,7 @@ let ``MCP shows changed objects per group if the host groups them`` () =
             selected = None
         }
     run.Complete(RunOutcome.ofStatus Succeeded) |> ignore
-    let text, _ = Http.McpView.run "OtherApp" runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = Http.McpView.run "OtherApp" runs [] 0L run
     Assert.Contains("created (1): 11\n", text)
     Assert.Matches(@"changed \(3, all in .*r1-changed\.txt\): 2 Path of Travel Lines, 1 Schedules", text)
     Assert.DoesNotContain("21, 22", text)
@@ -257,10 +246,10 @@ let ``MCP shows changed objects per group if the host groups them`` () =
 let ``MCP says when a running run has not started yet`` () =
     let runs = RunRegistry(Path.Combine(Path.GetTempPath(), "CaddisTests", "runs-" + Guid.NewGuid().ToString "N"))
     let run = Run("r1", FSharpCode, UiThread, "1", "", runs.CreateFolder "r1", 10_000, true)
-    let text, _ = Http.McpView.run "OtherApp" runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = Http.McpView.run "OtherApp" runs [] 0L run
     Assert.Contains("It has not started yet: OtherApp runs it only when it is idle", text)
     run.Started <- true
-    let text, _ = Http.McpView.run "OtherApp" runs "http://127.0.0.1:7810" [] 0L run
+    let text, _ = Http.McpView.run "OtherApp" runs [] 0L run
     Assert.Contains("It runs on the UI thread, so it can't be cancelled and OtherApp is blocked until it finishes.", text)
 
 [<Theory>]
