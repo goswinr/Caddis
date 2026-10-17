@@ -216,6 +216,12 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             "firstLine", Json.ofString (if firstLine.Length > 100 then firstLine.Substring(0, 100) + "..." else firstLine)
         ]
 
+    /// The .NET runtime and the versions of FSharp.Core and FSharp.Compiler.Service that are loaded, for the settings panel.
+    member _.RuntimeInfo : string =
+        let fsharpCore = versionOf typeof<list<int>>.Assembly
+        let fcs = versionOf typeof<FSharp.Compiler.Interactive.Shell.FsiEvaluationSession>.Assembly
+        $"{RuntimeInformation.FrameworkDescription} · FSharp.Core {fsharpCore} · FSharp.Compiler.Service {fcs}"
+
     member self.Status(extra: (string * JsonNode) list) : JsonObject =
         let memoryMB =
             use p = Process.GetCurrentProcess()

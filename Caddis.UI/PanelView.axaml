@@ -108,6 +108,7 @@
           <CheckBox x:Name="Echo" Content="Echo output to the command line" />
           <CheckBox x:Name="Lan" Content="Listen on the network (LAN)" />
           <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
+          <TextBlock x:Name="RuntimeInfo" Opacity="0.7" TextWrapping="Wrap" VerticalAlignment="Center" />
         </WrapPanel>
       </Border>
 

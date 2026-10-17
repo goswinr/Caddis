@@ -70,6 +70,7 @@ type PanelView(host: PanelHost) as this =
     let echo: CheckBox = find "Echo"
     let lan: CheckBox = find "Lan"
     let cancelWaiting: CheckBox = find "CancelWaiting"
+    let runtimeInfo: TextBlock = find "RuntimeInfo"
     let runs: ListBox = find "Runs"
     let output: TextBox = find "Output"
     let codeView: TextEditor = find "CodeView"
@@ -230,6 +231,7 @@ type PanelView(host: PanelHost) as this =
                 echo.IsChecked <- Nullable svc.Settings.echoOutput
                 lan.IsChecked <- Nullable svc.Settings.listenOnLan
                 cancelWaiting.IsChecked <- Nullable svc.Settings.cancelWaitingCommands
+                runtimeInfo.Text <- svc.RuntimeInfo
                 cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
                 refreshRuns s
                 host.Refreshed ()
