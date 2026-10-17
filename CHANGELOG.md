@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When the server starts, Rhino prints the commands to add Caddis to Claude Code (`claude mcp add ...`) and Codex (`codex mcp add ...`) to its command line.
 - In Revit, unseen errors also turn the ribbon's `Info` button red with an exclamation mark and their number, and the Info dialog lists the latest ones above the other messages. In `revit.log` they are marked with `ERROR`.
 - While the server runs, the panel shows whether Claude Code and Codex connect to this app: `active`, `not set up` with a `Set up` button that runs `claude mcp add ...` or `codex mcp add ...`, or `inactive` with an `Activate` button. The commands are in the buttons' tooltips, a right-click on an agent copies them.
+- For development, the files in `Dev`, e.g. `Rhino8.cmd` or `Revit2026.cmd`, start Rhino or Revit with a local build of Caddis, while the installed Caddis stays installed for every other start. In Revit 2025 and later the loader loads Caddis.Revit from the folder in the environment variable `CADDIS_REVIT_DEV` if it is set.
 - With two instances of an app, e.g. two Revits, `Activate` in the second one takes over the port where the agents connect, once the first one is idle with no run in progress. The first one moves to another port and logs that. Agents connected to the port go on with the second one, and their next tool result says that another Caddis answers now. `POST /release` asks for the port.
 
 ### Changed

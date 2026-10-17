@@ -35,6 +35,11 @@ current/
 `Caddis.Revit.dll` is loaded with `Assembly.LoadFrom`, so its dependencies, e.g. FSharp.Core, are loaded from its own folder.
 If it fails to load, the loader shows the path and the error in a dialog.
 
+## Local builds
+If the environment variable `CADDIS_REVIT_DEV` is set, the loader loads `Caddis.Revit.dll` from its subfolder `net8.0` or `net10.0` instead,
+in the same layout as above. [Dev/Start-Dev.ps1](../Dev/Start-Dev.ps1) sets it only for the Revit it starts, with a local build in `%LocalAppData%\Caddis.Dev\Revit<year>`,
+see [Dev/README.md](../Dev/README.md). Caddis.Revit finds no bootstrapper next to that folder, so it doesn't check for updates.
+
 The development install with [install-dev.ps1](../Caddis.Revit/install-dev.ps1) doesn't use the loader:
 it registers the build for the .NET of that Revit directly, as named in Revit's `RevitAPI.runtimeconfig.json`.
 

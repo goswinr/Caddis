@@ -205,6 +205,9 @@ Each app supplies the panel's actions, theme colors and docking wrapper: Eto in 
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
 See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
 
+### Run a local build in Rhino or Revit
+To start Rhino or Revit with a local build instead of the installed Caddis, double-click e.g. `Dev\Rhino8.cmd` or `Dev\Revit2026.cmd`, see [Dev/README.md](Dev/README.md).
+
 ### Releases
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
 using `Ionide.KeepAChangelog.Tasks`, as in Fesh.Rhino. To publish a release:

@@ -40,6 +40,10 @@ Revit loads only one version of them, so Caddis.Revit can run next to a Fesh.Rev
 Uninstall it via Windows' native `Add or Remove Programs` settings.
 
 ### Installation for development
+To start Revit with a local build, while the installed Caddis stays registered for every other start of Revit,
+see [Dev/README.md](../Dev/README.md).
+
+To register a local build for every start of Revit instead:
 ```
 dotnet build Caddis.Revit -c Release
 ./Caddis.Revit/install-dev.ps1 -Year 2026 -Configuration Release

@@ -132,6 +132,7 @@ Caddis.Rhino/                  the Rhino plugin, a .rhp, and yak.yml
 Caddis.Revit/                  the Revit add-in, and install-dev.ps1
 Caddis.Revit.Loader/           C# add-in for Revit 2025 and later, loads the net8.0 or net10.0 build
 Caddis.Revit.Bootstrapper/     the Velopack app of the Revit installer
+Dev/                           a .cmd per app, e.g. Rhino8.cmd, and Start-Dev.ps1: start Rhino or Revit with a local build instead of the installed Caddis
 Tests/Caddis.Core.Tests/       xUnit tests of the core with a headless host
 Tests/Caddis.UI.Tests/         xUnit v3 tests of the panel with Avalonia's headless platform
 Docs/img/                      logo, favicon and makeAllSizes.ps1, which renders them from logo.png
@@ -787,7 +788,7 @@ The ribbon commands enter API context too, so `Script.UiApp` works there.
 
 ### Loader
 
-[`CaddisLoader`](Caddis.Revit.Loader/CaddisLoader.cs) is the add-in of Revit 2025 and later. It loads `../net10.0/Caddis.Revit.dll` if `Environment.Version.Major >= 10`, else `../net8.0/`, with `Assembly.LoadFrom` so its dependencies come from its folder, creates `Caddis.Revit.CaddisApplication`, and passes `OnStartup` and `OnShutdown` on. A load error is shown in a dialog. See the [loader's README](Caddis.Revit.Loader/README.md).
+[`CaddisLoader`](Caddis.Revit.Loader/CaddisLoader.cs) is the add-in of Revit 2025 and later. It loads `../net10.0/Caddis.Revit.dll` if `Environment.Version.Major >= 10`, else `../net8.0/`, with `Assembly.LoadFrom` so its dependencies come from its folder, creates `Caddis.Revit.CaddisApplication`, and passes `OnStartup` and `OnShutdown` on. A load error is shown in a dialog. If the environment variable `CADDIS_REVIT_DEV` is set, it loads from the `net8.0` or `net10.0` folder in that folder instead, see [Dev/README.md](Dev/README.md). See the [loader's README](Caddis.Revit.Loader/README.md).
 
 ### Bootstrapper and updates
 
@@ -800,7 +801,7 @@ The ribbon commands enter API context too, so `Script.UiApp` works there.
 - `--install-update <revit pid>`, started by Caddis when the last Revit closes: lets Velopack's `Update.exe` install a downloaded release once that Revit has exited, then restarts the bootstrapper, which shows the new version.
 
 Velopack runs in this process and not in Revit, where it could conflict with the Velopack of another add-in, e.g. an older Fesh.Revit.
-For development, [install-dev.ps1](Caddis.Revit/install-dev.ps1) writes a `Caddis.addin` that points at a local build directly, picking the build from `RevitAPI.runtimeconfig.json`; it does not use the loader.
+For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a local build: via `CADDIS_REVIT_DEV` if the installed loader reads it, otherwise it swaps `Caddis.addin` until that Revit has loaded the build. [install-dev.ps1](Caddis.Revit/install-dev.ps1) writes a `Caddis.addin` that points at a local build directly for every start, picking the build from `RevitAPI.runtimeconfig.json`; it does not use the loader.
 
 ---
 

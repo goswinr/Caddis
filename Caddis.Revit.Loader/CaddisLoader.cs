@@ -8,18 +8,25 @@ namespace Caddis.Revit.Loader
     /// <summary>
     /// The entry point in Revit 2025 and later, registered in Caddis.addin. Don't rename it.
     /// Loads Caddis.Revit.dll from the folder net8.0 or net10.0 next to the folder of the loader, for the .NET runtime that Revit runs on,
-    /// and passes Revit's calls on to it. The ribbon buttons of Caddis refer to that dll, the loader is only needed at start and shutdown.
+    /// or in the folder named by CADDIS_REVIT_DEV, and passes Revit's calls on to it. The ribbon buttons of Caddis refer to that dll, the loader is only needed at start and shutdown.
     /// </summary>
     public class CaddisLoader : IExternalApplication
     {
         IExternalApplication? caddis;
 
+        /// <summary>Set by Dev/Start-Dev.ps1 for the Revit it starts: a folder with a local build of Caddis.Revit in net8.0 or net10.0,
+        /// loaded instead of the installed one.</summary>
+        const string DevFolderVariable = "CADDIS_REVIT_DEV";
+
         /// <summary>The path of Caddis.Revit.dll for the runtime of this process.</summary>
         static string CaddisPath()
         {
-            string loaderFolder = Path.GetDirectoryName(typeof(CaddisLoader).Assembly.Location)!;
             string framework = Environment.Version.Major >= 10 ? "net10.0" : "net8.0";
-            return Path.Combine(Path.GetDirectoryName(loaderFolder)!, framework, "Caddis.Revit.dll");
+            string? devFolder = Environment.GetEnvironmentVariable(DevFolderVariable);
+            string folder = string.IsNullOrEmpty(devFolder)
+                ? Path.GetDirectoryName(Path.GetDirectoryName(typeof(CaddisLoader).Assembly.Location)!)!
+                : devFolder;
+            return Path.Combine(folder, framework, "Caddis.Revit.dll");
         }
 
         /// <summary>Loads Caddis.Revit and starts it.</summary>

@@ -18,7 +18,9 @@ both use the same versions of FSharp.Core and FSharp.Compiler.Service.
 
 ### Manual installation
 
-Build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
+To run a local build while Caddis is installed from Yak, see [Dev/README.md](../Dev/README.md).
+
+Without Caddis installed, build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
 then drag `Caddis.Rhino/bin/Debug/net8.0/Caddis.Rhino.rhp` into Rhino 8.
 Rhino on .NET Framework loads the build in `bin/Debug/net48` next to it, Rhino 9 Beta the one in `bin/Debug/net10.0`.
 The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like Fesh.Rhino for Rhino 9, and has the panel.
