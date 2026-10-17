@@ -193,7 +193,7 @@ dotnet test Caddis.slnx
 `Caddis.Core` and `Caddis.UI` target `net8.0;net10.0` with Avalonia 12, and `net48` for Rhino and Revit 2024 on .NET Framework, with Avalonia 11.
 Each app supplies the panel's actions, theme colors and docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
-See [plan.md](plan.md) for the design and the open tasks.
+See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
 
 ### Releases
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
