@@ -68,6 +68,9 @@ type PanelView(host: PanelHost) as this =
     let serverStatus: TextBlock = find "ServerStatus"
     let fsiStatus: TextBlock = find "FsiStatus"
     let message: TextBlock = find "Message"
+    let sdkNotice: WrapPanel = find "SdkNotice"
+    let sdkText: TextBlock = find "SdkText"
+    let getSdk: Button = find "GetSdk"
     let startStop: Button = find "StartStop"
     let agents: StackPanel = find "Agents"
     let agentNote: TextBlock = find "AgentNote"
@@ -349,10 +352,22 @@ type PanelView(host: PanelHost) as this =
                 agentNote.IsVisible <- true
             | _ -> agentNote.IsVisible <- false
 
+    /// Recommends installing the .NET SDK while scripts can't use NuGet packages without it.
+    let refreshSdkNotice () =
+        let nuget = DotnetSdk.current ()
+        match NuGetSupport.installAdviceLines host.Name nuget with
+        | None -> sdkNotice.IsVisible <- false
+        | Some lines ->
+            sdkNotice.IsVisible <- true
+            sdkText.Text <- $"Scripts can't use NuGet packages without the {NuGetSupport.requiredSdk nuget}."
+            ToolTip.SetTip(sdkNotice, tip lines)
+            ToolTip.SetTip(getSdk, $"Open {NuGetSupport.downloadUrl nuget}")
+
     let refresh () =
         message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
         refreshErrors ()
         version.Text <- host.Version ()
+        refreshSdkNotice ()
         match host.Server () with
         | None ->
             serverStatus.Text <- "Caddis is not loaded."
@@ -548,6 +563,7 @@ type PanelView(host: PanelHost) as this =
                 let copy = MenuItem(Header = "Copy the command")
                 copy.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyAgentCommands s row))
                 row.Row.ContextMenu <- ContextMenu(ItemsSource = [ copy ])
+        getSdk.Click.Add(fun _ -> host.OpenUrl (NuGetSupport.downloadUrl (DotnetSdk.current ())))
         mode.SelectionChanged.Add(fun _ -> if not updating then host.SetMode (if mode.SelectedIndex = 1 then Background else UiThread))
         // Click is only raised by the user, not when refresh sets IsChecked.
         autoStart.Click.Add(fun _ -> host.SetAutoStart (autoStart.IsChecked.GetValueOrDefault()))

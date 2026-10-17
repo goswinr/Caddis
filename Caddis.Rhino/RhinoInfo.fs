@@ -28,7 +28,7 @@ module RhinoInfo =
                 "status ('ok', 'compileError', 'runtimeError', 'cancelled', 'timeout', 'rejected' or 'running'),"
                 "F# Interactive's output with the types of new definitions and the value of the last expression,"
                 "stdout, what was printed to the Rhino command line, stderr, compiler errors and warnings, the exception with the script line, and files saved to Caddis.Script.OutDir, images inline."
-                "Definitions stay available for later calls. RhinoCommon is referenced. NuGet packages can be used via #r \"nuget: Name\"."
+                "Definitions stay available for later calls. RhinoCommon is referenced."
                 "Each run is one undo step in Rhino. In background mode code that uses the Rhino UI must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
             ]
         recordUndo = "Wrap the run in a Rhino undo record so that caddis_undo can revert it. Default: true."

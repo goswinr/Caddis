@@ -935,7 +935,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Shared console**: `Console.Out` is redirected for the whole process during a run, so other plugins' console output is captured into the run.
 - **Other plugins**: one that loads an older FSharp.Core first can keep Caddis from loading. In Revit the first add-in to load wins; Caddis can run next to Fesh.Revit only with the same FSharp.Core and FCS.
 - **Stack trace lines**: an exception in a top-level statement is reported at line 1, a limitation of FSI's debug info; inside functions the line is right.
-- **NuGet references** with `#r "nuget:"` need the .NET SDK.
+- **NuGet references** with `#r "nuget:"` need a .NET SDK of the app's .NET version or newer. `DotnetSdk.fs` finds it like FCS and reports it in status, MCP texts, run notes and the panel.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
 - **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
 - **Claude Desktop**: the extension is validated and packed with the MCPB CLI and its relay is tested with Node, but installing it in Claude Desktop is tested by hand only.

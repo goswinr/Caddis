@@ -246,6 +246,7 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
                 "fsharpCore", Json.ofString (versionOf typeof<list<int>>.Assembly)
                 "fsharpCompilerService", Json.ofString (versionOf typeof<FSharp.Compiler.Interactive.Shell.FsiEvaluationSession>.Assembly)
                 "dotnet", Json.ofString RuntimeInformation.FrameworkDescription
+                "nuget", NuGetSupport.toJson (DotnetSdk.current ())
                 "os", Json.ofString RuntimeInformation.OSDescription
                 "processId", Json.ofInt Environment.ProcessId
                 "memoryMB", Json.ofInt64 memoryMB

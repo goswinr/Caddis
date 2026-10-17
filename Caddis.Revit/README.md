@@ -162,6 +162,7 @@ Caddis.Revit.Script.OnUi(fun () -> ...)  // in Revit's API context, needed in ba
 ```
 `Caddis.Revit.Script` also has `OutDir` and `RunId` of `Caddis.Script`.
 `REVIT` is defined for `#if`, and `NETFRAMEWORK` in Revit 2024.
+NuGet packages via `#r "nuget: Name"` need the .NET SDK of Revit's .NET version or newer (see [NuGet packages](../README.md#nuget-packages)).
 
 In Revit on .NET, scripts can't use WPF types, e.g. `System.Windows.Window`: F# Interactive type-checks against the .NET SDK's reference assemblies,
 whose `WindowsBase.dll` is an empty stub that takes precedence over the real one, also with `#r`. Reflection works.

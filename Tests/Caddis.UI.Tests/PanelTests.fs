@@ -214,6 +214,37 @@ let ``while the server runs, the agents show whether they connect to it, and the
     finally window.Close()
 }
 
+[<AvaloniaFact>]
+let ``recommends the .NET SDK while scripts can't use NuGet packages`` () =
+    let prev = Environment.GetEnvironmentVariable "DOTNET_HOST_PATH"
+    let setHost (path: string) =
+        Environment.SetEnvironmentVariable("DOTNET_HOST_PATH", path)
+        DotnetSdk.clearCache ()
+    // a dotnet executable without SDKs next to it, like on a PC with only the .NET runtime
+    let dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N")).FullName
+    let fake = Path.Combine(dir, (if OperatingSystem.IsWindows() then "dotnet.exe" else "dotnet"))
+    File.WriteAllText(fake, "")
+    let mutable opened = []
+    let view = PanelView({ host "Rhino" with OpenUrl = fun url -> opened <- opened @ [ url ] })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    try
+        window.Show()
+        setHost fake
+        view.Refresh()
+        Assert.True(view.FindControl<WrapPanel>("SdkNotice").IsVisible)
+        Assert.Equal($"Scripts can't use NuGet packages without the .NET SDK {Environment.Version.Major} or newer.", view.FindControl<TextBlock>("SdkText").Text)
+        click (view.FindControl<Button> "GetSdk")
+        Assert.Equal<string list>([ $"https://dotnet.microsoft.com/download/dotnet/{Environment.Version.Major}.0" ], opened)
+        // the SDK was installed
+        let sdk = Directory.CreateDirectory(Path.Combine(dir, "sdk", $"{Environment.Version.Major}.0.100")).FullName
+        File.WriteAllText(Path.Combine(sdk, "dotnet.dll"), "")
+        DotnetSdk.clearCache ()
+        view.Refresh()
+        Assert.False(view.FindControl<WrapPanel>("SdkNotice").IsVisible)
+    finally
+        window.Close()
+        setHost prev
+
 let runWithId id kind code =
     Run(id, kind, UiThread, code, "example.fsx", Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString "N"), 10000, false)
 

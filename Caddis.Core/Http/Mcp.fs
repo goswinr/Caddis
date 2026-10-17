@@ -53,12 +53,12 @@ type McpEndpoint(svc: CaddisService) =
     static let idArray (description: string) : JsonNode =
         Json.obj [ "type", Json.ofString "array"; "items", Json.obj [ "type", Json.ofString "string" ]; "description", Json.ofString description ]
 
-    /// The tools, with the texts that depend on the host app from HostInfo.mcp.
-    static let toolsOf (t: McpTexts) : McpTool list = [
+    /// The tools, with the texts that depend on the host app from HostInfo.mcp, and on whether NuGet packages can be used.
+    static let toolsOf (t: McpTexts) (nuget: NuGetSupport) : McpTool list = [
         {
             name = "caddis_eval"
             title = "Evaluate F#"
-            description = t.eval
+            description = t.eval + " " + NuGetSupport.evalText nuget
             properties =
                 codeAndPath
                 @ [
@@ -270,7 +270,8 @@ type McpEndpoint(svc: CaddisService) =
 
     let info = svc.Host.Info
 
-    let tools = toolsOf info.mcp
+    /// Not kept: an SDK installed while the host app runs makes NuGet packages available.
+    let tools () = toolsOf info.mcp (DotnetSdk.current ())
 
     /// Runs started by a tools/call, by session id and the JSON text of the request id, so that notifications/cancelled can cancel them.
     let runsByRequest = ConcurrentDictionary<string, string>()
@@ -303,11 +304,15 @@ type McpEndpoint(svc: CaddisService) =
     let initialize (p: JsonNode) : JsonNode =
         let requested = Json.tryString "protocolVersion" p |> Option.defaultValue supportedVersions[0]
         let version = if Array.contains requested supportedVersions then requested else supportedVersions[0]
+        let instructions =
+            match NuGetSupport.installAdvice info.appName (DotnetSdk.current ()) with
+            | None -> info.mcp.instructions
+            | Some advice -> info.mcp.instructions + "\n" + $"If a task needs a NuGet package, tell the person in {info.appName}: {advice}"
         Json.obj [
             "protocolVersion", Json.ofString version
             "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ] ]
             "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString "Caddis"; "version", Json.ofString svc.Version ]
-            "instructions", Json.ofString info.mcp.instructions
+            "instructions", Json.ofString instructions
         ]
 
     /// Results have no structuredContent, see McpView.
@@ -449,10 +454,10 @@ type McpEndpoint(svc: CaddisService) =
                 return if isNull id then None else Some(errorResponse id -32600 "Invalid request: 'method' is missing.")
             | Some "initialize" -> return Some(response id (initialize p))
             | Some "ping" -> return Some(response id (JsonObject()))
-            | Some "tools/list" -> return Some(response id (Json.obj [ "tools", Json.arr (List.map toolJson tools) ]))
+            | Some "tools/list" -> return Some(response id (Json.obj [ "tools", Json.arr (List.map toolJson (tools ())) ]))
             | Some "tools/call" ->
                 let name = Json.tryString "name" p |> Option.defaultValue ""
-                if tools |> List.exists (fun t -> t.name = name) then
+                if tools () |> List.exists (fun t -> t.name = name) then
                     let args = Json.prop "arguments" p |> Option.defaultWith (fun () -> JsonObject())
                     let! result = callTool req id name args
                     return Some(response id (withSessionNote req result))
@@ -471,7 +476,7 @@ type McpEndpoint(svc: CaddisService) =
         }
 
     /// The tools as tools/list lists them, new nodes on each call.
-    member _.Tools: JsonNode list = List.map toolJson tools
+    member _.Tools: JsonNode list = List.map toolJson (tools ())
 
     member _.Handle(req: Request) : Task<Response> =
         task {

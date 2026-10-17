@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `listenOnLan` and `tokenFile` in the status and in the discovery files.
 - The panel's settings show the version of Caddis. In Revit also whether it is the latest, or whether a newer one is available or downloaded, from the update check at Revit's start.
 - Revit's `Info` button shows the same update status, and the `Caddis` command in Rhino shows the version.
+- Caddis checks whether a .NET SDK is installed that can restore NuGet packages for `#r "nuget: ..."`. `caddis_status` reports it under `nuget`, and the description of `caddis_eval` and the MCP instructions tell the agent.
+- Without that SDK the panel recommends installing it, with a button to its download page, and a failed run with `#r "nuget:"` gets a note explaining why.
 
 ## [0.2.1] - 2026-10-11
 

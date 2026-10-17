@@ -97,7 +97,7 @@ Every run is wrapped in one Rhino undo record.
 ## In scripts
 RhinoCommon and System.Drawing.Common are referenced in every session.
 Other assemblies of Rhino can be referenced by file name, e.g. `#r "Eto.dll"` or `#r "Rhino.UI.dll"`,
-and NuGet packages via `#r "nuget: Rhino.Scripting"`, which needs the .NET SDK.
+and NuGet packages via `#r "nuget: Rhino.Scripting"`, which needs the .NET SDK 8 or newer, 10 in Rhino 9 (see [NuGet packages](../README.md#nuget-packages)).
 
 In background mode, calls to RhinoCommon that touch the document or the UI go in `Caddis.Script.OnUi(fun () -> ...)`, as in the example below.
 `RHINO` is defined for `#if`, and `NETFRAMEWORK` in Rhino on .NET Framework.

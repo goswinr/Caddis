@@ -132,6 +132,18 @@ An explicit `objectIds` array must be nonempty and contain only valid ids of the
 MCP results are text written for the model, without `structuredContent`:
 Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
 
+### NuGet packages
+Scripts can reference NuGet packages via `#r "nuget: Name"`. F# Interactive restores them with `dotnet msbuild`, so they need a .NET SDK of the app's .NET version or newer,
+e.g. the .NET SDK 8 in Rhino 8 or Revit 2025, and any SDK on .NET Framework. Everything else works without an SDK.
+Caddis finds `dotnet` where F# Interactive does: `DOTNET_HOST_PATH`, next to the running .NET runtime, on `PATH`, then in `Program Files\dotnet`.
+Without a suitable SDK
+- `caddis_status` and `/status` report it under `nuget`, with the reason and the download page,
+- the description of `caddis_eval` and the instructions on `initialize` tell the agent, which can pass the advice on to the person,
+- a failed run with `#r "nuget:"` gets a note explaining it: F# Interactive's own error doesn't mention the SDK,
+- the panel recommends installing the SDK, with a button to its download page.
+
+An SDK installed while the app runs is found within 10 s.
+
 ## REST
 ```
 curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"

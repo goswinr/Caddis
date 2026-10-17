@@ -532,6 +532,11 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
 #else
             ScriptState.withContext context evaluate
 #endif
+        // FSI's error for a package it couldn't restore doesn't say that the SDK is missing
+        match outcome.status with
+        | CompileError
+        | RuntimeError when DotnetSdk.referencesNuGet run.Code -> NuGetSupport.installAdvice host.Info.appName (DotnetSdk.check ()) |> Option.iter run.AddNote
+        | _ -> ()
         finishRun run outcome
 
     // --- public members ---

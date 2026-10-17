@@ -32,7 +32,7 @@ module RevitInfo =
                 "F# Interactive's output with the types of new definitions and the value of the last expression,"
                 "stdout, stderr, compiler errors and warnings, the exception with the script line, the ids of the elements the run created, changed and deleted,"
                 "Revit's warnings and errors, and files saved to Caddis.Script.OutDir, images inline."
-                "Definitions stay available for later calls. RevitAPI and RevitAPIUI are referenced, Caddis.Revit.Script.Doc is the active document. NuGet packages can be used via #r \"nuget: Name\"."
+                "Definitions stay available for later calls. RevitAPI and RevitAPIUI are referenced, Caddis.Revit.Script.Doc is the active document."
                 "Changes need a transaction, e.g. Caddis.Revit.Script.Transact(\"name\", fun doc -> ...). On the 'ui' thread a run is one undo step in Revit and is rolled back if it fails."
                 "In background mode every Revit API call must be wrapped in Caddis.Revit.Script.OnUi(fun () -> ...)."
             ]
