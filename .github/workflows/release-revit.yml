@@ -116,8 +116,8 @@ jobs:
             --mainExe Caddis.Revit.Bootstrapper.exe `
             --framework net48 `
             --runtime win-x64 `
-            --icon Docs/img/favicon.ico `
-            --splashImage Docs/img/logo128.png `
+            --icon Docs/img/installer/favicon.ico `
+            --splashImage Docs/img/installer/logo128.png `
             --packAuthors 'Goswin Rothenthal' `
             --releaseNotes .github/InstallNotes-revit.md `
             --azureTrustedSignFile .github/signing-metadata.json `

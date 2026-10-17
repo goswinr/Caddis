@@ -13,7 +13,7 @@
     <Product>Caddis for Revit</Product>
     <Company>Goswin Rothenthal</Company> <!-- shown in the details of the exe in Windows Explorer -->
     <Description>Installs, updates and registers Caddis with Revit.</Description>
-    <ApplicationIcon>../Docs/img/favicon.ico</ApplicationIcon>
+    <ApplicationIcon>../Docs/img/installer/favicon.ico</ApplicationIcon>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 

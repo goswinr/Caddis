@@ -8,7 +8,7 @@ See the [main README](../README.md) for what Caddis does, connecting an agent, t
 
 ## Installation
 
-After the first Yak release, install via Rhino's `PackageManager` command and search for `Caddis`.
+Install via Rhino's `PackageManager` command and search for `Caddis`.
 The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
 On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`).
 There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
