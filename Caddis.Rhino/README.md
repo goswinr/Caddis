@@ -18,7 +18,7 @@ F# Interactive downloads them with the SDK. In Rhino 8 the .NET SDK 8 is enough.
 
 Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
 both use the same versions of FSharp.Core and FSharp.Compiler.Service.
-Caddis doesn't start a run while Fesh.Rhino runs a script, and Fesh.Rhino newer than 0.36.0 doesn't start a script while Caddis runs one.
+Caddis doesn't start a run while Fesh.Rhino runs a script, and Fesh.Rhino 0.36.1 or later doesn't start a script while Caddis runs one.
 
 ### Manual installation
 
