@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Rhino: while NuGet packages can be used, the MCP instructions suggest the package Rhino.Scripting.FSharp to the agent, with the 900+ functions of rhinoscriptsyntax as in Python, for common tasks like adding objects, layers, names, colors and user text. Models know these functions well, so they guess fewer RhinoCommon names and overloads.
+- Rhino: Caddis doesn't start a run while Fesh.Rhino runs a script, and tells the agent why. Before, with either in background mode, both could change the document at the same time. Fesh.Rhino newer than 0.36.0 also doesn't start a script while Caddis runs one, and keeps the `rs.Print` output of Caddis runs out of its log.
 
 ### Changed
 - The extension of Claude Desktop gets the same instructions as Caddis while Caddis isn't running, with the NuGet packages of the app or the advice to install the .NET SDK.

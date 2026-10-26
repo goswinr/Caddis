@@ -96,7 +96,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - Undo of a run: each run is one undo step.
 - Viewport capture as PNG, with size and display mode.
 - Export to the file formats of the app, as a run with its files.
-- Rhino: command macros like typed at the command line (`caddis_command`), with cancellation of commands that wait for input; a yellow border around the viewports while a run is in progress; echo of script output to the command line; the SynchronizationContext for Rhino.Scripting and its Esc state cleared before each run; the MCP instructions suggest Rhino.Scripting.FSharp when NuGet packages can be used.
+- Rhino: command macros like typed at the command line (`caddis_command`), with cancellation of commands that wait for input; a yellow border around the viewports while a run is in progress; echo of script output to the command line; the SynchronizationContext for Rhino.Scripting and its Esc state cleared before each run; the MCP instructions suggest Rhino.Scripting.FSharp when NuGet packages can be used; runs and the scripts of Fesh.Rhino don't overlap.
 - Revit: runs in Revit's API context through an external event; a transaction group per run, rolled back if the run fails; Revit's warnings as notes and errors as rolled-back transactions instead of dialogs; changed elements counted per category; listing Revit's blocking dialogs and pressing their buttons (`caddis_dialog`).
 
 **Server**
@@ -285,7 +285,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [AssemblyInfo.fs](Caddis.Rhino/AssemblyInfo.fs) | assembly attributes | the plugin GUID and description |
 | [RhinoInfo.fs](Caddis.Rhino/RhinoInfo.fs) | `RhinoInfo` | `HostInfo` and the MCP texts for Rhino |
 | [RunBorder.fs](Caddis.Rhino/RunBorder.fs) | `RunBorderConduit`, `RunBorder` | the yellow viewport border during runs |
-| [RhinoHost.fs](Caddis.Rhino/RhinoHost.fs) | `RhinoLog`, `RhinoScripting`, `RhinoHost` | the `ICaddisHost` for Rhino |
+| [RhinoHost.fs](Caddis.Rhino/RhinoHost.fs) | `RhinoLog`, `RhinoScripting`, `Interop`, `FeshRhino`, `RhinoHost` | the `ICaddisHost` for Rhino |
 | [Updates.fs](Caddis.Rhino/Updates.fs) | `Updates` (internal) | asks Yak for a newer release, and reads from the package's `manifest.txt` whether one is installed |
 | [App.fs](Caddis.Rhino/App.fs) | `App` | the server of this Rhino and the actions of the command and panel |
 | [AvaloniaHost.fs](Caddis.Rhino/AvaloniaHost.fs) | `RhinoAvaloniaSetup`, `AvaloniaHost` | Avalonia in an Eto `NativeControlHost` |
@@ -359,7 +359,7 @@ There is one `CaddisServer` per app process. A second load of the Rhino plugin i
 | `References` | session creation, API docs | RhinoCommon, System.Drawing | RevitAPI, RevitAPIUI, Caddis.Revit | none |
 | `LibFolders` | `--lib:` of the session, XML docs | RhinoCommon's folder, Rhino's exe folder | RevitAPI's folder | none |
 | `InvokeOnUi` | runs on the UI thread, `Script.OnUi`, capture, undo, command and export runs, type-check | `RhinoApp.InvokeOnUiThread`, inline on the UI thread | the external event, inline in API context | a `WorkerThread` |
-| `CannotRunReason` | before each run | a Rhino command is running | a transaction is open, only checked in API context | never |
+| `CannotRunReason` | before each run | a Rhino command or a script of Fesh.Rhino is running | a transaction is open, only checked in API context | never |
 | `BeforeRun`, `AfterRun` | on the evaluation thread around each F# run | undo record, command line capture, input watchdog, border, redraw | transaction group, change tracking, Revit's failures | nothing |
 | `Echo` | for all output, if `echoOutput` is on | to the command line, line by line | nothing, Revit has no command line | nothing |
 | `Log`, `LogError` | messages of Caddis | command line, errors also in the panel | `revit.log`, errors also on the Info button and in the panel | a function |
@@ -750,12 +750,16 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
 
 ## 10. Rhino: Caddis.Rhino
 
-**Loading**: [`CaddisPlugIn`](Caddis.Rhino/PlugIn.fs) loads at Rhino's start. It refuses a second load and Rhino on .NET older than 8, except the net48 build. It installs the assembly resolver, hooks up Rhino.Scripting, creates the server, registers the panel per document and starts the server if `autoStart` is on.
+**Loading**: [`CaddisPlugIn`](Caddis.Rhino/PlugIn.fs) loads at Rhino's start. It refuses a second load and Rhino on .NET older than 8, except the net48 build. It installs the assembly resolver, hooks up Rhino.Scripting and Fesh.Rhino, creates the server, registers the panel per document and starts the server if `autoStart` is on.
 
 **Rhino.Scripting**: the MCP instructions suggest [Rhino.Scripting.FSharp](https://github.com/goswinr/Rhino.Scripting.FSharp), which brings [Rhino.Scripting](https://github.com/goswinr/Rhino.Scripting), the functions of rhinoscriptsyntax for F#. Models know them from Python, so they guess fewer names and overloads than in RhinoCommon. Caddis doesn't reference or ship it: scripts load it with `#r "nuget: Rhino.Scripting.FSharp"`, as in the default template of Fesh.Rhino, so with the same version both load one copy from the NuGet cache.
 [`RhinoScripting`](Caddis.Rhino/RhinoHost.fs) hooks up each copy of Rhino.Scripting when it is loaded, or at start for one already loaded:
 - It sets the public static `RhinoSync.SyncContext` to Rhino's UI `SynchronizationContext`. Rhino.Scripting looks for Fesh.Rhino otherwise, and background scripts couldn't reach the UI thread.
 - `BeforeRun` clears the internal static `State.EscapePressed`, as Fesh.Rhino does before each of its runs. Rhino.Scripting remembers an Esc press even when no script runs, e.g. one that deselected objects, and `rs.EscapeTest()` would raise right at the start of the next run. The first access also adds Rhino.Scripting's event handlers on the UI thread, where they must be added.
+
+**Fesh.Rhino**: Caddis runs and the scripts of [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino) must not overlap. In background or async mode both would change the document from two threads and nest their undo records, and the capture of `Console.Out` would take in Fesh's output. Neither references the other, each reads the other's state by reflection:
+- [`FeshRhino`](Caddis.Rhino/RhinoHost.fs) finds the assembly `Fesh.Rhino` when it is loaded, or at start, and reads the `Func<bool>` of `Fesh.Rhino.Sync.isEvaluating`, true while Fesh compiles or evaluates. `CannotRunReason` then rejects the run, F# runs as well as commands and exports. Fesh.Rhino 0.36.0 and older don't have it.
+- [`Interop`](Caddis.Rhino/RhinoHost.fs)`.isRunning` is public for Fesh.Rhino and other plugins, true from `BeforeRun` to `AfterRun`. Newer Fesh.Rhino doesn't start a script then, writes Rhino.Scripting's prints only to the command line, where the capture takes them, ignores `rs.ClearLog()`, and doesn't take `Console.Out` when its window gets the focus.
 
 **[`RhinoHost`](Caddis.Rhino/RhinoHost.fs)**:
 - *Undo*: `BeforeRun` opens `BeginUndoRecord "Caddis r12"` on the UI thread in both modes, `AfterRun` closes it. Document events tell whether the run changed anything; a run without changes keeps no undo record. `Command.UndoRedo` events track which record is on top, including Rhino's purge of empty records, so `caddis_undo` only undoes a run whose record is still on top, with `_Undo` because `RhinoDoc.Undo()` outside a command leaves a record open.
@@ -946,7 +950,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Other plugins**: one that loads an older FSharp.Core first can keep Caddis from loading. In Revit the first add-in to load wins; Caddis can run next to Fesh.Revit only with the same FSharp.Core and FCS.
 - **Stack trace lines**: an exception in a top-level statement is reported at line 1, a limitation of FSI's debug info; inside functions the line is right.
 - **NuGet references** with `#r "nuget:"` need a .NET SDK of the app's .NET version or newer. `DotnetSdk.fs` finds it like FCS and reports it in status, MCP texts, run notes and the panel.
-- **Rhino.Scripting** is reached by reflection, via `RhinoSync.SyncContext` and the internal `State.EscapePressed`. A version that renames them is silently not hooked up. With Fesh.Rhino loaded, Rhino.Scripting takes Fesh's hooks instead, also in Caddis runs: `rs.Print` writes to Fesh's log as well as the command line, and `rs.Get*` functions hide the Fesh window.
+- **Rhino.Scripting** is reached by reflection, via `RhinoSync.SyncContext` and the internal `State.EscapePressed`. A version that renames them is silently not hooked up. With Fesh.Rhino loaded, Rhino.Scripting takes Fesh's hooks instead, also in Caddis runs: `rs.Get*` functions hide the Fesh window, and with Fesh.Rhino 0.36.0 or older `rs.Print` writes to Fesh's log as well as the command line.
+- **Fesh.Rhino** is reached by reflection too, via `Fesh.Rhino.Sync.isEvaluating`, and reads `Caddis.Rhino.Interop.isRunning` the same way. A rename on either side silently lets runs overlap again.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
 - **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
 - **Claude Desktop**: the extension is validated and packed with the MCPB CLI and its relay is tested with Node, but installing it in Claude Desktop is tested by hand only.

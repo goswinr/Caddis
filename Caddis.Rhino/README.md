@@ -18,6 +18,7 @@ F# Interactive downloads them with the SDK. In Rhino 8 the .NET SDK 8 is enough.
 
 Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
 both use the same versions of FSharp.Core and FSharp.Compiler.Service.
+Caddis doesn't start a run while Fesh.Rhino runs a script, and Fesh.Rhino newer than 0.36.0 doesn't start a script while Caddis runs one.
 
 ### Manual installation
 
@@ -131,7 +132,7 @@ rs.AddPoint(1., 2., 3.) |>! rs.setLayer "Points"
 Once the package is loaded, `caddis_describe` shows its functions with their docs, e.g. `RhinoScriptSyntax.ObjectLayer`.
 Rhino.Scripting looks for Rhino's UI thread in Fesh.Rhino. Caddis gives it the UI thread too, so that its functions that use the UI work in background mode without Fesh.Rhino.
 It also clears Rhino.Scripting's Esc state before each run, as Fesh.Rhino does: an Esc pressed in Rhino before, e.g. to deselect objects, doesn't make `rs.EscapeTest()` raise.
-With Fesh.Rhino loaded, `rs.Print` also writes to Fesh's log, and `rs.Get*` functions hide the Fesh window, also in Caddis runs.
+With Fesh.Rhino loaded, `rs.Get*` functions hide the Fesh window, also in Caddis runs. With Fesh.Rhino 0.36.0 or older, `rs.Print` in Caddis runs also writes to Fesh's log.
 
 ## Exemplary run
 

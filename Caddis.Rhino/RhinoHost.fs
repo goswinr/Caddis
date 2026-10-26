@@ -98,6 +98,52 @@ module RhinoScripting =
                 RhinoLog.error $"Caddis: resetting the Esc state of Rhino.Scripting failed: {e.GetBaseException().Message}"
 
 
+/// For other plugins, which read it via reflection, so that their scripts and Caddis runs don't overlap, e.g. Fesh.Rhino.
+/// Don't rename it or its members.
+module Interop =
+
+    /// True while Caddis runs F# code, from BeforeRun to AfterRun. Set on Rhino's UI thread.
+    let mutable isRunning = false
+
+
+/// Finds Fesh.Rhino, the F# editor for Rhino, so that its scripts and Caddis runs don't overlap.
+/// Caddis doesn't reference it, it reads the module Fesh.Rhino.Sync via reflection, as Rhino.Scripting does.
+/// Fesh.Rhino reads Interop.isRunning the same way.
+module FeshRhino =
+
+    /// The static property Fesh.Rhino.Sync.isEvaluating, a Func<bool>. Null until a Fesh.Rhino that has it is loaded.
+    let mutable private isEvaluating: PropertyInfo = null
+
+    let private hookUp (a: Assembly) =
+        if a.GetName().Name = "Fesh.Rhino" then
+            try
+                match a.GetType "Fesh.Rhino.Sync" with
+                | null -> ()
+                | sync ->
+                    match sync.GetProperty("isEvaluating", BindingFlags.Public ||| BindingFlags.Static) with
+                    | null -> () // an older Fesh.Rhino
+                    | p -> isEvaluating <- p
+            with e ->
+                RhinoLog.error $"Caddis: finding the state of Fesh.Rhino failed: {e.Message}"
+
+    let install () =
+        AppDomain.CurrentDomain.AssemblyLoad.Add(fun e -> hookUp e.LoadedAssembly)
+        for a in AppDomain.CurrentDomain.GetAssemblies() do
+            hookUp a
+
+    /// True while Fesh.Rhino compiles or runs a script. Called from any thread, never raises.
+    let isRunning () =
+        match isEvaluating with
+        | null -> false
+        | p ->
+            try
+                match p.GetValue null with
+                | :? Func<bool> as f -> f.Invoke()
+                | _ -> false
+            with _ ->
+                false
+
+
 /// Connects Caddis to Rhino: UI thread, undo records, redraw, viewport capture and export.
 type RhinoHost() =
 
@@ -541,12 +587,14 @@ type RhinoHost() =
 
         member _.CannotRunReason() =
             if Command.InCommand() then Some "A Rhino command is running. Finish or cancel it first."
+            elif FeshRhino.isRunning () then Some "Fesh, the F# editor in Rhino, is running a script. Run again once it has finished."
             else None
 
         member _.BeforeRun(run: Run) =
             onUi (fun () ->
                 RhinoScripting.resetEscapePressed ()
                 runActive <- true
+                Interop.isRunning <- true
                 docChanged <- false
                 match RhinoDoc.ActiveDoc with
                 | doc when run.RecordUndo && not (isNull doc) ->
@@ -573,6 +621,7 @@ type RhinoHost() =
                 for n in scriptNotes do
                     run.AddNote n
                 runActive <- false
+                Interop.isRunning <- false
                 run.CommandLine.Append(takeCaptured ())
                 endCapture ()
                 match run.UndoSerial with

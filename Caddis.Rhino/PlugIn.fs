@@ -31,6 +31,7 @@ type CaddisPlugIn() =
                 try FsiAssemblyResolver.install ()
                 with e -> RhinoLog.error $"Caddis: putting its assembly resolver first failed: {e.Message}"
                 RhinoScripting.install ()
+                FeshRhino.install ()
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
                 RhinoApp.Closing.Add(fun _ ->
