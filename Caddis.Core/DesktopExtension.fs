@@ -1,10 +1,13 @@
 namespace Caddis
 
 open System
+open System.Diagnostics
 open System.IO
 open System.IO.Compression
+open System.Runtime.InteropServices
 open System.Text
 open System.Text.Json.Nodes
+open Microsoft.Win32
 
 /// Caddis as an extension of Claude Desktop, an MCP Bundle (.mcpb): a zip of a manifest, relay.js and an icon.
 /// Claude Desktop runs local MCP servers over stdio only, and reaches the URLs of its connectors from Anthropic's servers,
@@ -139,12 +142,86 @@ module DesktopExtension =
             use entry = zip.CreateEntry(name, CompressionLevel.Optimal).Open()
             entry.Write(bytes, 0, bytes.Length)
 
-    /// The folder of Claude Desktop's settings: %APPDATA%\Claude, on Mac ~/Library/Application Support/Claude.
+    /// The package family of Claude Desktop for Windows from the Microsoft Store or an MSIX file.
+    let packageFamily = "Claude_pzs8sxrjxfjjc"
+
+    /// The program of Claude Desktop from its installer for Windows, in the folder of local app data, which starts its latest version.
+    let installerProgram (localAppData: string) =
+        Path.Combine(localAppData, "AnthropicClaude", "claude.exe")
+
+    /// The program of Claude Desktop from its installer for Windows, %LOCALAPPDATA%\AnthropicClaude\claude.exe.
+    /// None if it isn't installed so, and on Mac.
+    let program () =
+        let path = installerProgram (Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData)
+        if OperatingSystem.IsWindows() && File.Exists path then Some path else None
+
+    /// The id of Claude Desktop as the app of its MSIX package, e.g. "Claude_pzs8sxrjxfjjc!Claude", by which Windows starts it.
+    /// Windows lists the packages of the user in the registry, each with a key for each of its apps. None if there is no such package, and on Mac.
+    let packagedAppId () =
+        if not (OperatingSystem.IsWindows()) then
+            None
+        else
+            try
+                use packages =
+                    Registry.CurrentUser.OpenSubKey
+                        @"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages"
+                let name, publisherId = let i = packageFamily.IndexOf '_' in packageFamily.Substring(0, i), packageFamily.Substring(i + 1)
+                // full names are e.g. Claude_1.2.3.0_x64__pzs8sxrjxfjjc
+                packages.GetSubKeyNames()
+                |> Array.filter (fun n -> n.StartsWith(name + "_") && n.EndsWith("_" + publisherId))
+                |> Array.tryPick (fun n ->
+                    use package = packages.OpenSubKey n
+                    package.GetSubKeyNames() |> Array.tryHead |> Option.map (fun app -> $"{packageFamily}!{app}"))
+            with _ ->
+                None
+
+    [<ComImport; Guid("2e941141-7f97-4756-ba1d-9decde894a3d"); InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>]
+    type private IApplicationActivationManager =
+        abstract ActivateApplication:
+            [<MarshalAs(UnmanagedType.LPWStr)>] appUserModelId: string *
+            [<MarshalAs(UnmanagedType.LPWStr)>] arguments: string *
+            options: int *
+            [<Out>] processId: byref<uint32> ->
+                unit
+
+    /// Starts the app of an MSIX package with these arguments. Its program can't be started directly,
+    /// it would run outside of its package, with other folders for its data, and not pass the arguments on to the running app.
+    let private activate (appId: string) (arguments: string) =
+        let manager =
+            Activator.CreateInstance(Type.GetTypeFromCLSID(Guid "45BA127D-10A8-46EA-8AB7-56EA9078943C")) :?> IApplicationActivationManager
+        try
+            let mutable pid = 0u
+            manager.ActivateApplication(appId, arguments, 0, &pid)
+        finally
+            Marshal.ReleaseComObject manager |> ignore
+
+    /// Opens the bundle in Claude Desktop, which asks the person to install it.
+    /// Claude Desktop for Windows, from its installer or its MSIX package, isn't the app for .mcpb files, so Windows would ask which app to open it with.
+    /// So it starts Claude Desktop with the file, which passes it on to the running Claude Desktop.
+    let openBundle (path: string) =
+        match program (), packagedAppId () with
+        | Some exe, _ -> Process.Start(ProcessStartInfo(exe, $"\"{path}\"", UseShellExecute = false)) |> ignore
+        | None, Some appId -> activate appId $"\"{path}\""
+        | None, None -> Process.Start(ProcessStartInfo(path, UseShellExecute = true)) |> ignore
+
+    /// The folder of Claude Desktop's settings on Windows, in these folders of the user's local and roaming app data: Claude in the roaming one.
+    /// Claude Desktop from its MSIX package has it in its package's folder instead, where Windows redirects its roaming app data,
+    /// unless Claude Desktop from the installer is there too.
+    let windowsSettingsFolder (localAppData: string) (roamingAppData: string) =
+        let packaged = Path.Combine(localAppData, "Packages", packageFamily, "LocalCache", "Roaming", "Claude")
+        if not (File.Exists(installerProgram localAppData)) && Directory.Exists packaged then
+            packaged
+        else
+            Path.Combine(roamingAppData, "Claude")
+
+    /// The folder of Claude Desktop's settings: %APPDATA%\Claude, or the one of its MSIX package, on Mac ~/Library/Application Support/Claude.
     let settingsFolder () =
         if OperatingSystem.IsMacOS() then
             Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.UserProfile, "Library", "Application Support", "Claude")
         else
-            Path.Combine(Environment.GetFolderPath Environment.SpecialFolder.ApplicationData, "Claude")
+            windowsSettingsFolder
+                (Environment.GetFolderPath Environment.SpecialFolder.LocalApplicationData)
+                (Environment.GetFolderPath Environment.SpecialFolder.ApplicationData)
 
     /// The file in which Claude Desktop lists the installed extensions, each with its manifest.
     let installationsPath () =

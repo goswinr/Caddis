@@ -84,7 +84,10 @@ from Anthropic's servers, which can't reach your computer. So Caddis comes as a 
 whose small relay passes Claude Desktop's messages to Caddis on this computer. Claude Desktop brings the Node.js that runs it.
 
 The panel's `Set up` makes the extension for the running app, with its port and its tools. Each [release](https://github.com/goswinr/Caddis/releases)
-also has `caddis-rhino.mcpb` and `caddis-revit.mcpb` for the default ports: open one, or drag it into Claude Desktop.
+also has `caddis-rhino.mcpb` and `caddis-revit.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
+On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
+`More apps` > `Look for another app on this PC` and `%LOCALAPPDATA%\AnthropicClaude\claude.exe`, with `Always`.
+Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Extensions.
 Its setting `Port` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
 While the app isn't running, the extension still lists its tools, and their results say to start the app.
 

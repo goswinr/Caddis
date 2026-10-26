@@ -423,8 +423,8 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
         with _ ->
             None
 
-    /// Opens a file with the app that the system has for it, e.g. an .mcpb file with Claude Desktop. Tests set one that doesn't.
-    member val OpenFile: string -> unit = (fun path -> Process.Start(ProcessStartInfo(path, UseShellExecute = true)) |> ignore) with get, set
+    /// Opens an .mcpb file in Claude Desktop. Tests set one that doesn't.
+    member val OpenFile: string -> unit = DesktopExtension.openBundle with get, set
 
     /// The extension of Claude Desktop for this server, with its port, and its instructions and tools for while it isn't running.
     member this.DesktopBundle() : DesktopExtension.Bundle = {

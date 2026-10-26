@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - The link to the README in the messages of the Revit installer opens the README of Caddis for Revit, it pointed to a heading that doesn't exist.
 - In the panel's list of runs, the time of a running run counts up every second. It stayed at the time when the run was first listed.
+- On Windows, `Set up` for Claude Desktop starts Claude Desktop with the extension, from its installer or its MSIX package of the Microsoft Store. Windows asked which app to open the `.mcpb` file with, since Claude Desktop isn't the app for `.mcpb` files.
+- The panel shows whether Claude Desktop from its MSIX package has the extension installed. It looked for its settings in `%APPDATA%\Claude`, the MSIX package has them in its own folder.
 
 ## [0.3.0] - 2026-10-17
 

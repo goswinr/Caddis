@@ -83,6 +83,19 @@ let ``the installed extension relays to the port of its setting, or to the defau
     Assert.False(AgentConfigs(fun _ -> Path.Combine(newTempDir (), "Claude", "extensions-installations.json")).IsInstalled ClaudeDesktop)
 
 [<Fact>]
+let ``Claude Desktop from its MSIX package has its settings in the package's folder, unless it is installed by the installer too`` () =
+    let local, roaming = newTempDir (), newTempDir ()
+    let settingsFolder () = DesktopExtension.windowsSettingsFolder local roaming
+    Assert.Equal(Path.Combine(roaming, "Claude"), settingsFolder ())
+    let packaged = Path.Combine(local, "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude")
+    Directory.CreateDirectory packaged |> ignore
+    Assert.Equal(packaged, settingsFolder ())
+    let program = DesktopExtension.installerProgram local
+    Directory.CreateDirectory(Path.GetDirectoryName program) |> ignore
+    File.WriteAllText(program, "")
+    Assert.Equal(Path.Combine(roaming, "Claude"), settingsFolder ())
+
+[<Fact>]
 let ``Set up opens the extension made for the running server`` () =
     use s = newServer (port 30)
     let opened = ResizeArray<string>()
