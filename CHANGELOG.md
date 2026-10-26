@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-26
+
 ### Changed
 - The window of the Revit installer closes after 30 seconds. Its button counts down the seconds, clicking it keeps the window open.
 
