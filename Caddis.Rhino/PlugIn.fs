@@ -30,7 +30,7 @@ type CaddisPlugIn() =
                 // before Caddis.Core uses System.Text.Json or FCS, so that on .NET Framework it gets its versions, not Rhino's older ones
                 try FsiAssemblyResolver.install ()
                 with e -> RhinoLog.error $"Caddis: putting its assembly resolver first failed: {e.Message}"
-                RhinoScriptingSync.install ()
+                RhinoScripting.install ()
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
                 RhinoApp.Closing.Add(fun _ ->

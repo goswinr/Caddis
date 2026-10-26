@@ -109,10 +109,29 @@ Every run is wrapped in one Rhino undo record.
 ## In scripts
 RhinoCommon and System.Drawing.Common are referenced in every session.
 Other assemblies of Rhino can be referenced by file name, e.g. `#r "Eto.dll"` or `#r "Rhino.UI.dll"`,
-and NuGet packages via `#r "nuget: Rhino.Scripting"`, which needs the .NET SDK 8 or newer, 10 in Rhino 9 (see [NuGet packages](../README.md#nuget-packages)).
+and NuGet packages via `#r "nuget: Name"`, which needs the .NET SDK 8 or newer, 10 in Rhino 9 (see [NuGet packages](../README.md#nuget-packages)).
 
 In background mode, calls to RhinoCommon that touch the document or the UI go in `Caddis.Script.OnUi(fun () -> ...)`, as in the example below.
 `RHINO` is defined for `#if`, and `NETFRAMEWORK` in Rhino on .NET Framework.
+
+### Rhino.Scripting
+[Rhino.Scripting](https://github.com/goswinr/Rhino.Scripting) has the 900+ functions of rhinoscriptsyntax for F#, named and used as in Python,
+and [Rhino.Scripting.FSharp](https://github.com/goswinr/Rhino.Scripting.FSharp) adds curried versions for pipelines and extensions of RhinoCommon types.
+While NuGet packages can be used, the MCP instructions suggest them to the agent for common tasks, e.g. adding objects, layers, names, colors and user text:
+
+```fsharp
+#r "nuget: Rhino.Scripting.FSharp"
+open Rhino.Scripting
+open Rhino.Scripting.FSharp
+type rs = RhinoScriptSyntax
+
+rs.AddPoint(1., 2., 3.) |>! rs.setLayer "Points"
+```
+
+Once the package is loaded, `caddis_describe` shows its functions with their docs, e.g. `RhinoScriptSyntax.ObjectLayer`.
+Rhino.Scripting looks for Rhino's UI thread in Fesh.Rhino. Caddis gives it the UI thread too, so that its functions that use the UI work in background mode without Fesh.Rhino.
+It also clears Rhino.Scripting's Esc state before each run, as Fesh.Rhino does: an Esc pressed in Rhino before, e.g. to deselect objects, doesn't make `rs.EscapeTest()` raise.
+With Fesh.Rhino loaded, `rs.Print` also writes to Fesh's log, and `rs.Get*` functions hide the Fesh window, also in Caddis runs.
 
 ## Exemplary run
 

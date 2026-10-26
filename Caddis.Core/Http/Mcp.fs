@@ -268,6 +268,13 @@ type McpEndpoint(svc: CaddisService) =
     static let newSessionId () =
         Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
 
+    /// The instructions of the host app, with its NuGet packages if they can be used, or else the advice to install the .NET SDK.
+    static let instructionsOf (info: HostInfo) (nuget: NuGetSupport) =
+        match NuGetSupport.installAdvice info.appName nuget, info.mcp.packages with
+        | Some advice, _ -> info.mcp.instructions + "\n" + $"If a task needs a NuGet package, tell the person in {info.appName}: {advice}"
+        | None, Some packages -> info.mcp.instructions + "\n" + packages
+        | None, None -> info.mcp.instructions
+
     let info = svc.Host.Info
 
     /// Not kept: an SDK installed while the host app runs makes NuGet packages available.
@@ -304,15 +311,11 @@ type McpEndpoint(svc: CaddisService) =
     let initialize (p: JsonNode) : JsonNode =
         let requested = Json.tryString "protocolVersion" p |> Option.defaultValue supportedVersions[0]
         let version = if Array.contains requested supportedVersions then requested else supportedVersions[0]
-        let instructions =
-            match NuGetSupport.installAdvice info.appName (DotnetSdk.current ()) with
-            | None -> info.mcp.instructions
-            | Some advice -> info.mcp.instructions + "\n" + $"If a task needs a NuGet package, tell the person in {info.appName}: {advice}"
         Json.obj [
             "protocolVersion", Json.ofString version
             "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ] ]
             "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString "Caddis"; "version", Json.ofString svc.Version ]
-            "instructions", Json.ofString instructions
+            "instructions", Json.ofString(instructionsOf info (DotnetSdk.current ()))
         ]
 
     /// Results have no structuredContent, see McpView.
@@ -477,6 +480,9 @@ type McpEndpoint(svc: CaddisService) =
 
     /// The tools as tools/list lists them, new nodes on each call.
     member _.Tools: JsonNode list = List.map toolJson (tools ())
+
+    /// The instructions as initialize sends them.
+    member _.Instructions: string = instructionsOf info (DotnetSdk.current ())
 
     member _.Handle(req: Request) : Task<Response> =
         task {

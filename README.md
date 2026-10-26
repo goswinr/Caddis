@@ -144,7 +144,7 @@ e.g. the .NET SDK 8 in Rhino 8 or Revit 2025, and any SDK on .NET Framework. Eve
 Caddis finds `dotnet` where F# Interactive does: `DOTNET_HOST_PATH`, next to the running .NET runtime, on `PATH`, then in `Program Files\dotnet`.
 Without a suitable SDK
 - `caddis_status` and `/status` report it under `nuget`, with the reason and the download page,
-- the description of `caddis_eval` and the instructions on `initialize` tell the agent, which can pass the advice on to the person,
+- the description of `caddis_eval` and the instructions on `initialize` tell the agent, which can pass the advice on to the person, and in Rhino the instructions leave out the suggestion of [Rhino.Scripting](Caddis.Rhino/README.md#rhinoscripting),
 - a failed run with `#r "nuget:"` gets a note explaining it: F# Interactive's own error doesn't mention the SDK,
 - the panel recommends installing the SDK, with a button to its download page.
 

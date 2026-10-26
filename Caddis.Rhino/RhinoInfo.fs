@@ -22,6 +22,16 @@ module RhinoInfo =
                 "caddis_command runs Rhino commands like typed at the command line, for what commands do well, e.g. _Zoom, _SetDisplayMode, _Make2D, or to read what _What, _Length or _Area print. Use caddis_eval for logic, loops and geometry math. A command run in caddis_eval via RhinoApp.RunScript must get all its inputs in the macro, otherwise it waits until someone gives them in Rhino, or Caddis cancels it if the person turned that on."
                 "Use caddis_check to type-check code against the session without running it, and caddis_capture_viewport to see the result."
             ]
+        packages =
+            Some(
+                String.concat " " [
+                    "The NuGet package Rhino.Scripting.FSharp has the 900+ functions of rhinoscriptsyntax, named and used as in Python, as static members of RhinoScriptSyntax, and curried versions of many of them for F# pipelines. It brings the package Rhino.Scripting with it."
+                    "Load it with #r \"nuget: Rhino.Scripting.FSharp\", then 'open Rhino.Scripting', 'open Rhino.Scripting.FSharp' and 'type rs = RhinoScriptSyntax', e.g. rs.AddPoint(1., 2., 3.) |>! rs.setLayer \"Points\"."
+                    "Prefer it for common tasks in the document, e.g. adding objects, layers, names, colors and user text, and use RhinoCommon for the rest: its functions take and return object ids (GUIDs) and RhinoCommon types."
+                    "The first #r downloads it, which takes a while. Then caddis_describe shows its members, e.g. 'RhinoScriptSyntax.ObjectLayer', or 'RhinoScriptSyntax' with a filter like 'Layer'."
+                    "Don't use its Get* functions or rs.MessageBox, they wait for the person in Rhino. In background mode, call its functions that change the document inside Caddis.Script.OnUi, as with RhinoCommon."
+                ]
+            )
         eval =
             String.concat " " [
                 "Evaluates F# code in the persistent F# Interactive session inside Rhino and returns the result:"

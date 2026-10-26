@@ -433,7 +433,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
         port = port
         version = svc.Version
         platforms = [ (if OperatingSystem.IsMacOS() then "darwin" else "win32") ]
-        instructions = host.Info.mcp.instructions
+        instructions = mcp.Instructions
         tools = mcp.Tools
     }
 

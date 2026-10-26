@@ -35,6 +35,9 @@ let private runtimeMajor = None
 let private runtimeMajor = Some Environment.Version.Major
 #endif
 
+/// An SDK that can restore packages for this runtime.
+let private usableSdk = match runtimeMajor with Some m -> $"{m}.0.100" | None -> "8.0.100"
+
 [<Fact>]
 let ``finds the SDKs next to the dotnet executable, newest first`` () =
     let host = fakeDotnet [ "8.0.100"; "10.0.100-rc.2.25502.107"; "10.0.100"; "9.0.300" ]
@@ -100,8 +103,7 @@ let ``MCP tells the agent whether NuGet packages can be used`` () =
         let _, body =
             HttpTests.mcp """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}"""
         HttpTests.str [ "result"; "instructions" ] (JsonNode.Parse body)
-    let required = match runtimeMajor with Some m -> $"{m}.0.100" | None -> "8.0.100"
-    withHost (fakeDotnet [ required ]) (fun () ->
+    withHost (fakeDotnet [ usableSdk ]) (fun () ->
         Assert.EndsWith("NuGet packages can be used via #r \"nuget: Name\".", evalDescription ())
         Assert.DoesNotContain("NuGet", instructions ()))
     withHost (fakeDotnet []) (fun () ->
@@ -110,6 +112,20 @@ let ``MCP tells the agent whether NuGet packages can be used`` () =
         let status = JsonNode.Parse(snd (HttpTests.send HttpTests.client.Value (new Net.Http.HttpRequestMessage(Net.Http.HttpMethod.Get, "/status"))))
         Assert.False(HttpTests.flag [ "nuget"; "available" ] status)
         Assert.StartsWith("https://dotnet.microsoft.com/download", HttpTests.str [ "nuget"; "download" ] status))
+
+[<Fact>]
+let ``MCP suggests the host's NuGet packages only if they can be used`` () =
+    let instructions () =
+        HostTests.str [ "result"; "instructions" ] (HostTests.mcp """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}""")
+    let packages = "The NuGet package OtherApp.Scripting has the API of OtherApp."
+    withHost (fakeDotnet [ usableSdk ]) (fun () ->
+        Assert.Equal("Caddis runs F# code inside OtherApp.\n" + packages, instructions ())
+        // and Claude Desktop's extension while the app isn't running
+        Assert.EndsWith(packages, HostTests.server.Value.DesktopBundle().instructions))
+    withHost (fakeDotnet []) (fun () ->
+        let text = instructions ()
+        Assert.DoesNotContain(packages, text)
+        Assert.Contains("If a task needs a NuGet package, tell the person in OtherApp: Scripts can't use NuGet packages", text))
 
 [<Fact>]
 let ``a run with a NuGet reference explains a missing SDK`` () =

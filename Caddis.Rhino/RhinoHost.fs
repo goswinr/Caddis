@@ -44,31 +44,58 @@ module RhinoLog =
         writeLine s
 
 
-/// Rhino.Scripting finds the UI SynchronizationContext via reflection in the Fesh.Rhino plugin.
-/// Without Fesh.Rhino set it via its public RhinoSync.SyncContext property,
-/// so that Rhino.Scripting can switch to the UI thread when scripts run in background mode.
-module RhinoScriptingSync =
+/// Connects Rhino.Scripting to Caddis, for scripts that use it, e.g. via '#r "nuget: Rhino.Scripting.FSharp"'.
+/// Caddis doesn't reference it, it finds each loaded copy by its name, like Fesh.Rhino does.
+module RhinoScripting =
 
-    let private trySet (ctx: SynchronizationContext) (a: Assembly) =
+    /// The static property EscapePressed of the internal class Rhino.Scripting.State, of each loaded Rhino.Scripting.
+    /// There can be several, e.g. after a reset with another version, or one that Fesh.Rhino loaded.
+    let private escapeFlags = ResizeArray<PropertyInfo>()
+
+    /// Rhino.Scripting finds the UI SynchronizationContext via reflection in the Fesh.Rhino plugin.
+    /// Without Fesh.Rhino this sets it via its public RhinoSync.SyncContext property,
+    /// so that Rhino.Scripting can switch to the UI thread when scripts run in background mode.
+    let private hookUp (ctx: SynchronizationContext) (a: Assembly) =
         if a.GetName().Name = "Rhino.Scripting" then
             try
                 // Rhino.Scripting.RhinoSync since version 0.7, Rhino.RhinoSync before
                 match a.GetType "Rhino.Scripting.RhinoSync" |> Option.ofObj |> Option.orElse (a.GetType "Rhino.RhinoSync" |> Option.ofObj) with
-                | None -> ()
-                | Some t ->
+                | Some t when not (isNull ctx) ->
                     match t.GetProperty("SyncContext", BindingFlags.Public ||| BindingFlags.Static) with
                     | null -> ()
                     | p -> p.SetValue(null, ctx)
+                | _ -> ()
             with e ->
                 RhinoLog.error $"Caddis: setting RhinoSync.SyncContext of Rhino.Scripting failed: {e.Message}"
+            try
+                // exists since at least Rhino.Scripting 0.8
+                match a.GetType "Rhino.Scripting.State" with
+                | null -> ()
+                | state ->
+                    match state.GetProperty("EscapePressed", BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.Static) with
+                    | null -> ()
+                    | p -> lock escapeFlags (fun () -> escapeFlags.Add p)
+            with e ->
+                RhinoLog.error $"Caddis: finding the Esc state of Rhino.Scripting failed: {e.Message}"
 
     /// Call on the UI thread.
     let install () =
         let ctx = SynchronizationContext.Current
-        if not (isNull ctx) then
-            AppDomain.CurrentDomain.AssemblyLoad.Add(fun e -> trySet ctx e.LoadedAssembly)
-            for a in AppDomain.CurrentDomain.GetAssemblies() do
-                trySet ctx a
+        AppDomain.CurrentDomain.AssemblyLoad.Add(fun e -> hookUp ctx e.LoadedAssembly)
+        for a in AppDomain.CurrentDomain.GetAssemblies() do
+            hookUp ctx a
+
+    /// Rhino.Scripting remembers an Esc press even when no script runs, e.g. one that deselected objects in Rhino.
+    /// Then rs.EscapeTest() would raise right away in the next run. So this clears it before each run, as Fesh.Rhino does.
+    /// Call on the UI thread: the first access sets up the event handlers of Rhino.Scripting, which must be added there.
+    let resetEscapePressed () =
+        for p in lock escapeFlags (fun () -> List.ofSeq escapeFlags) do
+            try
+                p.SetValue(null, false)
+            with e ->
+                // don't try again on every run
+                lock escapeFlags (fun () -> escapeFlags.Remove p |> ignore)
+                RhinoLog.error $"Caddis: resetting the Esc state of Rhino.Scripting failed: {e.GetBaseException().Message}"
 
 
 /// Connects Caddis to Rhino: UI thread, undo records, redraw, viewport capture and export.
@@ -518,6 +545,7 @@ type RhinoHost() =
 
         member _.BeforeRun(run: Run) =
             onUi (fun () ->
+                RhinoScripting.resetEscapePressed ()
                 runActive <- true
                 docChanged <- false
                 match RhinoDoc.ActiveDoc with

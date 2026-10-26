@@ -21,6 +21,7 @@ type HeadlessHost(log: string -> unit) =
                     "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
                     "Files saved to the folder Caddis.Script.OutDir are returned with the result, images inline."
                 ]
+            packages = None
             eval = "Evaluates F# code in the persistent F# Interactive session and returns the result. Definitions stay available for later calls."
             recordUndo = "Wrap the run in an undo record of the host app. Default: true."
             command =

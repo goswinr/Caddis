@@ -601,6 +601,8 @@ type CommandToolTexts = {
 type McpTexts = {
     /// Sent on initialize: what Caddis does in this app and how to use the tools.
     instructions: string
+    /// Added to the instructions if NuGet packages can be used: packages that suit this app and how to use them. None if there are none.
+    packages: string option
     eval: string
     /// The 'recordUndo' argument of caddis_eval.
     recordUndo: string

@@ -28,6 +28,7 @@ type OtherAppHost() =
             mcp = {
                 inner.Info.mcp with
                     instructions = "Caddis runs F# code inside OtherApp."
+                    packages = Some "The NuGet package OtherApp.Scripting has the API of OtherApp."
                     command = None
                     dialog = Some "Lists or presses buttons of dialogs of OtherApp."
             }
@@ -96,7 +97,8 @@ let str path n = (at path n).GetValue<string>()
 let ``MCP uses the name and instructions of the host`` () =
     let result = at [ "result" ] (mcp """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}""")
     Assert.Equal("caddis-other", str [ "serverInfo"; "name" ] result)
-    Assert.Equal("Caddis runs F# code inside OtherApp.", str [ "instructions" ] result)
+    // followed by its NuGet packages or the advice to install the .NET SDK, see NuGetTests
+    Assert.StartsWith("Caddis runs F# code inside OtherApp.\n", str [ "instructions" ] result)
     Assert.Equal($"claude mcp add --transport http --scope user caddis-other {server.Value.McpUrl}", server.Value.ClaudeMcpCommand)
     Assert.Equal($"codex mcp add caddis-other --url {server.Value.McpUrl}", server.Value.CodexMcpCommand)
 

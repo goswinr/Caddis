@@ -25,6 +25,7 @@ module RevitInfo =
                 "Look up Revit API types and members you are not sure about with caddis_describe instead of guessing their names, overloads or parameter types. The API changes between Revit versions, e.g. element ids are Int64: ElementId(316577L) and id.Value."
                 "Use caddis_check to type-check code against the session without running it, and caddis_capture_viewport to see a view."
             ]
+        packages = None
         eval =
             String.concat " " [
                 "Evaluates F# code in the persistent F# Interactive session inside Revit and returns the result:"
