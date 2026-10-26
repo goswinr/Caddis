@@ -33,14 +33,18 @@ type CaddisPlugIn() =
                 RhinoScriptingSync.install ()
                 let server = new CaddisServer(RhinoHost(), SettingsStore())
                 App.server <- Some server
-                RhinoApp.Closing.Add(fun _ -> App.shutdown ())
+                RhinoApp.Closing.Add(fun _ ->
+                    PanelPlacement.save ()
+                    App.shutdown ())
                 try
                     Rhino.UI.Panels.RegisterPanel(
                         this, typeof<CaddisPanel>, "Caddis", typeof<CaddisPanel>.Assembly,
                         "Caddis.Rhino.Resources.Caddis.ico", Rhino.UI.PanelType.PerDoc
                     )
+                    PanelPlacement.restoreAtStart ()
                 with e ->
                     RhinoLog.error $"Caddis: registering the panel failed: {e.Message}"
+                Updates.check ()
                 if server.Service.Settings.autoStart then App.start ()
                 LoadReturnCode.Success
             with e ->

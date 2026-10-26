@@ -38,6 +38,7 @@
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="FSharp.Core" Version="10.1.401" /> <!-- the version that FCS pins in the net48 build of Caddis.Core -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <!-- Platform backends for the shared Avalonia panel in Rhino's Eto shell. -->
@@ -62,9 +63,11 @@
     <Compile Include="RhinoInfo.fs" />
     <Compile Include="RunBorder.fs" />
     <Compile Include="RhinoHost.fs" />
+    <Compile Include="Updates.fs" />
     <Compile Include="App.fs" />
     <Compile Include="AvaloniaHost.fs" />
     <Compile Include="PanelTheme.fs" />
+    <Compile Include="PanelPlacement.fs" />
     <Compile Include="Panel.fs" />
     <Compile Include="PlugIn.fs" />
     <Compile Include="Commands.fs" />

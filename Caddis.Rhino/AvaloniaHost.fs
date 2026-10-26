@@ -48,6 +48,11 @@ type AvaloniaHost(content: Avalonia.Controls.Control) =
 
     member _.SyncDpi() = embedded |> Option.iter _.SyncDpi()
 
+    /// The native window of the content, None until it is created.
+    member _.Handle =
+        try embedded |> Option.map _.Handle
+        with _ -> None
+
     override _.Dispose(disposing) =
         if disposing then
             embedded |> Option.iter (fun view -> (view :> IDisposable).Dispose())

@@ -46,6 +46,7 @@ module private PanelServices =
         Errors = RevitLog.errors
         Refreshed = fun () -> try App.stateChanged () with _ -> ()
         Version = Updates.status
+        Update = Updates.notice
         VersionTip = String.concat "\n" [
             "When Revit starts, Caddis checks its releases on GitHub and asks whether to download a newer one."
             "A downloaded release is installed when the last Revit has closed."

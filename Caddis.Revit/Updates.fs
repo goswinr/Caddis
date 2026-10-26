@@ -76,27 +76,26 @@ module internal Updates =
         with _ ->
             lastCheck |> Option.map snd
 
-    /// Whether version a is newer than b, e.g. 0.3.0 than 0.2.1 or than 0.3.0-beta.1.
-    let private isNewer (a: string) (b: string) =
-        let numbers (v: string) =
-            match Version.TryParse(v.Split('-')[0]) with
-            | true, n -> Some n
+    /// Whether a newer Caddis is downloaded or available, compared to this build: the file of the check may be older than this build,
+    /// e.g. at the first start after an update, until the bootstrapper checked again. None if not, or if Caddis was not installed by its installer.
+    let notice () =
+        if not installed then
+            None
+        else
+            match readCheck () with
+            | Some { Downloaded = Some d } when ReleaseVersion.isNewer d version ->
+                Some $"Caddis {d} is downloaded, it is installed when the last Revit has closed. You're using {version}."
+            | Some { Latest = Some l } when ReleaseVersion.isNewer l version ->
+                Some $"Caddis {l} is available, you're using {version}. Caddis offers to download it when Revit starts."
             | _ -> None
-        match numbers a, numbers b with
-        | Some x, Some y -> x > y || (x = y && not (a.Contains "-") && b.Contains "-")
-        | _ -> a <> b
 
-    /// The version of Caddis and whether a newer one is available or downloaded, compared to this build:
-    /// the file of the check may be older than this build, e.g. at the first start after an update, until the bootstrapper checked again.
+    /// The version of Caddis and whether a newer one is available or downloaded.
     let status () =
         if not installed then
             $"You're using Caddis {version}. Updates are off, Caddis was not installed by its installer."
         else
-            match readCheck () with
-            | Some { Downloaded = Some d } when isNewer d version ->
-                $"Caddis {d} is downloaded, it is installed when the last Revit has closed. You're using {version}."
-            | Some { Latest = Some l } when isNewer l version ->
-                $"Caddis {l} is available, you're using {version}. Caddis offers to download it when Revit starts."
-            | Some { Latest = Some _ } -> $"You're using the latest version of Caddis, {version}."
-            | Some { Error = Some e } -> $"You're using Caddis {version}. Checking for updates failed: {e}"
+            match notice (), readCheck () with
+            | Some n, _ -> n
+            | None, Some { Latest = Some _ } -> $"You're using the latest version of Caddis, {version}."
+            | None, Some { Error = Some e } -> $"You're using Caddis {version}. Checking for updates failed: {e}"
             | _ -> $"You're using Caddis {version}."

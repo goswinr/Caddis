@@ -84,7 +84,7 @@
       </Grid.RowDefinitions>
 
       <!-- The logo beside the status line and the buttons. Their groups wrap below each other when the panel is narrow. -->
-      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,4">
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,4">
         <Border x:Name="Logo" Grid.RowSpan="2" VerticalAlignment="Top" Background="Transparent" Cursor="Hand" Margin="0,2,8,0">
           <Image x:Name="LogoImage" Width="40" Height="40" />
         </Border>
@@ -149,6 +149,16 @@
           <TextBlock x:Name="SdkText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
           <Button x:Name="GetSdk" Content="Get the .NET SDK" />
         </WrapPanel>
+        <!-- Only while a newer Caddis is available, or installed after a restart. -->
+        <Grid x:Name="UpdateNotice" Grid.Row="5" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" IsVisible="False" Background="Transparent" Margin="0,2,0,2">
+          <!-- A blue disc with an i, the same in light and dark themes. -->
+          <Grid Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,6,0">
+            <Ellipse Fill="#0078D4" />
+            <Rectangle Fill="White" Width="2" Height="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,3,0,0" />
+            <Rectangle Fill="White" Width="2" Height="5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3" />
+          </Grid>
+          <TextBlock x:Name="UpdateText" Grid.Column="1" TextWrapping="Wrap" />
+        </Grid>
       </Grid>
 
       <!-- Folded until the Settings button is checked. Below the settings, the version of Caddis and whether a newer one is available. -->

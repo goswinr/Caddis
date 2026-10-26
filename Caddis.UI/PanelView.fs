@@ -85,6 +85,8 @@ type PanelView(host: PanelHost) as this =
     let sdkNotice: WrapPanel = find "SdkNotice"
     let sdkText: TextBlock = find "SdkText"
     let getSdk: Button = find "GetSdk"
+    let updateNotice: Grid = find "UpdateNotice"
+    let updateText: TextBlock = find "UpdateText"
     let startStop: Button = find "StartStop"
     let agents: StackPanel = find "Agents"
     let agentNote: TextBlock = find "AgentNote"
@@ -383,6 +385,11 @@ type PanelView(host: PanelHost) as this =
         message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
         refreshErrors ()
         version.Text <- host.Version ()
+        match host.Update () with
+        | Some text ->
+            updateNotice.IsVisible <- true
+            updateText.Text <- text
+        | None -> updateNotice.IsVisible <- false
         refreshSdkNotice ()
         match host.Server () with
         | None ->
@@ -516,6 +523,7 @@ type PanelView(host: PanelHost) as this =
         ToolTip.SetTip(clearErrors, tip [ "Remove these errors from the list."; "The Errors button is hidden until the next error." ])
         ToolTip.SetTip(settingsToggle, "Show or hide the settings and the version of Caddis.")
         ToolTip.SetTip(version, host.VersionTip)
+        ToolTip.SetTip(updateNotice, host.VersionTip)
         ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])

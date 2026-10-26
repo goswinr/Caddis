@@ -56,6 +56,7 @@ let host name = {
     Errors = ErrorLog 20
     Refreshed = ignore
     Version = fun () -> $"You're using Caddis 1.2.3 in {name}."
+    Update = fun () -> None
     VersionTip = "Updates"
     Palette = fun () -> palette false
     SubscribeTheme = fun _ -> { new IDisposable with member _.Dispose() = () }
@@ -84,6 +85,25 @@ let ``shared XAML loads and exposes the host's options and actions`` name =
         Assert.Equal($"You're using Caddis 1.2.3 in {name}.", view.FindControl<TextBlock>("Version").Text)
         Assert.NotNull(view.FindControl<Image>("LogoImage").Source)
         Assert.NotNull(view.FindControl<TextEditor>("CodeView").SyntaxHighlighting)
+    finally window.Close()
+
+[<AvaloniaFact>]
+let ``the update notice shows only while the host has one`` () =
+    let mutable update = None
+    let view = PanelView({ host "Rhino" with Update = fun () -> update })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    let notice = view.FindControl<Grid> "UpdateNotice"
+    try
+        window.Show()
+        view.Refresh()
+        Assert.False notice.IsVisible
+        update <- Some "Caddis 1.2.4 is installed, Rhino loads it when it restarts. You're using 1.2.3."
+        view.Refresh()
+        Assert.True notice.IsVisible
+        Assert.Equal(update.Value, view.FindControl<TextBlock>("UpdateText").Text)
+        update <- None
+        view.Refresh()
+        Assert.False notice.IsVisible
     finally window.Close()
 
 [<AvaloniaFact>]

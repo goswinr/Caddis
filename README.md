@@ -203,6 +203,7 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 |---|---|
 | `settings-rhino.json` | The settings of Caddis in Rhino |
 | `settings-revit.json` | The settings of Caddis in Revit |
+| `panel-rhino8.json`, `panel-rhino9.json` | Whether the panel is shown in Rhino and where, restored when Rhino starts |
 | `instances\<process id>.json` | The port of each running server |
 | `revit.log` | Caddis' own messages in Revit |
 | `revit-update.json` | The result of the latest update check in Revit, which the panel and `Info` show |

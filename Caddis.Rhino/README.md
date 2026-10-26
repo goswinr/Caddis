@@ -58,6 +58,9 @@ Captures with `caddis_capture_viewport`, `RhinoView.CaptureToBitmap` or `ViewCap
 ## The Caddis panel
 
 Open it with the command `Caddis` and the option `Panel`, then dock it like any Rhino panel.
+When Rhino closes, Caddis saves whether the panel is shown and where, in `panel-rhino8.json` or `panel-rhino9.json` in `%AppData%\Caddis`.
+At the next start it moves the panel back if Rhino shows it elsewhere, e.g. after an update of Caddis:
+docked, to the tabs of a panel it was docked with; floating, to its place on the screen, on Windows.
 Its content is the Avalonia panel shared with Revit in `Caddis.UI`, hosted in Rhino's Eto docking container.
 Rhino supplies its theme colors and the additional command-line settings.
 
@@ -69,11 +72,13 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
 
 - The header shows where the server listens, and the state and thread mode of the F# session.
 - `Start` / `Stop` the server.
+- When a newer Caddis is on Yak, a notice says so: update it in Rhino's `PackageManager`.
+  Once it is installed, the notice says that Rhino loads it when it restarts. Caddis checks Yak when Rhino starts.
 - While it runs, whether Claude Code, Codex and Claude Desktop connect to this Rhino, with `Set up` or `Activate`,
   see [Connect an AI agent](../README.md#connect-an-ai-agent).
 - `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
 - `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
-  and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core, FSharp.Compiler.Service and Caddis.
+  and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core, FSharp.Compiler.Service and Caddis, and whether this is the latest Caddis.
   All buttons and options have tooltips.
 - The recent runs are listed newest first, with their id, status, duration and first line of code:
   `r` for F# code, `c` for Rhino commands, `x` for exports.

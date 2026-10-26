@@ -39,6 +39,7 @@
 
   <ItemGroup>
     <Compile Include="Compat.fs" />
+    <Compile Include="ReleaseVersion.fs" />
     <Compile Include="ErrorLog.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="DotnetSdk.fs" />

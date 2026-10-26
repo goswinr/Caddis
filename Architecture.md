@@ -246,6 +246,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | File | Types and modules | What |
 |---|---|---|
 | [Compat.fs](Caddis.Core/Compat.fs) | `Compat` (AutoOpen), `NetFramework`; net48 only | .NET Core members Caddis uses, for .NET Framework; line numbers from portable PDBs; a `LegacyReferenceResolver` so type-checking finds the framework assemblies |
+| [ReleaseVersion.fs](Caddis.Core/ReleaseVersion.fs) | `ReleaseVersion` | compares versions of releases, for the update checks in Rhino and Revit |
 | [ErrorLog.fs](Caddis.Core/ErrorLog.fs) | `ErrorLog` | the latest internal errors, with a count of unseen ones |
 | [Json.fs](Caddis.Core/Json.fs) | `Json` | builds and reads `JsonNode`s |
 | [Settings.fs](Caddis.Core/Settings.fs) | `ThreadMode`, `CaddisSettings`, `SettingsStore` | the settings record and its defaults; the settings and discovery files |
@@ -285,9 +286,11 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [RhinoInfo.fs](Caddis.Rhino/RhinoInfo.fs) | `RhinoInfo` | `HostInfo` and the MCP texts for Rhino |
 | [RunBorder.fs](Caddis.Rhino/RunBorder.fs) | `RunBorderConduit`, `RunBorder` | the yellow viewport border during runs |
 | [RhinoHost.fs](Caddis.Rhino/RhinoHost.fs) | `RhinoLog`, `RhinoScriptingSync`, `RhinoHost` | the `ICaddisHost` for Rhino |
+| [Updates.fs](Caddis.Rhino/Updates.fs) | `Updates` (internal) | asks Yak for a newer release, and reads from the package's `manifest.txt` whether one is installed |
 | [App.fs](Caddis.Rhino/App.fs) | `App` | the server of this Rhino and the actions of the command and panel |
 | [AvaloniaHost.fs](Caddis.Rhino/AvaloniaHost.fs) | `RhinoAvaloniaSetup`, `AvaloniaHost` | Avalonia in an Eto `NativeControlHost` |
 | [PanelTheme.fs](Caddis.Rhino/PanelTheme.fs) | `PanelTheme` (internal) | colors from `Rhino.UI.ThemeSettings` |
+| [PanelPlacement.fs](Caddis.Rhino/PanelPlacement.fs) | `PanelPlacement` | saves whether the panel is shown and where when Rhino closes, restores it at the next start |
 | [Panel.fs](Caddis.Rhino/Panel.fs) | `PanelServices` (private), `CaddisPanel` | the docked panel |
 | [PlugIn.fs](Caddis.Rhino/PlugIn.fs) | `CaddisPlugIn` | the plugin, loaded at Rhino's start |
 | [Commands.fs](Caddis.Rhino/Commands.fs) | `CaddisCommand` | the command `Caddis` |
@@ -723,7 +726,7 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
 
 - **Avalonia start**: [`AvaloniaSetup.ensure`](Caddis.UI/AvaloniaSetup.fs) configures `PanelApp` with the app's backend and `SetupWithoutStarting`, so the app keeps its own message loop. If another plugin already started Avalonia, the panel adds the Fluent theme to itself instead. Rendering is in software everywhere, so no ANGLE libraries are shipped.
 - **Native libraries**: apps don't read the plugin's `deps.json`, so SkiaSharp's and HarfBuzzSharp's natives are found by a `DllImportResolver` in `runtimes/<rid>/native`, or on .NET Framework loaded with `LoadLibrary` from `x64` or `arm64`.
-- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, the clipboard, optional settings that only Rhino has, a save-file dialog, a message line (Revit), the `ErrorLog`, the palette, and a theme-change subscription.
+- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, the clipboard, optional settings that only Rhino has, a save-file dialog, a message line (Revit), the version and an update notice, the `ErrorLog`, the palette, and a theme-change subscription.
 - **Theme**: the app supplies 16 named colors, applied as `Caddis.*` brushes within the panel's own `ThemeVariantScope`, so styles never leak into the app. Rhino takes them from `ThemeSettings`, Revit from fixed light and dark palettes.
 - **Refresh**: a 1 s timer of the app calls `Refresh`, which reads the server's state. The run list is rebuilt only when ids or statuses changed.
 - **Contents**: server and session state; Start or Stop, Cancel run (only for background runs), Reset; while the server runs, a row per AI agent; Settings with the mode, autostart, echo and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.

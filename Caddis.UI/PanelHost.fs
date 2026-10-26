@@ -37,6 +37,8 @@ type PanelHost = {
     Refreshed: unit -> unit
     /// The version of Caddis, and whether a newer one is available if the host knows it. Shown with the settings.
     Version: unit -> string
+    /// That a newer Caddis is available, or installed after a restart. Shown at the top of the panel while it is Some.
+    Update: unit -> string option
     /// Where the updates of Caddis come from.
     VersionTip: string
     Palette: unit -> PanelPalette

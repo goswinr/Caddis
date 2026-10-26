@@ -184,6 +184,7 @@ with the notes in [InstallNotes-revit.md](../.github/InstallNotes-revit.md), lik
 The bootstrapper writes the `.addin` files when Caddis is installed or updated and when it is started, and deletes them when Caddis is uninstalled.
 Caddis in Revit starts it to check for updates when Revit starts, and to install a downloaded one when the last Revit closes.
 It writes the result of the check to `%AppData%\Caddis\revit-update.json`, and the panel's settings and `Info` show from it whether this is the latest version.
+While a newer version is available or downloaded, the panel shows a notice at its top.
 So Velopack runs in its own process, not in Revit, where it could conflict with the Velopack of another add-in, e.g. of an older Fesh.Revit.
 
 The workflow signs with Azure Trusted Signing, like Fesh.Revit, see [signing-metadata.json](../.github/signing-metadata.json). It needs:

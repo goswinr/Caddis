@@ -42,16 +42,21 @@ module private PanelServices =
         Message = None
         Errors = RhinoLog.errors
         Refreshed = ignore
-        // Rhino's PackageManager knows of newer releases, Caddis doesn't.
-        Version = fun () -> App.server |> Option.map (fun s -> $"You're using Caddis {s.Service.Version}.") |> Option.defaultValue ""
-        VersionTip = "Rhino's PackageManager installs and updates Caddis, search for Caddis there."
+        Version = Updates.status
+        Update = Updates.notice
+        VersionTip = String.concat "\n" [
+            "When Rhino starts, Caddis checks its releases on Yak, the package server of Rhino."
+            "Rhino's Package Manager installs and updates Caddis, search for Caddis there."
+            "Rhino loads an update when it restarts."
+        ]
         Palette = PanelTheme.palette
         SubscribeTheme = PanelTheme.subscribe
     }
 
 /// A dockable panel to control the Caddis server and see the recent runs and their output.
 /// Rhino docks Eto panels, its content is the Avalonia PanelView, which follows Rhino's light, dark or custom theme.
-[<Guid("f3b1a864-f96c-4fcc-b7f4-325d0dab262b")>]
+/// Rhino keeps the panel's place in its layout by this id, and Caddis too, see PanelPlacement.
+[<Guid(PanelPlacement.PanelId)>]
 type CaddisPanel() as this =
     inherit Panel()
 
@@ -63,10 +68,12 @@ type CaddisPanel() as this =
             let view = PanelView(PanelServices.host)
             let host = new AvaloniaHost(view)
             this.Content <- host
+            PanelPlacement.panelHandle <- fun () -> host.Handle
             host.SizeChanged.Add(fun _ -> host.SyncDpi())
             timer.Elapsed.Add(fun _ ->
                 view.Refresh()
-                host.SyncDpi())
+                host.SyncDpi()
+                PanelPlacement.shown ())
             this.LoadComplete.Add(fun _ ->
                 view.Refresh()
                 timer.Start())
@@ -79,3 +86,9 @@ type CaddisPanel() as this =
                         $"The Caddis panel could not be shown: {e.Message}{Environment.NewLine}Use the command 'Caddis' instead. When it starts the server, it prints the commands to add Caddis to Claude Code and Codex.",
                     Wrap = WrapMode.Word
                 )
+
+    // Rhino calls PanelHidden when the user closes the panel, and PanelClosing when Rhino exits.
+    interface Rhino.UI.IPanel with
+        member _.PanelShown(_, _) = ()
+        member _.PanelHidden(_, _) = PanelPlacement.hiding ()
+        member _.PanelClosing(_, _) = PanelPlacement.hiding ()
