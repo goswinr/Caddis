@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-26
+
 ### Added
 - While a newer Caddis is available, or installed and waiting for a restart, the panel shows a notice at its top, in Rhino and Revit.
 - Rhino: when Rhino starts, Caddis asks Yak for a newer release for this Rhino. The panel's settings and the `Caddis` command show whether this is the latest version, or that a newer one is available in the `PackageManager` or installed and loaded when Rhino restarts.
