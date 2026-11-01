@@ -54,7 +54,7 @@ module DesktopExtension =
             "name", str b.serverName
             "display_name", str $"Caddis for {b.appName}"
             "version", str b.version
-            "description", str $"Run F# scripts inside a running {b.appName}: the agent writes the code, Caddis runs it in {b.appName} and returns what happened."
+            "description", str $"Run F# scripts inside {b.appName}: the agent writes the code, Caddis runs it in {b.appName} and reports what happened."
             "long_description",
             str (
                 String.concat "\n\n" [

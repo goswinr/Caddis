@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Revit: the dialogs of the updater, e.g. the one that offers a newer Caddis when Revit starts, have a link 'What is this?' at the bottom to the Caddis repository on GitHub. They come from a separate program, so it wasn't clear where they come from.
+
 ## [0.3.3] - 2026-10-26
 
 ### Added

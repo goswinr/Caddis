@@ -9,7 +9,7 @@ module RevitInfo =
     let private mcp: McpTexts = {
         instructions =
             String.concat "\n" [
-                "Caddis runs F# code inside a running Revit in a persistent F# Interactive session. A person is usually working in the same Revit window."
+                "Caddis runs F# code inside Revit in a persistent F# Interactive session. A person is usually working in the same Revit window."
                 "Values, functions and types defined in one caddis_eval call stay available in later calls until caddis_reset."
                 "RevitAPI and RevitAPIUI are referenced. Caddis.Revit.Script.Doc is the active Document, Script.UiDoc the active UIDocument, e.g. for the selection, and Script.UiApp the UIApplication. caddis_status shows the active document with its length unit, active view and levels."
                 "The Revit API uses feet for lengths and radians for angles, whatever the units of the document. Convert with e.g. UnitUtils.ConvertToInternalUnits(1000.0, UnitTypeId.Millimeters) and UnitUtils.ConvertFromInternalUnits."

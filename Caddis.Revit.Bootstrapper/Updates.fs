@@ -5,7 +5,6 @@ open System.Diagnostics
 open System.IO
 open System.Text
 open System.Threading
-open System.Windows
 open Velopack
 open Velopack.Locators
 open Velopack.Sources
@@ -59,8 +58,6 @@ module Updates =
         with e ->
             log $"writing {path} failed: {e.Message}"
 
-    let private show (text: string) (buttons: MessageBoxButton) (icon: MessageBoxImage) = MessageBox.Show(text, "Caddis for Revit", buttons, icon)
-
     /// Checks for a newer release and asks whether to download it. Only one check at a time, e.g. when several Revits start.
     let check () =
         use running = new Mutex(false, "Caddis.Revit.Bootstrapper.CheckForUpdate")
@@ -77,11 +74,11 @@ module Updates =
                             writeStatus (Some(string v)) None None
                             let question =
                                 $"Caddis {v} is available, this is {um.CurrentVersion}.{Environment.NewLine}{Environment.NewLine}Download it now? It is installed when the last Revit has closed."
-                            if show question MessageBoxButton.YesNo MessageBoxImage.Question = MessageBoxResult.Yes then
+                            if Dialog.ask question then
                                 um.DownloadUpdates info
                                 writeStatus (Some(string v)) (Some(string v)) None
                                 log $"downloaded Caddis {v}, it is installed when the last Revit has closed."
-                                show $"Caddis {v} is downloaded. It is installed when the last Revit has closed." MessageBoxButton.OK MessageBoxImage.Information |> ignore
+                                Dialog.info $"Caddis {v} is downloaded. It is installed when the last Revit has closed."
                             else
                                 log $"the update to Caddis {v} was skipped."
                         else

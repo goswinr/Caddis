@@ -92,5 +92,5 @@ module Main =
                 0
             | _ -> showWindow updatedTo.Value
         with e ->
-            MessageBox.Show($"Caddis.Revit.Bootstrapper failed:{Environment.NewLine}{e}", "Caddis for Revit", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+            Dialog.error $"Caddis.Revit.Bootstrapper failed:{Environment.NewLine}{e}"
             1

@@ -319,7 +319,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 ### Caddis.Revit.Loader and Caddis.Revit.Bootstrapper
 
 - [CaddisLoader.cs](Caddis.Revit.Loader/CaddisLoader.cs): `Caddis.Revit.Loader.CaddisLoader`, an `IExternalApplication`. Its full name is written into the `.addin` files, don't rename it.
-- [Revit.fs](Caddis.Revit.Bootstrapper/Revit.fs), [Updates.fs](Caddis.Revit.Bootstrapper/Updates.fs), [Main.fs](Caddis.Revit.Bootstrapper/Main.fs): namespace `Caddis.Revit.Bootstrapper` with `Message`, `Revit` (registration), `Updates` (Velopack) and `Main` (entry point).
+- [Revit.fs](Caddis.Revit.Bootstrapper/Revit.fs), [Dialog.fs](Caddis.Revit.Bootstrapper/Dialog.fs), [Updates.fs](Caddis.Revit.Bootstrapper/Updates.fs), [Main.fs](Caddis.Revit.Bootstrapper/Main.fs): namespace `Caddis.Revit.Bootstrapper` with `Message`, `Revit` (registration), `Dialog` (task dialogs), `Updates` (Velopack) and `Main` (entry point).
 
 ### Tests
 
@@ -819,6 +819,7 @@ The ribbon commands enter API context too, so `Script.UiApp` works there.
 - Registration: for every year folder in `%ProgramData%\Autodesk\Revit\Addins` from 2024 on, it writes `%AppData%\Autodesk\Revit\Addins\<year>\Caddis.addin`: the `net48` build for 2024, the loader for later years.
 - `--check-for-update`, started by Caddis when Revit starts: checks the GitHub releases, once at a time across Revits, and asks whether to download a newer one.
 - `--install-update <revit pid>`, started by Caddis when the last Revit closes: lets Velopack's `Update.exe` install a downloaded release once that Revit has exited, then restarts the bootstrapper, which shows the new version.
+- Its dialogs are native task dialogs from `TaskDialogIndirect` in comctl32 version 6, which [app.manifest](Caddis.Revit.Bootstrapper/app.manifest) requests. Their footer links 'What is this?' to the GitHub repository: they show while Revit starts, from a process of their own, so the user may not know where they come from. .NET Framework has no managed task dialog, and a `MessageBox` has no footer.
 
 Velopack runs in this process and not in Revit, where it could conflict with the Velopack of another add-in, e.g. an older Fesh.Revit.
 For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a local build: via `CADDIS_REVIT_DEV` if the installed loader reads it, otherwise it swaps `Caddis.addin` until that Revit has loaded the build. [install-dev.ps1](Caddis.Revit/install-dev.ps1) writes a `Caddis.addin` that points at a local build directly for every start, picking the build from `RevitAPI.runtimeconfig.json`; it does not use the loader.
