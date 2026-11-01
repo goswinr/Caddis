@@ -12,8 +12,8 @@
 [![license](https://img.shields.io/github/license/goswinr/Caddis)](LICENSE)
 ![code size](https://img.shields.io/github/languages/code-size/goswinr/Caddis.svg)
 
-An MCP server to host F# interactive in Rhino or Revit.
-This gives your AI agent the full power to do anything that RhinoCommon or the RevitAPI can do.
+An MCP server to host F# interactive in [Rhino](https://www.rhino3d.com/) or [Revit](https://www.autodesk.com/products/revit/overview).
+This gives your AI agent the full power to do anything that [RhinoCommon](https://developer.rhino3d.com/api/RhinoCommon/) or the [RevitAPI](https://www.revitapidocs.com/2027/) can do.
 Your LLM already knows how to use these APIs, but can't execute them directly, unless hosted inside Rhino or Revit.
 
 **Individual Rhino/Revit methods are not registered as MCP tools.** Agents discover Caddis's tools through MCP,
@@ -35,8 +35,8 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino 
 
 | App | Runs in | Install | Read more |
 |---|---|---|---|
-| Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | Rhino's `PackageManager`, search for `Caddis` (after the first Yak release) | [Caddis for Rhino](Caddis.Rhino/README.md) |
-| Revit | Revit 2024 to 2027 on Windows | `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
+| Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | In Rhino's `PackageManager`, search for `Caddis` or use [food4rhino](https://www.food4rhino.com/en/app/caddis) | [Caddis for Rhino](Caddis.Rhino/README.md) |
+| Revit | Revit 2024 to 2027 on Windows | Run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
 
 Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
 It works for every version of Rhino and Revit. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).

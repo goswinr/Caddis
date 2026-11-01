@@ -8,7 +8,7 @@ See the [main README](../README.md) for what Caddis does, connecting an agent, t
 
 ## Installation
 
-Install via Rhino's `PackageManager` command and search for `Caddis`.
+Install via Rhino's `PackageManager` command and search for `Caddis`, or download it from [food4rhino](https://www.food4rhino.com/en/app/caddis).
 The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
 On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`).
 There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
@@ -181,11 +181,18 @@ An agent sent these, the panel lists them newest first:
   four times `-_RotateView _Right`, and `_Zoom _All _Extents`.
 - `r3` computes the volumes of the slabs. It uses `slabs` from `r1`: the values of earlier runs stay available.
 - `x4` exports all objects to `towers.obj`, via `caddis_export`.
-- `r5` runs for 12 s on the background thread, the viewport screenshot below was taken meanwhile.
+- `r5` runs for 12 s on the background thread.
 
-This screenshot was taken in Rhino 8.35 on Windows with Caddis 0.3.0, while `r5` was running.
+## Example in the Claude app
 
-![Three twisted towers in a Rhino viewport, framed by the yellow border Caddis draws while a run is in progress](Docs/run-border.png)
+The prompt: "Use Caddis to draw a Triangle, find the incircle center, divide into 3 triangles and recurse 10 times, fade out color".
+The agent ran F# code in Rhino and captured the Top view to check its result. After the first capture it changed the draw order, so that the darker levels show.
+
+![The Claude app with the prompt, the agent's runs with its two captures of the Top view, and Caddis for Rhino among the connectors](Docs/Screen-Claude.png)
+
+In Rhino 9 Beta: the subdivided triangle in the Top view, and the Caddis panel with the code of the first run, which you can run again or export.
+
+![Rhino with the subdivided triangle in the Top view, and the Caddis panel showing the F# code of run r1](Docs/Screen-Rhino.png)
 
 ## Yak releases
 
