@@ -17,15 +17,19 @@ Steps 1 to 4 are done. Tested by hand in AutoCAD 2025 with its update 25.0.189, 
 - `caddis_dialog`: the dialog of OPTIONS run with `caddis_command`, listed with its buttons, and closed with `Cancel`, over REST; the tool over MCP.
 - Step 4, the loader: loaded with NETLOAD from `loader\` with `CADDIS_AUTOCAD_DEV`, and from a folder like the bundle's `Contents` with `install-folder.txt`;
   AutoCAD registers the commands of the build it loads and calls its `Initialize`. The packaging steps publish locally; `PackageContents.xml` parses.
+- Step 4, the installer, on 2026-11-07, with no other AutoCAD running: `Caddis.AutoCAD-autocad-Setup.exe` packed locally with `vpk pack` as in release-revit.yml, unsigned.
+  The setup installed to `%LocalAppData%\Caddis.AutoCAD`, wrote the bundle and showed the bootstrapper's window. AutoCAD started normally (`/product ACAD`) loaded the loader from the bundle
+  and Caddis from `current\net10.0`, with no drawing open; Caddis listened about 9 s after the start, the update check found no release in the channel and no error.
+  AutoCAD showed the panel again at its start, from its saved state. The bootstrapper run again while AutoCAD ran said the loader is in use and registered again.
+  Uninstalling with `Update.exe --uninstall` removed the bundle, the install folder and the entry in 'Installed apps', and left Caddis for Revit alone.
+- `SECURELOAD` 1: AutoCAD asks before it loads the unsigned loader from the bundle, 'Security - Unsigned Executable File' with 'Always Load', 'Load Once' and 'Do Not Load'. 'Do Not Load', and closing the dialog, leave Caddis unloaded.
 
 Not tested yet:
-- **The installer and the bundle.** Writing a bundle to `%AppData%\Autodesk\ApplicationPlugins` was not tried: an AutoCAD of the person was running,
-  and AutoCAD loads a bundle that appears there also into a running AutoCAD (`APPAUTOLOAD` 14). Test it with no other AutoCAD running:
-  build `Caddis.AutoCAD.Bootstrapper`, copy `bin/publish/autocad` of the [packaging action](../.github/actions/package-autocad/action.yml) somewhere, run the bootstrapper from there.
-  It writes the bundle; start AutoCAD, Caddis should load from that folder. Remove the bundle folder afterwards.
-- `SECURELOAD` 1, the default: does AutoCAD ask before it loads the loader from the bundle in `%AppData%`? It is 0 in the profile on this computer.
+- 'Always Load' in that dialog: what it changes, and that AutoCAD doesn't ask again. The permission check denied pressing it, as it weakens AutoCAD's security for good. Ask the person to try it.
+- Whether AutoCAD asks for the signed loader of a release too.
 - The Velopack release in the channel `autocad`, uploaded with `--merge` into Revit's release, and updates from it. Only the next tag runs it.
-- The panel's first show without a saved place: docked right at 420 by 760. Tested only that `Load` doesn't fire for a palette set with a new id.
+- Uninstalling while AutoCAD runs: AutoCAD locks the loader in the bundle, so deleting the bundle can fail halfway.
+- The panel's first show without a saved place: docked right at 420 by 760. Tested only that `Load` doesn't fire for a palette set with a new id. The profile on this computer has a saved place from the tests.
 - the `net8.0-windows` build, i.e. AutoCAD 2025 or 2026 before their update to .NET 10
 - AutoCAD 2026, and AutoCAD 2027 (R26.0, package AutoCAD.NET 26.0.0): does the build against the 2025 API load there?
 - that zooming or panning with the mouse after a run makes `caddis_undo` refuse (it relies on `Document.ViewChanged`)
@@ -54,6 +58,12 @@ Not tested yet:
   through its `CommandHandler`, posted with `SynchronizationContext.Current.Post` so that it runs after the run. The panel's view is `Panel.content` (internal) `.Value.View`.
 - Screenshots: `PrintWindow` with `PW_RENDERFULLCONTENT` of AutoCAD's main window, or of the palette set's own window when it floats; close a dialog with `WM_CLOSE`.
 - Switching `COLORTHEME` changes the profile in the registry, which the person's AutoCAD shares: set it back to what it was, 0 here.
+- To test the installer: publish as the [packaging action](../.github/actions/package-autocad/action.yml) does, then `vpk pack` with the arguments of release-revit.yml but without `--azureTrustedSignFile`, into a folder outside the repository.
+  Install `vpk` 1.2.161 with `dotnet tool install vpk --tool-path <folder>`. Run the setup only while no AutoCAD of the person runs (`APPAUTOLOAD` 14 loads new bundles into running AutoCADs), and uninstall afterwards.
+  `SECURELOAD` is the string value `SECURELOAD` in `HKCU\Software\Autodesk\AutoCAD\R25.0\ACAD-8101:409\Profiles\<<Unnamed Profile>>\Variables`; change it only while no AutoCAD runs, and set it back.
+- The buttons of AutoCAD's security dialog, a task dialog, don't support UI Automation's Invoke. `WM_CLOSE` closes it, as 'Do Not Load'.
+  Velopack's 'Uninstall Complete' has only OK and ignores `WM_CLOSE`: post `TDM_CLICK_BUTTON` (0x466) with `IDOK` (1) to it.
+- `PrintWindow` of a WPF window, e.g. the bootstrapper's, gives a white image: read its text with UI Automation's `TextPattern` instead.
 
 ## Step 2: caddis_command, done
 
@@ -93,7 +103,7 @@ What was decided:
 - Export: PDF, STL, SAT and others, e.g. through the commands `_.-EXPORT`, `_.STLOUT`, `_.ACISOUT` with `RunCommands`; now only DWG and DXF with `Database.Wblock`.
   `ICaddisHost.Export` is synchronous, so that would need it to return a task too, as `RunCommands` does.
 - `caddis_dialog` is done, with [Dialogs.fs](Dialogs.fs), a copy of [RevitDialogs.fs](../Caddis.Revit/RevitDialogs.fs). Share the two later.
-- AutoCAD 2024 is installed on this computer and runs on .NET Framework: a `net48` build would need AutoCAD.NET 24.x and Avalonia 11 for the panel. Not planned yet.
+- AutoCAD 2024 runs on .NET Framework: a `net48` build would need AutoCAD.NET 24.x and Avalonia 11 for the panel. Not planned yet. Only AutoCAD 2025 is installed on this computer.
 
 ## Open decisions for the user
 
