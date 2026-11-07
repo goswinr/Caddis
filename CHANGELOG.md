@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-07
+
 ### Added
 - AutoCAD: Caddis runs in AutoCAD 2025 and later, with the same F# session, MCP tools and panel as in Rhino and Revit, a `Caddis` tab on the ribbon, `caddis_command` for AutoCAD commands and `caddis_dialog` for the dialogs they open. The results of F# runs and commands include what they wrote to AutoCAD's command line. `caddis_describe` shows the docs of the AutoCAD API, from the XML docs in Autodesk's AutoCAD.NET packages, which Caddis brings along with their license, since AutoCAD doesn't install them. Install it with `Caddis.AutoCAD-autocad-Setup.exe` from the release: it registers a bundle that every AutoCAD from 2025 on loads, picks the build for the .NET 8 or 10 that AutoCAD runs on, and offers updates when AutoCAD starts.
 
