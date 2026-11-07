@@ -19,6 +19,10 @@ type CaddisExtension() =
         member _.Initialize() =
             try
                 UiThread.init ()
+                // again once AutoCAD is in its message loop, in case it loads Caddis before it has its main window
+                let setMainWindow () = AutoCADDialogs.mainWindow <- Autodesk.AutoCAD.ApplicationServices.Application.MainWindow.Handle
+                try setMainWindow () with _ -> ()
+                UiThread.postLater setMainWindow
                 // before Caddis.Core uses System.Text.Json or FCS
                 try FsiAssemblyResolver.install ()
                 with e -> AutoCADLog.error $"Caddis: putting its assembly resolver first failed: {e.Message}"

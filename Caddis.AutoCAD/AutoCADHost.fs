@@ -308,7 +308,7 @@ type AutoCADHost() =
         | _ -> [||]
 
     /// When the watchdog found the current macro waiting at a prompt, the prompt at which Caddis cancelled it,
-    /// and whether it showed a dialog, which Caddis can't close.
+    /// and whether it showed a dialog, which the watchdog doesn't cancel. caddis_dialog can close it.
     let mutable waitingSince: DateTime option = None
     let mutable cancelledAt: string option = None
     let mutable waitedInDialog = false
@@ -358,7 +358,7 @@ type AutoCADHost() =
     /// For a macro whose command showed a dialog.
     let dialogNote (step: CommandStep) =
         let name = step.commands |> List.tryHead |> Option.map fst |> Option.defaultValue step.macro
-        $"{name} showed a dialog, which Caddis can't close, and waited until someone closed it in AutoCAD. Use the version of the command for the command line if there is one, e.g. '_.-LAYER' or '_.-HATCH'."
+        $"{name} showed a dialog and waited until it was closed, in AutoCAD or with caddis_dialog. Use the version of the command for the command line if there is one, e.g. '_.-LAYER' or '_.-HATCH'."
 
     /// The outcome of a macro that did not succeed, None if it did. error: the message if Editor.Command failed.
     let macroFailure (run: Run) (step: CommandStep) (inputs: string[]) (error: string option) (inDialog: bool) : RunOutcome option =
@@ -730,8 +730,8 @@ type AutoCADHost() =
 
         member _.Undo(run) = undo run
 
-        member _.Dialogs() = [] // not implemented for AutoCAD yet
+        member _.Dialogs() = AutoCADDialogs.dialogs ()
 
-        member _.PressDialogButton(_, _) = Error "Caddis can't press buttons of dialogs in AutoCAD yet."
+        member _.PressDialogButton(dialogId, button) = AutoCADDialogs.press (dialogId, button)
 
         member _.RunCommands(run, request) = runCommands run request

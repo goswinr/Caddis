@@ -1,8 +1,8 @@
 # Caddis for AutoCAD
 
 The AutoCAD plugin of Caddis, an F# interactive host for AutoCAD 2025 and later, controlled through HTTP and MCP.
-It has the same F# session, HTTP server, REST endpoints, MCP tools and panel as in Rhino and Revit, also `caddis_command`,
-but not yet `caddis_dialog`.
+It has the same F# session, HTTP server, REST endpoints, MCP tools and panel as in Rhino and Revit,
+also `caddis_command` as in Rhino and `caddis_dialog` as in Revit.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
 > Tested in AutoCAD 2025 with its update 25.0.189, on .NET 10. The installer is new and not tested in a release yet.
@@ -103,8 +103,10 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 - **Waiting for input**: a command that waits at a prompt for input that the macro does not give is cancelled after `inputTimeoutMs` (3 s), and `caddis_cancel` cancels it at once.
   Caddis' calls on the main thread still run while a command waits. One of them queues `^C^C` with `SendStringToExecute`, which the prompt takes as its input.
   The `PromptingFor*` and `PromptedFor*` events of the editor tell whether a prompt waits, and its message.
-- **Dialogs**: a command that opens a modal dialog, e.g. OPTIONS, waits until someone closes it in AutoCAD, and the result says so. Caddis doesn't cancel it:
+- **Dialogs**: a command that opens a modal dialog, e.g. OPTIONS, waits until the dialog is closed, and the result says so. The input timeout doesn't cancel it:
   the dialog doesn't take the `^C^C`, AutoCAD would run it later, e.g. at a prompt of the next command. A `caddis_cancel` meanwhile keeps the next macros from running.
+  `caddis_dialog` lists the open dialog with its text and buttons, and presses one of them, e.g. `Cancel`. It finds the dialog on top of AutoCAD's main window, which a modal dialog disables,
+  and reads and presses its buttons with UI Automation, as in Revit. `GET /dialogs` and `POST /dialog {"button": "Cancel"}` do the same over REST.
 - **Drawings**: commands that open or close drawings, e.g. `QUIT`, `CLOSE`, `QNEW` or `OPEN`, are refused: AutoCAD can't run them from the command context of a drawing, `QUIT` froze it in a test.
   Scripts open and create drawings with `Application.DocumentManager` in `caddis_eval`.
 - **Results**: the English name and result of each command, the handles of the entities in layouts that the commands created, changed and erased, and the selection if it changed.
@@ -122,6 +124,6 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 
 | Missing | Notes |
 |---|---|
-| `caddis_dialog` | The Win32 and UI Automation code of Revit's dialogs could be shared. |
+
 | Summaries in `caddis_describe` | AutoCAD doesn't install the XML docs of its API. They are in the AutoCAD.NET packages, whose license allows passing them on only with the license. |
 | The command line in results of `caddis_eval` | Output of `Editor.WriteMessage` is not in the result, use `printfn`. Command runs show the command line from AutoCAD's history, F# runs could too. |

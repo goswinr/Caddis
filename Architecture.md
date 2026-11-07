@@ -99,7 +99,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - Export to the file formats of the app, as a run with its files.
 - Rhino: command macros like typed at the command line (`caddis_command`), with cancellation of commands that wait for input; a yellow border around the viewports while a run is in progress; echo of script output to the command line; the SynchronizationContext for Rhino.Scripting and its Esc state cleared before each run; the MCP instructions suggest Rhino.Scripting.FSharp when NuGet packages can be used; runs and the scripts of Fesh.Rhino don't overlap.
 - Revit: runs in Revit's API context through an external event; a transaction group per run, rolled back if the run fails; Revit's warnings as notes and errors as rolled-back transactions instead of dialogs; changed elements counted per category; listing Revit's blocking dialogs and pressing their buttons (`caddis_dialog`).
-- AutoCAD: a document lock per run, which is its undo step; command macros (`caddis_command`) through `Editor.Command` in AutoCAD's command context, with cancellation of commands that wait for input and the command line from AutoCAD's history; the panel in a palette set, and a ribbon tab.
+- AutoCAD: a document lock per run, which is its undo step; command macros (`caddis_command`) through `Editor.Command` in AutoCAD's command context, with cancellation of commands that wait for input and the command line from AutoCAD's history; its modal dialogs listed and their buttons pressed (`caddis_dialog`), as in Revit; the panel in a palette set, and a ribbon tab.
 
 **Server**
 - MCP over Streamable HTTP at `/mcp`, with single JSON responses, and plain REST endpoints.
@@ -344,6 +344,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [AutoCADInfo.fs](Caddis.AutoCAD/AutoCADInfo.fs) | `AutoCADInfo` | `HostInfo` and the MCP texts for AutoCAD, handles as object ids |
 | [Macro.fs](Caddis.AutoCAD/Macro.fs) | `AutoCADMacro` (internal) | splits a macro of `caddis_command` into the inputs of `Editor.Command` |
 | [CommandLine.fs](Caddis.AutoCAD/CommandLine.fs) | `AutoCADCommandLine`, `PromptListener` (internal) | the command line history and what it added, the prompt, whether a modal dialog is open; the prompt events of the editor |
+| [Dialogs.fs](Caddis.AutoCAD/Dialogs.fs) | `AutoCADDialogs` (internal) | finds AutoCAD's modal dialog and presses its buttons, a copy of Revit's |
 | [AutoCADHost.fs](Caddis.AutoCAD/AutoCADHost.fs) | `AutoCADHost` | the `ICaddisHost` for AutoCAD |
 | [App.fs](Caddis.AutoCAD/App.fs) | `App` | the server of this AutoCAD, the actions of the command, ribbon and panel, the Info dialog |
 | [AvaloniaHost.fs](Caddis.AutoCAD/AvaloniaHost.fs) | `AvaloniaHost`, `KeyboardFilter` (internal) | Avalonia in a WPF `HwndHost`, a copy of Revit's; the keys typed in Avalonia's windows given to them in AutoCAD's `PreTranslateMessage` |
@@ -651,7 +652,7 @@ Files are listed with their local path.
 | `caddis_undo` | `runId`, default the latest run with an undo record | destructive | only if nothing else changed the document since |
 | `caddis_capture_viewport` | `view`, `width`, `height`, `displayMode` | read-only, idempotent | an image item and the file's path |
 | `caddis_export` | `format` (required), `name` ("export"), `objects` (`all` or `selected`), `objectIds`, `waitMs` (50000) | idempotent | a run of kind `export`; `objectIds` must be nonempty and valid |
-| `caddis_dialog` | `button`, `dialog` | destructive | Revit only; without `button` it lists the open dialog |
+| `caddis_dialog` | `button`, `dialog` | destructive | Revit and AutoCAD; without `button` it lists the open dialog |
 
 Every tool has `openWorldHint: false`. The descriptions of most tools come from the host's `McpTexts`, so they are specific to Rhino, Revit or AutoCAD.
 
@@ -877,7 +878,7 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 
 ## 12. AutoCAD: Caddis.AutoCAD
 
-The host with `caddis_command`, the panel, a ribbon tab, the commands `CADDIS` and `CADDISPANEL`, an installer with updates, and a dev start. No `caddis_dialog` yet. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
+The host with `caddis_command` and `caddis_dialog`, the panel, a ribbon tab, the commands `CADDIS` and `CADDISPANEL`, an installer with updates, and a dev start. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
 **Loading**: the installer writes the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.bundle`, which AutoCAD loads at its start, and right away if it is running.
 Its `PackageContents.xml` names the module `./Contents/Caddis.AutoCAD.Loader.dll`, for every AutoCAD-based product from series R25.0 on. Bundles name their modules relative to their folder,
@@ -909,6 +910,8 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - *Capture*: `Document.CapturePreviewImage` of the active view, at the size of `SCREENSIZE` unless a size is given. No other view and no visual style.
 - *Export*: `Database.Wblock()` for the whole drawing, `Wblock(ids, origin)` for selected objects or handles in model space, under a document lock, which it needs; then `SaveAs` for DWG or `DxfOut` for DXF. The drawing and its file name stay as they are.
 - *Ids*: handles as hexadecimal strings, found with `Database.GetObjectId(false, handle, 0)`.
+- *Dialogs*: [`AutoCADDialogs`](Caddis.AutoCAD/Dialogs.fs), a copy of `RevitDialogs`: while a modal dialog shows, AutoCAD's main window is disabled, and its last active popup is the dialog.
+  Found with Win32 functions that send no messages, then read and its buttons pressed with UI Automation on the thread pool, which the dialog's message loop answers. Tested with the dialog of OPTIONS.
 - *Messages*: [`AutoCADLog`](Caddis.AutoCAD/Log.fs) writes to the command line of the active drawing through the dispatcher, and to `%AppData%\Caddis\autocad.log`, which also has what was written while no drawing was open.
   It keeps the latest messages and errors for the Info dialog, AutoCAD's `Autodesk.Windows.TaskDialog`, like Revit's Info dialog.
 
@@ -1040,7 +1043,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, other apps | None. `ICaddisHost` is the extension point. |
 
-| `caddis_dialog` in AutoCAD | Not yet. A command that opens a modal dialog waits until someone closes it in AutoCAD. |
+
 | AutoCAD 2024 and older, AutoCAD LT, AutoCAD for Mac | Not supported: AutoCAD 2024 runs on .NET Framework, LT and Mac have no .NET API. |
 | Summaries of the AutoCAD API in `caddis_describe` | None, only signatures: AutoCAD doesn't install the XML docs of its API. |
 | Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user, and Claude Desktop. Others are set up by hand with the URL. |

@@ -14,6 +14,7 @@ Steps 1 to 4 are done. Tested by hand in AutoCAD 2025 with its update 25.0.189, 
   `caddis_undo` of a command run and of an F# run before and after one, command runs in background mode. QUIT, CLOSE, QNEW are refused.
 - Step 3, panel and ribbon: the ribbon tab with its texts, icons and checkboxes, in the dark and light theme; the panel in a palette set, its colors in both themes,
   typing in its search box (with key messages posted into AutoCAD's queue, not a keyboard), the Info dialog, the command CADDIS with `Panel`.
+- `caddis_dialog`: the dialog of OPTIONS run with `caddis_command`, listed with its buttons, and closed with `Cancel`, over REST; the tool over MCP.
 - Step 4, the loader: loaded with NETLOAD from `loader\` with `CADDIS_AUTOCAD_DEV`, and from a folder like the bundle's `Contents` with `install-folder.txt`;
   AutoCAD registers the commands of the build it loads and calls its `Initialize`. The packaging steps publish locally; `PackageContents.xml` parses.
 
@@ -91,8 +92,7 @@ What was decided:
 - Capture: other views, layouts and visual styles; now only the active view with `Document.CapturePreviewImage`.
 - Export: PDF, STL, SAT and others, e.g. through the commands `_.-EXPORT`, `_.STLOUT`, `_.ACISOUT` with `RunCommands`; now only DWG and DXF with `Database.Wblock`.
   `ICaddisHost.Export` is synchronous, so that would need it to return a task too, as `RunCommands` does.
-- `caddis_dialog`: the Win32 and UI Automation code of [RevitDialogs.fs](../Caddis.Revit/RevitDialogs.fs) could find AutoCAD's modal dialogs too, e.g. the one of a command in `caddis_command`.
-  Posting `WM_CLOSE` to the Options dialog closed it in a test, and OPTIONS then ended with the result `Success`.
+- `caddis_dialog` is done, with [Dialogs.fs](Dialogs.fs), a copy of [RevitDialogs.fs](../Caddis.Revit/RevitDialogs.fs). Share the two later.
 - AutoCAD 2024 is installed on this computer and runs on .NET Framework: a `net48` build would need AutoCAD.NET 24.x and Avalonia 11 for the panel. Not planned yet.
 
 ## Open decisions for the user

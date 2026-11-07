@@ -40,6 +40,7 @@
     <Compile Include="AutoCADInfo.fs" />
     <Compile Include="Macro.fs" />
     <Compile Include="CommandLine.fs" />
+    <Compile Include="Dialogs.fs" />
     <Compile Include="AutoCADHost.fs" />
     <Compile Include="App.fs" />
     <Compile Include="AvaloniaHost.fs" />

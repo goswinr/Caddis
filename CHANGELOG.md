@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- AutoCAD: Caddis runs in AutoCAD 2025 and later, with the same F# session, MCP tools and panel as in Rhino and Revit, a `Caddis` tab on the ribbon, and `caddis_command` for AutoCAD commands, whose results include what they printed to the command line. Install it with `Caddis.AutoCAD-autocad-Setup.exe` from the release: it registers a bundle that every AutoCAD from 2025 on loads, picks the build for the .NET 8 or 10 that AutoCAD runs on, and offers updates when AutoCAD starts.
+- AutoCAD: Caddis runs in AutoCAD 2025 and later, with the same F# session, MCP tools and panel as in Rhino and Revit, a `Caddis` tab on the ribbon, `caddis_command` for AutoCAD commands, whose results include what they printed to the command line, and `caddis_dialog` for the dialogs they open. Install it with `Caddis.AutoCAD-autocad-Setup.exe` from the release: it registers a bundle that every AutoCAD from 2025 on loads, picks the build for the .NET 8 or 10 that AutoCAD runs on, and offers updates when AutoCAD starts.
 
 ### Changed
 - Revit: the dialogs of the updater, e.g. the one that offers a newer Caddis when Revit starts, have a link 'What is this?' at the bottom to the Caddis repository on GitHub. They come from a separate program, so it wasn't clear where they come from.

@@ -26,6 +26,7 @@ module AutoCADInfo =
                 "On the 'ui' thread (the default) each run that changes the drawing is one undo step in AutoCAD, named after the run, which caddis_undo can revert. The views are redrawn after a run."
                 "Objects are identified by their handle as a hexadecimal string, e.g. '2A3F' from entity.Handle.ToString(). Get the ObjectId of a handle with db.GetObjectId(false, Handle(Convert.ToInt64(\"2A3F\", 16)), 0)."
                 "AutoCAD rejects a run while a command is active in it. Then the person in AutoCAD has to finish or cancel the command."
+                "A modal dialog, e.g. of a command run with caddis_command, blocks AutoCAD until it is closed. Results and caddis_status name an open dialog with its buttons. Close it with caddis_dialog, choosing what the person would expect, e.g. 'Cancel', or ask the person."
                 "On the 'ui' thread AutoCAD is blocked while code runs and a run can't be cancelled: an endless loop freezes AutoCAD until it is killed."
                 "For long or risky code switch to 'background' mode with caddis_set_mode, there timeoutMs and caddis_cancel stop a run. In background mode every call of the AutoCAD API must be inside Caddis.Script.OnUi(fun () -> ...), Caddis locks the drawing for each call, and each call that changes the drawing is its own undo step."
                 "caddis_eval returns after waitMs (default 50 s) with status 'running' if the run has not finished. It keeps running, wait for the result with caddis_get_run."
@@ -53,7 +54,7 @@ module AutoCADInfo =
                         "Runs AutoCAD commands in the active drawing as if typed at the command line, with Editor.Command."
                         "Each item of 'commands' is one command with its inputs, they run one after the other until one does not succeed."
                         "Inputs are separated by spaces, and unlike in scripts a space is no Enter: an empty input \"\" is Enter, e.g. to end LINE or PLINE. Quote inputs that contain spaces, e.g. \"Wall 1\"."
-                        "Prefix command names with '_.' and options with '_' for their English names. Use the version of a command for the command line where there is one, e.g. _.-LAYER, _.-HATCH, _.-INSERT: a command that opens a dialog blocks AutoCAD until someone closes it."
+                        "Prefix command names with '_.' and options with '_' for their English names. Use the version of a command for the command line where there is one, e.g. _.-LAYER, _.-HATCH, _.-INSERT: a command that opens a dialog blocks AutoCAD until it is closed, in AutoCAD or with caddis_dialog."
                         "A command without inputs after its name works on the selected objects, e.g. '_.ERASE'. Other commands ask for objects at 'Select objects:', where '_P \"\"' gives them the selected objects, e.g. '_.MOVE _P \"\" 0,0 10,0'. See 'select'."
                         "Returns the result of each command, the handles of the entities they created, changed and erased, the selection if it changed,"
                         "and what they printed to the command line, e.g. the results of LIST, DIST or AREA."
@@ -93,7 +94,14 @@ module AutoCADInfo =
             "Which objects to export: 'all' (the default) for a copy of the whole drawing, or the 'selected' ones, which must be in model space."
         exportObjectIds =
             "A nonempty array of handles of objects in model space, as hexadecimal strings, e.g. ['2A3F']. Overrides 'objects'. Invalid or empty arrays are rejected."
-        dialog = None
+        dialog =
+            Some(
+                String.concat " " [
+                    "Lists AutoCAD's open modal dialog, or presses one of its buttons. A dialog, e.g. of a command that caddis_command ran, blocks AutoCAD until it is closed."
+                    "Without 'button' it returns the dialog with its text and buttons. Press what the person would expect: prefer 'Cancel' or 'Close'."
+                    "Don't press buttons that save, delete or discard work, unless the person asked for it. Works while a run is in progress."
+                ]
+            )
     }
 
     let info: HostInfo = {
