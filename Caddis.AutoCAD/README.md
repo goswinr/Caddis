@@ -133,6 +133,18 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 - `caddis_export` writes a copy of the drawing, or of some objects in model space, to a new DWG or DXF file with `Database.Wblock`. The drawing and its file name stay as they are.
 - Objects are identified by their handle as a hexadecimal string, e.g. `2A3F`.
 
+## Example in the Claude app
+
+The prompt: "use caddis to draw a sierpinski fractal in autocad".
+The agent used Caddis for AutoCAD three times. Its one F# run drew a Sierpinski triangle of depth 6 with the .NET API: 729 closed polylines on a new layer `Sierpinski`,
+each colored by its position, in one transaction, so one undo step. The run queued `_.ZOOM _E` for after itself, and the agent checked the result with a capture of the viewport.
+
+![The Claude app with the prompt and the agent's summary of the drawn fractal, and Caddis for AutoCAD among the connectors](Docs/Sierpinski-Claude.png)
+
+In AutoCAD 2025: the colored Sierpinski triangle in model space, and the Caddis panel docked on the right with the code of run r1, which you can run again or export.
+
+![AutoCAD with the Sierpinski triangle in model space, and the Caddis panel showing the F# code of run r1](Docs/Sierpinski-acad.png)
+
 ## Not there yet
 
 | Missing | Notes |

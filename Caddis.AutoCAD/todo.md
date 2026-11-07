@@ -110,5 +110,5 @@ What was decided:
 - AutoCAD 2024 runs on .NET Framework: a `net48` build would need AutoCAD.NET 24.x and Avalonia 11 for the panel. Not planned yet. Only AutoCAD 2025 is installed on this computer.
 - The XML docs of the AutoCAD API are done, as the person decided: each build has them in `AutoCADApiDocs`, with the ObjectARX license, which allows passing copies on only with it, for developing AutoCAD apps.
   They aren't well-formed XML, `ApiDocs.ReadDocFile` reads them member by member. Tested with `caddis_describe` in AutoCAD 2025.
-- The README has screenshots of the ribbon in both themes and of the panel in the dark theme. One of the panel in the light theme with a meaningful run is missing,
-  like Revit's: the one taken in the tests had its search box open, and at the panel's width of 345 the code view's `Formatted` overlapped the tab `Output`.
+- The README has screenshots of the ribbon in both themes, of the panel in the dark theme, and of an example in the Claude app, a Sierpinski triangle, with the panel docked in AutoCAD.
+  One of the panel in the light theme is missing: the one taken in the tests had its search box open, and at the panel's width of 345 the code view's `Formatted` overlapped the tab `Output`.
