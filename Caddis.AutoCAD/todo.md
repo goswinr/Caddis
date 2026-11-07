@@ -104,8 +104,7 @@ What was decided:
   `ICaddisHost.Export` is synchronous, so that would need it to return a task too, as `RunCommands` does.
 - `caddis_dialog` is done, with [Dialogs.fs](Dialogs.fs), a copy of [RevitDialogs.fs](../Caddis.Revit/RevitDialogs.fs). Share the two later.
 - AutoCAD 2024 runs on .NET Framework: a `net48` build would need AutoCAD.NET 24.x and Avalonia 11 for the panel. Not planned yet. Only AutoCAD 2025 is installed on this computer.
-
-## Open decisions for the user
-
-- Ship the XML docs of the AutoCAD API, so that `caddis_describe` shows summaries? They are in the packages AutoCAD.NET, .Core and .Model.
-  Autodesk's ObjectARX license allows passing copies on only with the license, for developing AutoCAD apps.
+- The XML docs of the AutoCAD API are done, as the person decided: each build has them in `AutoCADApiDocs`, with the ObjectARX license, which allows passing copies on only with it, for developing AutoCAD apps.
+  They aren't well-formed XML, `ApiDocs.ReadDocFile` reads them member by member. Tested with `caddis_describe` in AutoCAD 2025.
+- The README has screenshots of the ribbon in both themes and of the panel in the dark theme. One of the panel in the light theme with a meaningful run is missing,
+  like Revit's: the one taken in the tests had its search box open, and at the panel's width of 345 the code view's `Formatted` overlapped the tab `Output`.

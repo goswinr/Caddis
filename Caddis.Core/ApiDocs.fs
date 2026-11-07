@@ -376,6 +376,17 @@ type ApiDocs(host: ICaddisHost) =
         |> Seq.map snd
         |> List.ofSeq
 
+    // --- XML doc files that are not well-formed ---
+
+    /// A member of an XML doc file, with its id and its content.
+    static let memberPattern = Regex("""<member\s+name="([^"]*)"\s*>(.*?)</member>""", RegexOptions.Singleline)
+
+    /// An '&' that doesn't start an entity.
+    static let bareAmpersand = Regex("&(?!(?:amp|lt|gt|quot|apos|#[0-9]+|#x[0-9a-fA-F]+);)")
+
+    /// A '<' that doesn't start a tag, comment or processing instruction. The tags of XML docs are lower case, e.g. summary or see.
+    static let bareLessThan = Regex("<(?![/!?]?[a-z])")
+
     // --- assemblies and types ---
 
     let typesCache = ConcurrentDictionary<Assembly, Type[]>()
@@ -428,7 +439,6 @@ type ApiDocs(host: ICaddisHost) =
         docsCache.GetOrAdd(
             a,
             fun a ->
-                let docs = Dictionary<string, string>()
                 try
                     let fileName = a.GetName().Name + ".xml"
                     let folders = [ Path.GetDirectoryName(location a); yield! host.LibFolders ]
@@ -438,19 +448,10 @@ type ApiDocs(host: ICaddisHost) =
                         |> List.map (fun d -> Path.Combine(d, fileName))
                         |> List.tryFind File.Exists
                     match file with
-                    | None -> ()
-                    | Some path ->
-                        // keep the XML of each member as a string, parsing all of RhinoCommon.xml into an XDocument needs much more memory
-                        use reader = XmlReader.Create path
-                        let mutable more = reader.ReadToFollowing "member"
-                        while more do
-                            let name = reader.GetAttribute "name"
-                            let xml = reader.ReadOuterXml()
-                            if not (isNull name) then docs[name] <- xml
-                            more <- (reader.NodeType = XmlNodeType.Element && reader.Name = "member") || reader.ReadToFollowing "member"
+                    | None -> Dictionary<string, string>() :> IReadOnlyDictionary<_, _>
+                    | Some path -> ApiDocs.ReadDocFile path
                 with _ ->
-                    ()
-                docs :> IReadOnlyDictionary<_, _>
+                    Dictionary<string, string>() :> IReadOnlyDictionary<_, _>
         )
 
     /// The parsed doc element of a member, if its assembly has an XML doc file.
@@ -708,3 +709,31 @@ type ApiDocs(host: ICaddisHost) =
             let shown = results |> Seq.sortBy fst |> Seq.truncate maxSearchResults |> Seq.map snd |> List.ofSeq
             let more = if results.Count > shown.Length then $"\n... {results.Count - shown.Length} more, search for a longer text." else ""
             String.concat "\n" shown + more + "\nLook up one with 'name' for its signatures and docs."
+
+    /// Reads an XML doc file into the XML of each member, by member id, e.g. "M:Rhino.Geometry.Brep.CreateFromBox(...)".
+    /// If the file is not well-formed XML, e.g. the XML docs of the AutoCAD API with bare '&' and '<' in their texts
+    /// and '&' instead of '@' for by-ref parameters in ids, each member is read on its own, with those escaped,
+    /// and a member that still doesn't parse is left out.
+    static member ReadDocFile(path: string) : IReadOnlyDictionary<string, string> =
+        let docs = Dictionary<string, string>()
+        try
+            // keep the XML of each member as a string, parsing all of RhinoCommon.xml into an XDocument needs much more memory
+            use reader = XmlReader.Create path
+            let mutable more = reader.ReadToFollowing "member"
+            while more do
+                let name = reader.GetAttribute "name"
+                let xml = reader.ReadOuterXml()
+                if not (isNull name) then docs[name] <- xml
+                more <- (reader.NodeType = XmlNodeType.Element && reader.Name = "member") || reader.ReadToFollowing "member"
+        with :? XmlException ->
+            docs.Clear()
+            for m in memberPattern.Matches(File.ReadAllText path) |> Seq.cast<Match> do
+                let id = m.Groups[1].Value.Replace("&amp;", "&").Replace('&', '@')
+                let content = bareLessThan.Replace(bareAmpersand.Replace(m.Groups[2].Value, "&amp;"), "&lt;")
+                let xml = $"<member name=\"{id}\">{content}</member>"
+                try
+                    XElement.Parse xml |> ignore
+                    docs[id] <- xml
+                with _ ->
+                    ()
+        docs :> IReadOnlyDictionary<_, _>

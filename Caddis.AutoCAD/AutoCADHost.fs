@@ -27,8 +27,11 @@ type AutoCADHost() =
         |> Array.filter (String.IsNullOrEmpty >> not)
         |> Array.distinct
 
-    /// AutoCAD's folder, so that e.g. #r "AcCui.dll" resolves.
-    let libFolders = [| Path.GetDirectoryName acdbmgdPath |]
+    /// The XML docs of the AutoCAD API, next to Caddis.AutoCAD.dll. AutoCAD doesn't install them, the build copies them from the AutoCAD.NET packages.
+    let apiDocsFolder = Path.Combine(Path.GetDirectoryName(typeof<AutoCADHost>.Assembly.Location), "AutoCADApiDocs")
+
+    /// AutoCAD's folder, so that e.g. #r "AcCui.dll" resolves, and the folder of the API docs, where caddis_describe finds e.g. AcDbMgd.xml.
+    let libFolders = [| Path.GetDirectoryName acdbmgdPath; if Directory.Exists apiDocsFolder then apiDocsFolder |]
 
     /// e.g. "AutoCAD 2025", from "AutoCAD 2025 - English" in the registry key of the product.
     let productName =

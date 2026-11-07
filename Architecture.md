@@ -405,7 +405,7 @@ There is one `CaddisServer` per app process. A second load of the Rhino plugin i
 | `Info` | MCP texts, names, id format | `RhinoInfo.info` | `RevitInfo.info` | `AutoCADInfo.info` | fixed texts |
 | `Description` | status | `Rhino <version> on Windows` or `Mac` | `Revit <version> (<build>) on Windows` | `AutoCAD <year> (<build>) on Windows` | `Headless (no host app)` |
 | `References` | session creation, API docs | RhinoCommon, System.Drawing | RevitAPI, RevitAPIUI, Caddis.Revit | AcDbMgd, AcCoreMgd, AcMgd | none |
-| `LibFolders` | `--lib:` of the session, XML docs | RhinoCommon's folder, Rhino's exe folder | RevitAPI's folder | AutoCAD's folder | none |
+| `LibFolders` | `--lib:` of the session, XML docs | RhinoCommon's folder, Rhino's exe folder | RevitAPI's folder | AutoCAD's folder, `AutoCADApiDocs` | none |
 | `InvokeOnUi` | runs on the UI thread, `Script.OnUi`, capture, undo, command and export runs, type-check | `RhinoApp.InvokeOnUiThread`, inline on the UI thread | the external event, inline in API context | the dispatcher of the main thread, inline on it; in background runs it locks the drawing for each call | a `WorkerThread` |
 | `CannotRunReason` | before each run | a Rhino command or a script of Fesh.Rhino is running | a transaction is open, only checked in API context | a command is in progress, or AutoCAD is not quiescent | never |
 | `BeforeRun`, `AfterRun` | on the evaluation thread around each F# run | undo record, command line capture, input watchdog, border, redraw | transaction group, change tracking, Revit's failures | document lock, which is the undo step of the run, change tracking, redraw | nothing |
@@ -629,6 +629,8 @@ Files are listed with their local path.
 - **Signatures in F# syntax**: `float`, `Point3d[]`, `int option`, `(unit -> int)`, curried groups from `CompilationArgumentCountsAttribute`, `[<Out>]`, `[<ParamArray>]` and `?optional` arguments. A hint explains that `[<Out>]` arguments become a returned tuple.
 - **Size**: at most 16,000 characters. A large type is shown in less detail until it fits: first all overloads with their first doc sentence, then without docs, then one overload per name, then names only.
 - **XML docs** are found next to the assembly or in the host's lib folders, e.g. RhinoCommon.xml in Rhino's `System/netcore`. Each member's XML is kept as a string per assembly, which needs far less memory than parsing RhinoCommon.xml into an `XDocument`.
+  `ApiDocs.ReadDocFile` reads a file as a stream. If it is not well-formed XML, as the XML docs of the AutoCAD API with bare `&` and `<` in their texts and `&` instead of `@` for by-ref parameters in ids,
+  it reads each member on its own with a regular expression, escapes those, and leaves out a member that still doesn't parse: one of AcDbMgd's 8,914.
 - **Search** finds type and member names containing the text in non-framework assemblies, up to 60 results.
 - **Suggestions** for a name not found: names that contain it, are contained in it, contain all its words, or are within an edit distance of about a third of its length, up to 8.
 
@@ -910,6 +912,9 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - *Capture*: `Document.CapturePreviewImage` of the active view, at the size of `SCREENSIZE` unless a size is given. No other view and no visual style.
 - *Export*: `Database.Wblock()` for the whole drawing, `Wblock(ids, origin)` for selected objects or handles in model space, under a document lock, which it needs; then `SaveAs` for DWG or `DxfOut` for DXF. The drawing and its file name stay as they are.
 - *Ids*: handles as hexadecimal strings, found with `Database.GetObjectId(false, handle, 0)`.
+- *API docs*: AutoCAD doesn't install the XML docs of its API. The target `CopyAutoCADApiDocs` of [Caddis.AutoCAD.fsproj](Caddis.AutoCAD/Caddis.AutoCAD.fsproj) copies them from the packages AutoCAD.NET, .Core and .Model,
+  the `.xml` next to each of their reference assemblies, into the folder `AutoCADApiDocs` of each build, with the packages' `LICENSE.txt`: their ObjectARX license allows passing copies on only together with it.
+  `LibFolders` includes that folder, so `caddis_describe` finds e.g. `AcDbMgd.xml` there. They are the docs of AutoCAD 2025's API, also in later AutoCADs.
 - *Dialogs*: [`AutoCADDialogs`](Caddis.AutoCAD/Dialogs.fs), a copy of `RevitDialogs`: while a modal dialog shows, AutoCAD's main window is disabled, and its last active popup is the dialog.
   Found with Win32 functions that send no messages, then read and its buttons pressed with UI Automation on the thread pool, which the dialog's message loop answers. Tested with the dialog of OPTIONS.
 - *Messages*: [`AutoCADLog`](Caddis.AutoCAD/Log.fs) writes to the command line of the active drawing through the dispatcher, and to `%AppData%\Caddis\autocad.log`, which also has what was written while no drawing was open.
@@ -982,7 +987,7 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 | DesktopTests (7) | the extension's manifest and `.mcpb` file, what Claude Desktop installed and its settings, where its MSIX package keeps them, `Set up` opening the extension; the relay with Node, where it is installed: messages to Caddis and back, and without Caddis its tools, errors and the `list_changed` once Caddis starts |
 | CommandTests (10) | command runs, input timeouts, argument checks, cancellation, notes and objects in MCP |
 | BackgroundTests (9) | background evaluation, `OnUi`, 409, cancel, timeout, `OnUi` callbacks during cancellation |
-| ApiDocsTests (11) | signatures, docs, short names, curried functions, filters, out parameters, enums, large types, suggestions, namespaces, search |
+| ApiDocsTests (12) | signatures, docs, short names, curried functions, filters, out parameters, enums, large types, suggestions, namespaces, search, XML doc files that are not well-formed |
 | OutputTests (7) | the capture buffer and clipping |
 | PanelTests (9) | XAML loads with the host's options, Errors, theme scope, code view, Run again, output with commands and grouped changes, Export and Export all, the agents' states, buttons, tooltips and copied commands |
 
@@ -1042,10 +1047,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | STEP export in Revit 2024 | Needs Revit 2025. |
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, other apps | None. `ICaddisHost` is the extension point. |
-
-
 | AutoCAD 2024 and older, AutoCAD LT, AutoCAD for Mac | Not supported: AutoCAD 2024 runs on .NET Framework, LT and Mac have no .NET API. |
-| Summaries of the AutoCAD API in `caddis_describe` | None, only signatures: AutoCAD doesn't install the XML docs of its API. |
 | Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user, and Claude Desktop. Others are set up by hand with the URL. |
 | Caddis in Anthropic's directory | Not listed. The directory takes no `.mcpb` files anymore, and the local MCP servers of a listed plugin run in Claude Code and Cowork, not in the chat of Claude Desktop. |
 | A NuGet package of Caddis.Core | Not published. |

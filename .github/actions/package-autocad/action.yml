@@ -6,6 +6,7 @@ description: Publish Caddis for every AutoCAD runtime, with the loader and the b
 #   Caddis.AutoCAD.Bootstrapper.exe  the Velopack app, net48: writes the bundle Caddis.bundle that registers Caddis with AutoCAD
 #   net8.0/   for AutoCAD 2025 and 2026 as released, on .NET 8
 #   net10.0/  for AutoCAD 2025 from its update 25.0.189 on, on .NET 10
+#             each with AutoCADApiDocs/, the XML docs of the AutoCAD API from the AutoCAD.NET packages, with their license
 #   loader/   Caddis.AutoCAD.Loader, copied into the bundle: loads net8.0 or net10.0, for the runtime AutoCAD runs on
 
 outputs:
@@ -59,9 +60,11 @@ runs:
           throw "Expected a stable semantic version from CHANGELOG.md, found '$version'."
         }
         "version=$version" >> $env:GITHUB_OUTPUT
-        foreach ($dll in 'net8.0/Caddis.AutoCAD.dll', 'net10.0/Caddis.AutoCAD.dll', 'loader/Caddis.AutoCAD.Loader.dll', 'Caddis.AutoCAD.Bootstrapper.exe') {
-          if (-not (Test-Path -LiteralPath "bin/publish/autocad/$dll")) {
-            throw "bin/publish/autocad/$dll is missing."
+        $files = 'net8.0/Caddis.AutoCAD.dll', 'net10.0/Caddis.AutoCAD.dll', 'loader/Caddis.AutoCAD.Loader.dll', 'Caddis.AutoCAD.Bootstrapper.exe',
+                 'net8.0/AutoCADApiDocs/AcDbMgd.xml', 'net8.0/AutoCADApiDocs/LICENSE.txt', 'net10.0/AutoCADApiDocs/AcDbMgd.xml', 'net10.0/AutoCADApiDocs/LICENSE.txt'
+        foreach ($file in $files) {
+          if (-not (Test-Path -LiteralPath "bin/publish/autocad/$file")) {
+            throw "bin/publish/autocad/$file is missing."
           }
         }
         Write-Host "Published Caddis $version for AutoCAD to bin/publish/autocad"

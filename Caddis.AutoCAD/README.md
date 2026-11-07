@@ -35,6 +35,8 @@ The bundle loads a small [loader](../Caddis.AutoCAD.Loader/README.md), which loa
 AutoCAD 2024 and older run on .NET Framework, Caddis doesn't support them. AutoCAD LT and AutoCAD for Mac have no .NET API.
 
 The builds reference the API of AutoCAD 2025, from the package [AutoCAD.NET](https://www.nuget.org/packages/AutoCAD.NET) 25.0.1.
+AutoCAD doesn't install the XML docs of its API, so each build has those of the AutoCAD.NET packages in its folder `AutoCADApiDocs`, with Autodesk's license for them, the ObjectARX license.
+`caddis_describe` shows their summaries, parameters and remarks, e.g. for `Polyline.AddVertexAt`.
 The versions of FSharp.Compiler.Service and FSharp.Core are those of the build of [Fesh](https://github.com/goswinr/Fesh) for the same .NET, as in Rhino and Revit.
 
 ## The ribbon tab and the panel
@@ -51,9 +53,17 @@ The tab `Caddis` on AutoCAD's ribbon has:
 | `Info` | the state, the commands to add Caddis to Claude Code and Codex, the latest messages, and errors. It turns red after an error |
 | `Start with AutoCAD`, `Echo output` | the settings `autoStart` and `echoOutput` |
 
+| Dark theme | Light theme |
+| --- | --- |
+| ![The Caddis tab on AutoCAD's ribbon in its dark theme](Docs/ribbon-dark.png) | ![The Caddis tab on AutoCAD's ribbon in its light theme](Docs/ribbon-light.png) |
+
 The panel is the same as in Rhino and Revit, in an AutoCAD palette: the server, set up of the AI agents, the settings, the recent runs with their output and code.
 The first time, it docks on the right of AutoCAD's window. AutoCAD keeps its place and size from then on, and shows it again at the next start if it was open.
 It follows AutoCAD's dark or light theme. While it has the focus, it gets all keys, also AutoCAD's shortcuts: click into the drawing to give them back to AutoCAD.
+
+![The Caddis panel floating in AutoCAD's dark theme, with the server listening on port 7830 and two runs](Docs/panel-dark.png)
+
+The screenshots were taken in AutoCAD 2025 with its update 25.0.189 and Caddis 0.3.3.
 
 ## The CADDIS command
 
@@ -124,6 +134,4 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 
 | Missing | Notes |
 |---|---|
-
-| Summaries in `caddis_describe` | AutoCAD doesn't install the XML docs of its API. They are in the AutoCAD.NET packages, whose license allows passing them on only with the license. |
 | The command line in results of `caddis_eval` | Output of `Editor.WriteMessage` is not in the result, use `printfn`. Command runs show the command line from AutoCAD's history, F# runs could too. |

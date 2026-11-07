@@ -51,6 +51,19 @@
     <Compile Include="Commands.fs" />
     <Compile Include="Extension.fs" />
   </ItemGroup>
+  <!-- The XML docs of the AutoCAD API, for the summaries in caddis_describe, see AutoCADHost.apiDocsFolder. AutoCAD doesn't install them,
+  the packages AutoCAD.NET, AutoCAD.NET.Core and AutoCAD.NET.Model have them next to their reference assemblies.
+  Their ObjectARX license allows passing copies on only together with it, so its LICENSE.txt goes into the same folder. -->
+  <Target Name="CopyAutoCADApiDocs" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_AutoCADApiReference Include="@(ReferencePath)" Condition="$([System.String]::new('%(ReferencePath.NuGetPackageId)').StartsWith('AutoCAD.NET'))" />
+      <_AutoCADApiDoc Include="@(_AutoCADApiReference->'%(RootDir)%(Directory)%(Filename).xml')" />
+      <None Include="@(_AutoCADApiDoc)" Condition="Exists('%(FullPath)')" Link="AutoCADApiDocs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+      <None Include="$(PkgAutoCAD_NET)\LICENSE.txt" Link="AutoCADApiDocs\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+    <Error Condition="'@(_AutoCADApiDoc)' == ''" Text="No reference assemblies of the AutoCAD.NET packages found, so no XML docs of the AutoCAD API to copy." />
+  </Target>
+
   <!-- AutoCAD runs on Windows x64. Software rendering needs neither ANGLE nor native debug symbols, as in Caddis.Revit. -->
   <Target Name="RemoveUnusedNativeLibraries" AfterTargets="ResolvePackageAssets">
     <ItemGroup>
