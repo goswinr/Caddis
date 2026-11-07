@@ -97,6 +97,9 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 - **Background mode.** Every call of the AutoCAD API must be inside `Caddis.Script.OnUi(fun () -> ...)`. Caddis locks the drawing for each call,
   so each call that changes something is its own undo step. `caddis_undo` works only for a run with exactly one of them.
 - **Redraw.** The views are redrawn after each run.
+- **Command line.** The result of a run has what it wrote to AutoCAD's command line, e.g. with `Editor.WriteMessage`, read from AutoCAD's history as for `caddis_command`.
+  It leaves out what Caddis wrote there itself, its echo of the output with `echoOutput` on, and AutoCAD's prompt.
+  AutoCAD's messages start with a line break, so a run's last message is still the current line when it ends, which isn't in the history: then Caddis ends that line.
 
 ## AutoCAD commands
 
@@ -134,4 +137,6 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 
 | Missing | Notes |
 |---|---|
-| The command line in results of `caddis_eval` | Output of `Editor.WriteMessage` is not in the result, use `printfn`. Command runs show the command line from AutoCAD's history, F# runs could too. |
+| Capture of other views, layouts and visual styles | `caddis_capture_viewport` captures only the active view, as AutoCAD shows it. |
+| Export to PDF, STL, SAT and other formats | `caddis_export` writes only DWG and DXF. |
+| AutoCAD 2024 and older | They run on .NET Framework, Caddis for AutoCAD needs .NET 8 or 10. |

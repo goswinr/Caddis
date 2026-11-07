@@ -75,9 +75,13 @@ What was found out, beyond what the docs say:
 - The setting `cancelWaitingCommands` does nothing in AutoCAD: a script can't start a command that waits, `SendStringToExecute` runs it after the run. The panel doesn't show it in AutoCAD.
 - QUIT through `Editor.Command` froze AutoCAD; QNEW succeeded without a new drawing; CLOSE closed the only drawing. So commands that open or close drawings are refused.
 
-Left to do:
-- F# runs could show the command line too, from `AutoCADCommandLine.history` in `BeforeRun` and `AfterRun`, e.g. what `Editor.WriteMessage` printed.
-  With `echoOutput` on, the command line also has Caddis' own echo of the output, which would have to be left out.
+F# runs show the command line too, done on 2026-11-07, see `AfterRun` of AutoCADHost and section 12 of Architecture.md. What was found out:
+- The history of `GetLastCommandLines` has only finished lines. A message that starts with a line break first finishes the current line, so a run's last message
+  stays the current line until the next line break, and isn't in the history. `GetCommandPromptString` is the prompt `Command:`, not the current line; `LASTPROMPT` is the newest finished line.
+- AutoCAD doesn't write its prompt again after a call through the dispatcher. So ending the current line after a run adds an empty line only if the current line was empty.
+- With `echoOutput` on, the default, Caddis' echo is written during the run in both modes: `UiThread.post` runs inline on the main thread. F# Interactive's `val it` is echoed last.
+  The echo wrote the empty lines after it one by one, two empty lines between runs; they are left out now.
+- Tested in 'ui' and background mode, with the echo off and on, with output only to stdout, a compile error, a message without a leading line break, the same text in both, and over MCP.
 
 ## Step 3: panel, ribbon, messages, done
 

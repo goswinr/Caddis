@@ -65,18 +65,38 @@ type AutoCADHost() =
 
     let echoBuffer = StringBuilder()
 
+    /// Empty lines of the echo that are not written yet. They are written before the next line that isn't empty,
+    /// so the empty lines at the end of a run's output, e.g. after F# Interactive's 'val it', are left out.
+    /// So the last line that Caddis writes is never empty, which AfterRun relies on.
+    let mutable echoBlankLines = 0
+
+    /// Writes the complete lines of the echo to the command line, or with 'all' also the rest, at the end of a run.
     let flushEcho (all: bool) =
-        let text =
+        let message =
             lock echoBuffer (fun () ->
                 let s = echoBuffer.ToString()
                 let cut = if all then s.Length else s.LastIndexOf '\n' + 1
-                if cut <= 0 then
-                    ""
-                else
-                    echoBuffer.Remove(0, cut) |> ignore
-                    s.Substring(0, cut))
+                let text =
+                    if cut <= 0 then
+                        ""
+                    else
+                        echoBuffer.Remove(0, cut) |> ignore
+                        s.Substring(0, cut).Replace("\r\n", "\n")
+                let lines = (if text.EndsWith "\n" then text.Substring(0, text.Length - 1) else text).Split('\n')
+                let message =
+                    match lines |> Array.tryFindIndexBack (fun l -> l.Trim() <> "") with
+                    | None when text <> "" ->
+                        echoBlankLines <- echoBlankLines + lines.Length
+                        ""
+                    | None -> ""
+                    | Some last ->
+                        let message = String.Join("\n", Array.append (Array.create echoBlankLines "") lines[.. last])
+                        echoBlankLines <- lines.Length - 1 - last
+                        message
+                if all then echoBlankLines <- 0
+                message)
         // AutoCAD's messages start with a line break instead of ending with one
-        if text <> "" then AutoCADLog.write ("\n" + text.TrimEnd('\r', '\n').Replace("\r\n", "\n"))
+        if message <> "" then AutoCADLog.write ("\n" + message)
 
     // --- runs, document locks and undo ---
 
@@ -86,6 +106,38 @@ type AutoCADHost() =
 
     /// True if the code of the current run is evaluated in one call on the main thread, in 'ui' mode. Then BeforeRun locks the drawing for the whole run.
     let mutable runOnUi = false
+
+    /// The command line when the current F# run started, for what the run printed to it: the history, newest first,
+    /// and what the current line may have been, AutoCAD's prompt, e.g. "Command:", or the last line Caddis wrote.
+    /// None if AutoCAD didn't answer in time in background mode.
+    let mutable runLinesBefore: (string[] * string list) option = None
+
+    /// Calls a function on the main thread, also from the background worker, where it waits at most 2 s for AutoCAD.
+    let onMainWithin2s (f: unit -> 'T) : 'T option =
+        if UiThread.isCurrent () then
+            Some(f ())
+        else
+            let t = UiThread.invoke f
+            if (try t.Wait 2000 with _ -> false) then Some t.Result else None
+
+    /// The lines that the current F# run printed to the command line, oldest first, e.g. with Editor.WriteMessage, on the main thread.
+    /// A message starts with a line break, as AutoCAD's own do, so the last one is still the current line, which the history doesn't have yet.
+    /// So this ends the current line first, unless the last line is one that Caddis wrote, e.g. its echo of the output. AutoCAD doesn't write its prompt again after a run.
+    let runLines (before: string[], startLines: string list) =
+        let after = AutoCADCommandLine.history ()
+        let after =
+            match AutoCADCommandLine.added before after, CoreApp.DocumentManager.MdiActiveDocument with
+            | [||], _
+            | _, null -> after
+            | _ when AutoCADLog.wroteLast () -> after
+            | _, doc ->
+                doc.Editor.WriteMessage "\n"
+                AutoCADCommandLine.history ()
+        // the first one is the line that was current when the run started, unless the run continued it without a line break
+        match AutoCADCommandLine.added before after with
+        | [||] -> [||]
+        | lines when lines[0].Trim() = "" || List.contains (lines[0].Trim()) startLines -> lines[1..]
+        | lines -> lines
 
     /// The lock of the drawing for the whole run in 'ui' mode, and the drawing.
     let mutable runLock: (DocumentLock * Document) option = None
@@ -667,11 +719,25 @@ type AutoCADHost() =
             docChanged <- false
             otherChanged <- false
             changedCalls <- 0
+            // what the run prints to the command line, without what Caddis writes there itself, see AfterRun
+            AutoCADLog.startRecording ()
+            let lastWritten = AutoCADLog.lastLine ()
+            runLinesBefore <-
+                onMainWithin2s (fun () -> AutoCADCommandLine.history (), [ AutoCADCommandLine.commandPrompt (); lastWritten.Trim() ] |> List.filter ((<>) ""))
             runActive <- true
 
         member _.AfterRun(run: Run, _status: RunStatus) =
             flushEcho true
             runActive <- false
+            // in background mode after the echo that flushEcho posted, the dispatcher runs calls in order
+            let lines = runLinesBefore |> Option.bind (fun before -> onMainWithin2s (fun () -> runLines before))
+            let written = AutoCADLog.stopRecording ()
+            match lines with
+            | Some lines ->
+                for line in AutoCADCommandLine.withoutWritten written lines do
+                    run.CommandLine.Append(line + "\n")
+            | None -> ()
+            runLinesBefore <- None
             match runLock with
             | Some(l, doc) ->
                 // 'ui' mode, on the main thread

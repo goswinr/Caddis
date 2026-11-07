@@ -3,7 +3,7 @@ namespace Caddis.AutoCAD
 open System
 open Autodesk.AutoCAD.EditorInput
 
-/// What AutoCAD's command line shows, for the results of caddis_command.
+/// What AutoCAD's command line shows, for the results of caddis_command and F# runs.
 module internal AutoCADCommandLine =
 
     /// The lines of the command line history, newest first, on the main thread. AutoCAD keeps the last 400.
@@ -21,6 +21,26 @@ module internal AutoCADCommandLine =
         match (if k = 0 then None else Seq.tryFind matchesAt (seq { 0 .. after.Length - k })) with
         | Some o -> Array.rev after[.. o - 1]
         | None -> Array.rev after
+
+    /// The lines that an F# run printed, for its result: without empty lines, and without the lines that Caddis wrote itself,
+    /// as counted by AutoCADLog.stopRecording, e.g. its echo of the run's output. A line the run printed with the same text as one of those stays as often as it is there more.
+    let withoutWritten (written: Collections.Generic.Dictionary<string, int>) (lines: string[]) : string[] =
+        lines
+        |> Array.filter (fun line ->
+            let key = line.TrimEnd()
+            if key = "" then
+                false
+            else
+                match written.TryGetValue key with
+                | true, n when n > 0 ->
+                    written[key] <- n - 1
+                    false
+                | _ -> true)
+
+    /// AutoCAD's prompt while no command runs, e.g. "Command:", in AutoCAD's language. Through an internal API, empty if it fails.
+    let commandPrompt () =
+        try Autodesk.AutoCAD.Internal.Utils.GetCommandPromptString().Trim()
+        with _ -> ""
 
     /// The prompt the command line shows, e.g. "Specify next point or [Undo]:", from the system variable LASTPROMPT.
     let prompt () =
