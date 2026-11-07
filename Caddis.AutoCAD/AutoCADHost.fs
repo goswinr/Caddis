@@ -391,6 +391,23 @@ type AutoCADHost() =
     /// Commands after which caddis_undo can't tell what UNDO 1 would undo.
     let undoCommands = set [ "UNDO"; "U"; "REDO"; "MREDO"; "OOPS" ]
 
+    /// Commands that open or close drawings. Editor.Command runs in the command context of the active drawing, where AutoCAD can't:
+    /// in a test QUIT froze AutoCAD, QNEW succeeded without a new drawing, and CLOSE closed it while the commands ran.
+    let documentCommands =
+        set [ "QUIT"; "EXIT"; "CLOSE"; "CLOSEALL"; "NEW"; "QNEW"; "OPEN"; "RECOVER"; "RECOVERALL"; "PARTIALOPEN" ]
+
+    /// Why caddis_command doesn't run a command that opens or closes drawings, None for other commands.
+    let documentCommandMessage (name: string) =
+        if not (documentCommands.Contains name) then None
+        elif name = "QUIT" || name = "EXIT" then
+            Some $"caddis_command doesn't run {name}: AutoCAD freezes when it quits from a command run. Leave closing AutoCAD to the person working in it."
+        else
+            Some(
+                $"caddis_command doesn't run {name}: it runs commands in the active drawing, where AutoCAD can't open or close drawings. "
+                + "Use caddis_eval with Application.DocumentManager instead, e.g. DocumentCollectionExtension.Add(Application.DocumentManager, \"acad.dwt\") "
+                + "or DocumentCollectionExtension.Open(Application.DocumentManager, path, false)."
+            )
+
     /// The handles of the entities in layouts among the touched objects, i.e. not e.g. the block table record of model space
     /// that changes when a command adds to it, or the entities of a block definition. Created, changed and erased, in order.
     let touchedEntities (db: Database) : string[] * string[] * string[] =
@@ -422,7 +439,10 @@ type AutoCADHost() =
             req.macros
             |> Array.map (fun m ->
                 match AutoCADMacro.parse m with
-                | Ok inputs -> m, inputs
+                | Ok inputs ->
+                    match documentCommandMessage (AutoCADMacro.commandName inputs) with
+                    | Some message -> failwith message
+                    | None -> m, inputs
                 | Error message -> failwith message)
         // EXECUTEFUNCTION clears the selection when it starts, the commands get it back
         let toSelect =
@@ -487,8 +507,10 @@ type AutoCADHost() =
                 let lines = if lines.Length > 0 && String.IsNullOrWhiteSpace lines[lines.Length - 1] then lines[.. lines.Length - 2] else lines
                 for line in lines do
                     run.CommandLine.Append(line + "\n")
-                let created, changed, deleted = touchedEntities doc.Database
-                let selectedAfter = selection ed
+                // e.g. a command defined in AutoLISP may have closed the drawing
+                let closed = doc.IsDisposed || isNull doc.Database
+                let created, changed, deleted = if closed then [||], [||], [||] else touchedEntities doc.Database
+                let selectedAfter = if closed then toSelect else selection ed
                 let undoCommand = steps |> Seq.exists (fun s -> s.commands |> List.exists (fun (name, _) -> undoCommands.Contains name))
                 // EXECUTEFUNCTION is an undo step of its own, also if it changed nothing
                 lastUndo <- if undoCommand then None else Some(run.Id, doc.UnmanagedObject)

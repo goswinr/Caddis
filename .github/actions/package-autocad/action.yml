@@ -1,0 +1,67 @@
+name: Package for AutoCAD
+description: Publish Caddis for every AutoCAD runtime, with the loader and the bootstrapper, into the folder that Velopack packs.
+
+# Used by build.yml and release-revit.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for the net48 bootstrapper.
+# bin/publish/autocad becomes the folder %LocalAppData%\Caddis.AutoCAD\current of the installation:
+#   Caddis.AutoCAD.Bootstrapper.exe  the Velopack app, net48: writes the bundle Caddis.bundle that registers Caddis with AutoCAD
+#   net8.0/   for AutoCAD 2025 and 2026 as released, on .NET 8
+#   net10.0/  for AutoCAD 2025 from its update 25.0.189 on, on .NET 10
+#   loader/   Caddis.AutoCAD.Loader, copied into the bundle: loads net8.0 or net10.0, for the runtime AutoCAD runs on
+
+outputs:
+  version:
+    description: Version of the latest release in CHANGELOG.md
+    value: ${{ steps.version.outputs.version }}
+  pack-dir:
+    description: The folder for vpk pack, relative to the repository root
+    value: bin/publish/autocad
+
+runs:
+  using: composite
+  steps:
+    # One step per build, so that a failure in one is not masked by another.
+    # AutoCAD provides the runtime. Publish includes Caddis.Core, Caddis.UI and the F# dependencies.
+    - name: Publish Caddis.AutoCAD net8.0
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.AutoCAD/Caddis.AutoCAD.fsproj
+        --configuration Release --framework net8.0-windows --self-contained false
+        --output bin/publish/autocad/net8.0
+
+    - name: Publish Caddis.AutoCAD net10.0
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.AutoCAD/Caddis.AutoCAD.fsproj
+        --configuration Release --framework net10.0-windows --self-contained false
+        --output bin/publish/autocad/net10.0
+
+    - name: Publish Caddis.AutoCAD.Loader
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.AutoCAD.Loader/Caddis.AutoCAD.Loader.csproj
+        --configuration Release --self-contained false
+        --output bin/publish/autocad/loader
+
+    - name: Publish Caddis.AutoCAD.Bootstrapper
+      shell: pwsh
+      run: >-
+        dotnet publish Caddis.AutoCAD.Bootstrapper/Caddis.AutoCAD.Bootstrapper.fsproj
+        --configuration Release
+        --output bin/publish/autocad
+
+    - name: Read version
+      id: version
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $version = (Get-Content -LiteralPath 'Caddis.AutoCAD.Bootstrapper/bin/ChangelogVersion.txt' -Raw).Trim()
+        if ($version -notmatch '^\d+\.\d+\.\d+$') {
+          throw "Expected a stable semantic version from CHANGELOG.md, found '$version'."
+        }
+        "version=$version" >> $env:GITHUB_OUTPUT
+        foreach ($dll in 'net8.0/Caddis.AutoCAD.dll', 'net10.0/Caddis.AutoCAD.dll', 'loader/Caddis.AutoCAD.Loader.dll', 'Caddis.AutoCAD.Bootstrapper.exe') {
+          if (-not (Test-Path -LiteralPath "bin/publish/autocad/$dll")) {
+            throw "bin/publish/autocad/$dll is missing."
+          }
+        }
+        Write-Host "Published Caddis $version for AutoCAD to bin/publish/autocad"

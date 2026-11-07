@@ -1,4 +1,4 @@
-name: Release Revit Installer
+name: Release Revit and AutoCAD Installers
 
 on:
   push:
@@ -55,6 +55,10 @@ jobs:
         id: package
         uses: ./.github/actions/package-revit
 
+      - name: Publish for every AutoCAD
+        id: package-autocad
+        uses: ./.github/actions/package-autocad
+
       - name: Package for Claude Desktop
         # Before the signing session: the extensions are not signed.
         id: desktop
@@ -65,9 +69,10 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
           CHANGELOG_VERSION: ${{ steps.package.outputs.version }}
+          AUTOCAD_VERSION: ${{ steps.package-autocad.outputs.version }}
         run: |
-          if ($env:TAG_NAME -cne $env:CHANGELOG_VERSION) {
-            throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION) must match."
+          if ($env:TAG_NAME -cne $env:CHANGELOG_VERSION -or $env:TAG_NAME -cne $env:AUTOCAD_VERSION) {
+            throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION, $env:AUTOCAD_VERSION) must match."
           }
 
       - name: Azure login
@@ -129,22 +134,71 @@ jobs:
           vpk upload github `
             --publish `
             --repoUrl https://github.com/goswinr/Caddis `
-            --releaseName "Caddis $env:VERSION for Revit" `
+            --releaseName "Caddis $env:VERSION for Revit and AutoCAD" `
             --tag $env:VERSION `
             --outputDir bin/installer
           Check 'vpk upload'
 
+      - name: Pack, sign and release for AutoCAD with Velopack
+        # Caddis.AutoCAD-autocad-Setup.exe, installed to %LocalAppData%Caddis.AutoCAD, in the GitHub release that the step above created.
+        # In the channel 'autocad': the files that list the releases of a channel, e.g. releases.win.json of Revit's, would otherwise collide.
+        # The installed Caddis.AutoCAD.Bootstrapper looks for updates in the channel it was packed with.
+        shell: pwsh
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.package-autocad.outputs.version }}
+          PACK_DIR: ${{ steps.package-autocad.outputs.pack-dir }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Check([string]$step) {
+            if ($LASTEXITCODE -ne 0) { throw "$step failed with exit code $LASTEXITCODE" }
+          }
+
+          # the previous release, for delta updates
+          vpk download github --repoUrl https://github.com/goswinr/Caddis --channel autocad --outputDir bin/installer-autocad
+          Check 'vpk download'
+
+          vpk pack `
+            --packId Caddis.AutoCAD `
+            --packTitle 'Caddis for AutoCAD' `
+            --packVersion $env:VERSION `
+            --packDir $env:PACK_DIR `
+            --mainExe Caddis.AutoCAD.Bootstrapper.exe `
+            --channel autocad `
+            --framework net48 `
+            --runtime win-x64 `
+            --icon Docs/img/installer/favicon.ico `
+            --splashImage Docs/img/installer/logo128.png `
+            --packAuthors 'Goswin Rothenthal' `
+            --releaseNotes .github/InstallNotes-autocad.md `
+            --azureTrustedSignFile .github/signing-metadata.json `
+            --outputDir bin/installer-autocad `
+            --noPortable `
+            --shortcuts None
+          Check 'vpk pack'
+
+          vpk upload github `
+            --publish `
+            --merge `
+            --repoUrl https://github.com/goswinr/Caddis `
+            --releaseName "Caddis $env:VERSION for Revit and AutoCAD" `
+            --tag $env:VERSION `
+            --channel autocad `
+            --outputDir bin/installer-autocad
+          Check 'vpk upload'
+
       - name: Attach the Claude Desktop extensions to the release
-        # The only GitHub release of a version is the one vpk created, so it carries the extension for Rhino too.
+        # The only GitHub release of a version is the one vpk created, so it carries the extensions for Rhino and AutoCAD too.
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.package.outputs.version }}
           RHINO_PATH: ${{ steps.desktop.outputs.rhino-path }}
           REVIT_PATH: ${{ steps.desktop.outputs.revit-path }}
+          AUTOCAD_PATH: ${{ steps.desktop.outputs.autocad-path }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh release upload $env:VERSION $env:RHINO_PATH $env:REVIT_PATH --repo goswinr/Caddis --clobber
+          gh release upload $env:VERSION $env:RHINO_PATH $env:REVIT_PATH $env:AUTOCAD_PATH --repo goswinr/Caddis --clobber
           if ($LASTEXITCODE -ne 0) {
             throw "gh release upload failed with exit code $LASTEXITCODE"
           }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- The plugin that the bundle Caddis.bundle loads in AutoCAD 2025 and later. AutoCAD 2025 and 2026 run on .NET 8 as released,
+    and on .NET 10 from an update on, e.g. AutoCAD 2025 from 25.0.189. The loader loads the build of Caddis.AutoCAD for the runtime AutoCAD runs on,
+    so that the plugin keeps working when AutoCAD is updated. Built for .NET 8, so that it runs on both.
+    In C#, so that it loads no FSharp.Core: Caddis.AutoCAD needs version 8 on .NET 8 and version 10 on .NET 10, and AutoCAD loads only one.
+    The same as Caddis.Revit.Loader. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Caddis.AutoCAD.Loader</RootNamespace>
+    <AssemblyName>Caddis.AutoCAD.Loader</AssemblyName>
+    <AssemblyTitle>Caddis</AssemblyTitle>
+    <Description>Loads the build of Caddis.AutoCAD for the .NET runtime that AutoCAD runs on.</Description>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- the API of AutoCAD 2025, the oldest AutoCAD this loader runs in, see Caddis.AutoCAD.fsproj -->
+    <PackageReference Include="AutoCAD.NET" Version="25.0.1" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

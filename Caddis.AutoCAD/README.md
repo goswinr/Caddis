@@ -1,18 +1,27 @@
 # Caddis for AutoCAD
 
 The AutoCAD plugin of Caddis, an F# interactive host for AutoCAD 2025 and later, controlled through HTTP and MCP.
-It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino, also `caddis_command`,
+It has the same F# session, HTTP server, REST endpoints, MCP tools and panel as in Rhino and Revit, also `caddis_command`,
 but not yet `caddis_dialog`.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
-> A first version, not packaged yet. Tested in AutoCAD 2025 with its update 25.0.189, on .NET 10.
+> Tested in AutoCAD 2025 with its update 25.0.189, on .NET 10. The installer is new and not tested in a release yet.
 
 ## Installation
 
-There is no installer yet. Build Caddis and load `Caddis.AutoCAD.dll` with AutoCAD's command `NETLOAD`,
+Download `Caddis.AutoCAD-autocad-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) and run it.
+It needs no admin rights. It installs Caddis to `%LocalAppData%\Caddis.AutoCAD\current`
+and registers it with the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.bundle`, which every AutoCAD from 2025 on loads when it starts,
+also the products based on AutoCAD, e.g. Civil 3D. An AutoCAD that is running loads it right away.
+If AutoCAD asks whether to load `Caddis.AutoCAD.Loader.dll`, choose 'Always Load'.
+
+When AutoCAD starts, Caddis checks for a newer release on GitHub and offers to download it. A downloaded release is installed when the last AutoCAD has closed.
+To uninstall, use 'Installed apps' in Windows' settings, it removes the bundle too.
+
+Without the installer, build Caddis and load `Caddis.AutoCAD.dll` with AutoCAD's command `NETLOAD`,
 from `Caddis.AutoCAD\bin\Debug\net10.0-windows` or `net8.0-windows`, for the .NET that AutoCAD runs on.
-Or double-click [Dev\AutoCAD2025.cmd](../Dev/README.md), which builds Caddis and starts AutoCAD 2025 with it.
-AutoCAD asks whether to load the unsigned `Caddis.AutoCAD.dll`, unless its folder is in AutoCAD's trusted locations.
+Or double-click [Dev\AutoCAD2025.cmd](../Dev/README.md), which builds Caddis and starts AutoCAD 2025 with it, also when Caddis is installed.
+AutoCAD asks whether to load an unsigned dll, unless its folder is in AutoCAD's trusted locations.
 
 There is a build of Caddis for each .NET that AutoCAD runs on:
 
@@ -22,10 +31,29 @@ There is a build of Caddis for each .NET that AutoCAD runs on:
 | 2025 from its update 25.0.189 on | .NET 10 | `net10.0` | 43.12.401, 10.1.401 |
 
 AutoCAD's folder has the file `acdbmgd.runtimeconfig.json`, its `tfm` tells which .NET it runs on.
+The bundle loads a small [loader](../Caddis.AutoCAD.Loader/README.md), which loads the build for the .NET of the AutoCAD it runs in. So Caddis keeps working when an update of AutoCAD changes its .NET.
 AutoCAD 2024 and older run on .NET Framework, Caddis doesn't support them. AutoCAD LT and AutoCAD for Mac have no .NET API.
 
 The builds reference the API of AutoCAD 2025, from the package [AutoCAD.NET](https://www.nuget.org/packages/AutoCAD.NET) 25.0.1.
 The versions of FSharp.Compiler.Service and FSharp.Core are those of the build of [Fesh](https://github.com/goswinr/Fesh) for the same .NET, as in Rhino and Revit.
+
+## The ribbon tab and the panel
+
+The tab `Caddis` on AutoCAD's ribbon has:
+
+| Button | Does |
+|---|---|
+| `Start listening`, `Stop listening` | starts or stops the server on port 7830 |
+| `Mode` | runs scripts on AutoCAD's main thread or on a background thread. Starts a new F# session |
+| `Reset F# Session` | starts a new F# session, all values are lost |
+| `Cancel run` | cancels a run in background mode, or the commands of `caddis_command` while they wait for input |
+| `Caddis Details Panel` | shows or hides the panel |
+| `Info` | the state, the commands to add Caddis to Claude Code and Codex, the latest messages, and errors. It turns red after an error |
+| `Start with AutoCAD`, `Echo output` | the settings `autoStart` and `echoOutput` |
+
+The panel is the same as in Rhino and Revit, in an AutoCAD palette: the server, set up of the AI agents, the settings, the recent runs with their output and code.
+The first time, it docks on the right of AutoCAD's window. AutoCAD keeps its place and size from then on, and shows it again at the next start if it was open.
+It follows AutoCAD's dark or light theme. While it has the focus, it gets all keys, also AutoCAD's shortcuts: click into the drawing to give them back to AutoCAD.
 
 ## The CADDIS command
 
@@ -39,8 +67,9 @@ The versions of FSharp.Compiler.Service and FSharp.Core are those of the build o
 | `Reset` | starts a new F# session, all values are lost |
 | `AutoStart` | starts the server when Caddis loads, toggles and keeps the prompt open |
 | `EchoOutput` | also prints the output of runs to the command line, toggles and keeps the prompt open |
+| `Panel` | shows the panel |
 
-It is scriptable, e.g. `(command "CADDIS" "_Start")`.
+It is scriptable, e.g. `(command "CADDIS" "_Start")`. `CADDISPANEL` shows the panel too.
 Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.log`, which also has the messages from when no drawing was open.
 
 ## How runs work in AutoCAD
@@ -76,6 +105,8 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
   The `PromptingFor*` and `PromptedFor*` events of the editor tell whether a prompt waits, and its message.
 - **Dialogs**: a command that opens a modal dialog, e.g. OPTIONS, waits until someone closes it in AutoCAD, and the result says so. Caddis doesn't cancel it:
   the dialog doesn't take the `^C^C`, AutoCAD would run it later, e.g. at a prompt of the next command. A `caddis_cancel` meanwhile keeps the next macros from running.
+- **Drawings**: commands that open or close drawings, e.g. `QUIT`, `CLOSE`, `QNEW` or `OPEN`, are refused: AutoCAD can't run them from the command context of a drawing, `QUIT` froze it in a test.
+  Scripts open and create drawings with `Application.DocumentManager` in `caddis_eval`.
 - **Results**: the English name and result of each command, the handles of the entities in layouts that the commands created, changed and erased, and the selection if it changed.
   Also the command line from AutoCAD's history, e.g. what LIST or DIST print, read with the internal API `Autodesk.AutoCAD.Internal.Utils.GetLastCommandLines`. AutoCAD keeps its last 400 lines.
 
@@ -92,7 +123,5 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 | Missing | Notes |
 |---|---|
 | `caddis_dialog` | The Win32 and UI Automation code of Revit's dialogs could be shared. |
-| The panel, a ribbon tab | AutoCAD's `PaletteSet` can host the Avalonia panel through WPF, as Revit's dockable pane does. |
-| An installer and updates | A bundle in `ApplicationPlugins`, with a loader that picks the net8.0 or net10.0 build, as in Revit. |
 | Summaries in `caddis_describe` | AutoCAD doesn't install the XML docs of its API. They are in the AutoCAD.NET packages, whose license allows passing them on only with the license. |
 | The command line in results of `caddis_eval` | Output of `Editor.WriteMessage` is not in the result, use `printfn`. Command runs show the command line from AutoCAD's history, F# runs could too. |

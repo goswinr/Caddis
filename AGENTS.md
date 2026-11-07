@@ -2,7 +2,7 @@
 
 Caddis is an MCP server that hosts one persistent F# Interactive session inside Rhino, Revit or AutoCAD,
 so that AI agents can run RhinoCommon, Revit API or AutoCAD .NET API code in the running app.
-F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac. AutoCAD is a first version, without panel, installer or `caddis_dialog`.
+F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac. AutoCAD has no `caddis_dialog` yet.
 
 Before a change that isn't trivial, read the relevant part of [Architecture.md](Architecture.md):
 it covers the design decisions, every file, the request flow, threads, cancellation, and the known risks.
@@ -36,6 +36,7 @@ So changes to `RhinoHost`, `RevitHost`, `AutoCADHost`, the panel's hosting or an
   Once it listens, it writes `%AppData%\Caddis\instances\<pid>.json`. Then use REST: `curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"`, with port 7820 for Revit and 7830 for AutoCAD.
 - In Revit, a modal dialog blocks every run from starting. `GET /dialogs` lists it and `POST /dialog {"button": "..."}` presses one of its buttons.
 - In AutoCAD, a command that waits for input rejects every run, and neither an Esc posted to its window nor a COM call from outside cancels it. Avoid queuing commands without all their inputs with `SendStringToExecute` while testing; a backslash in the string is a pause for input too. `caddis_command` cancels its own commands when they wait.
+- AutoCAD 2025 may hang when it exits, also without Caddis: one thread stays, and the process can't be killed for minutes. It still locks the build in `%LocalAppData%\Caddis.Dev`, so Start-Dev refuses to start; wait, or stage a build elsewhere. Killing AutoCAD instead loses the place of the panel.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` before passing `/switch` arguments to Windows programs. Otherwise Git Bash rewrites them as paths.
 
 ## Architecture
@@ -43,12 +44,14 @@ So changes to `RhinoHost`, `RevitHost`, `AutoCADHost`, the panel's hosting or an
 | Project | |
 |---|---|
 | `Caddis.Core` | F# session, runs, `HttpListener` server, REST, MCP, API docs. No Rhino, Revit or AutoCAD dependency |
-| `Caddis.UI` | Avalonia panel shared by Rhino and Revit |
+| `Caddis.UI` | Avalonia panel shared by Rhino, Revit and AutoCAD |
 | `Caddis.Rhino` | Rhino plugin (`.rhp`): `RhinoHost`, the `Caddis` command, the panel in an Eto `NativeControlHost` |
 | `Caddis.Revit` | Revit add-in: `RevitHost`, the ribbon, the panel in a WPF `HwndHost` |
 | `Caddis.Revit.Loader` | C# add-in for Revit 2025 and later. It loads the net8.0 or net10.0 build of Caddis.Revit at start |
 | `Caddis.Revit.Bootstrapper` | Velopack app of the Revit installer: registers the add-in and installs updates |
-| `Caddis.AutoCAD` | AutoCAD plugin, loaded with `NETLOAD`: `AutoCADHost`, the `CADDIS` command. No panel or installer yet |
+| `Caddis.AutoCAD` | AutoCAD plugin: `AutoCADHost`, the ribbon tab, the panel in a `PaletteSet` through a WPF `HwndHost`, the commands `CADDIS` and `CADDISPANEL` |
+| `Caddis.AutoCAD.Loader` | C# plugin in the bundle `Caddis.bundle`. It loads the net8.0 or net10.0 build of Caddis.AutoCAD at start |
+| `Caddis.AutoCAD.Bootstrapper` | Velopack app of the AutoCAD installer: writes the bundle and installs updates |
 
 - An app plugs in by implementing `ICaddisHost` and supplying a `HostInfo`, both in [Caddis.Core/Model.fs](Caddis.Core/Model.fs). The interface carries the UI thread, undo, capture, export, commands and dialogs. `HeadlessHost` implements it for the tests.
 - How a request runs: `CaddisServer` checks `Origin` and the body size. It passes the request to `Rest.handle` or `McpEndpoint`, which call `CaddisService`. `CaddisService` calls `FsiHost`, which runs the code on the app's UI thread via `host.InvokeOnUi`, or on the `Caddis FSI` background `WorkerThread`.
@@ -71,7 +74,9 @@ Rhino and Revit load one copy of each assembly into their process, shared with e
 Some code depends on internals or on what the apps do at runtime:
 - Cancellation, and the script folder of `caddis_check`, read private FCS fields by reflection. `FsiAssemblyResolver` puts itself first by setting a private field of the runtime. After any FCS or .NET upgrade, test again in Rhino, with values defined in a second run and after a reset.
 - Public types of Caddis.Revit must not expose Avalonia or WPF types. FSI reads its public signature when a script uses `Caddis.Revit.Script`, and FSI on .NET can't resolve WPF types: the SDK's stub of WindowsBase wins. For the same reason, don't add WPF assemblies to the host's `References`.
-- Don't rename `Caddis.Revit.Loader.CaddisLoader`: installed `.addin` files contain its full name. The loader and the bootstrapper find Caddis.Revit by its path, not by a project reference.
+- Don't rename `Caddis.Revit.Loader.CaddisLoader`: installed `.addin` files contain its full name. The loader and the bootstrapper find Caddis.Revit by its path, not by a project reference. The same holds for AutoCAD's loader, whose path is in the bundle.
+- In AutoCAD, keys typed in the panel go to AutoCAD's command line unless `KeyboardFilter` in `Caddis.AutoCAD/AvaloniaHost.fs` gives them to Avalonia first, in AutoCAD's `PreTranslateMessage`.
+- The AutoCAD installer is a second Velopack package in the same GitHub release as Revit's, in the channel `autocad`, uploaded with `--merge` by release-revit.yml. In the default channel its list of releases would replace Revit's, and Revit's updates would break.
 - The HTTP accept loop is a `backgroundTask`, not a `task`. `Start` runs on the app's UI thread, and a `task` would continue there, so it couldn't accept requests while a run blocks that thread.
 - During a run, output capture redirects `Console.Out` for the whole process. That is why both test projects set `DisableTestParallelization`.
 

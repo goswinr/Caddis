@@ -39,12 +39,15 @@ jobs:
       - name: Test
         run: dotnet test Caddis.slnx --configuration Release --no-build
 
-      # Exercise the same packaging paths as release-rhino.yml and release-revit.yml on every push and pull request.
+      # Exercise the same packaging paths as release-rhino.yml and release-revit.yml, for Revit and AutoCAD, on every push and pull request.
       - name: Publish and build Yak package
         uses: ./.github/actions/package-rhino
 
       - name: Publish for every Revit
         uses: ./.github/actions/package-revit
+
+      - name: Publish for every AutoCAD
+        uses: ./.github/actions/package-autocad
 
       - name: Package for Claude Desktop
         uses: ./.github/actions/package-claude-desktop

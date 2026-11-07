@@ -38,15 +38,15 @@ let palette dark = {
 let host name = {
     Name = name
     ModeTip = $"{name} API context"
-    CommandLineTitle = if name = "Rhino" then Some "Rhino command line" else None
-    ChangeNoun = if name = "Rhino" then "objects" else "elements"
+    CommandLineTitle = if name = "Revit" then None else Some $"{name} command line"
+    ChangeNoun = if name = "Revit" then "elements" else "objects"
     Server = fun () -> None
     Start = ignore
     Stop = ignore
     SetClipboard = fun _ -> true
     SetMode = ignore
     SetAutoStart = ignore
-    SetEcho = if name = "Rhino" then Some ignore else None
+    SetEcho = if name = "Revit" then None else Some ignore
     SetCancelWaitingCommands = if name = "Rhino" then Some ignore else None
     Cancel = ignore
     Reset = ignore
@@ -67,6 +67,7 @@ let click (button: Button) = button.RaiseEvent(RoutedEventArgs(Button.ClickEvent
 [<AvaloniaTheory>]
 [<InlineData("Rhino")>]
 [<InlineData("Revit")>]
+[<InlineData("AutoCAD")>]
 let ``shared XAML loads and exposes the host's options and actions`` name =
     let mutable starts = 0
     let view = PanelView({ host name with Start = fun () -> starts <- starts + 1 })
@@ -75,7 +76,8 @@ let ``shared XAML loads and exposes the host's options and actions`` name =
         window.Show()
         view.Refresh()
         Assert.Equal($"Start with {name}", string (view.FindControl<CheckBox>("AutoStart").Content))
-        Assert.Equal((name = "Rhino"), view.FindControl<CheckBox>("Echo").IsVisible)
+        Assert.Equal((name <> "Revit"), view.FindControl<CheckBox>("Echo").IsVisible)
+        Assert.Contains($"{name} command line", string (ToolTip.GetTip(view.FindControl<CheckBox>("Echo"))))
         Assert.Equal((name = "Rhino"), view.FindControl<CheckBox>("CancelWaiting").IsVisible)
         Assert.Equal((name = "Revit"), view.FindControl<TextBlock>("Message").IsVisible)
         Assert.Equal(0, starts)

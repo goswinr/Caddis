@@ -10,6 +10,7 @@ To use NuGet packages in scripts via `#r "nuget: Name"`, also install the [.NET 
 Caddis runs without it, only NuGet packages need it.
 
 For Rhino, install Caddis with Rhino's Package Manager instead.
+For AutoCAD 2025 and later, download and run `Caddis.AutoCAD-autocad-Setup.exe`, see [Caddis for AutoCAD](https://github.com/goswinr/Caddis/blob/main/Caddis.AutoCAD/README.md).
 
 <details>
 

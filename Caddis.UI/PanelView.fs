@@ -526,7 +526,7 @@ type PanelView(host: PanelHost) as this =
         ToolTip.SetTip(updateNotice, host.VersionTip)
         ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
-        ToolTip.SetTip(echo, tip [ "Also print the output of runs to the Rhino command line:"; "printfn, F# Interactive's output and errors." ])
+        ToolTip.SetTip(echo, tip [ $"Also print the output of runs to the {host.Name} command line:"; "printfn, F# Interactive's output and errors." ])
         ToolTip.SetTip(
             cancelWaiting,
             tip [

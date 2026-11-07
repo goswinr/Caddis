@@ -4,8 +4,8 @@ open Autodesk.AutoCAD.EditorInput
 open Autodesk.AutoCAD.Runtime
 open Caddis
 
-/// The command CADDIS: start and stop the server, change the session and the settings.
-/// Scriptable, e.g. '(command "CADDIS" "_Start")'.
+/// The command CADDIS: start and stop the server, change the session and the settings, show the panel.
+/// Scriptable, e.g. '(command "CADDIS" "_Start")'. And CADDISPANEL, which shows the panel.
 type CaddisCommands() =
 
     static let onOff (b: bool) = if b then "on" else "off"
@@ -39,6 +39,7 @@ type CaddisCommands() =
                 options.Keywords.Add "Reset"
                 options.Keywords.Add "AutoStart"
                 options.Keywords.Add "EchoOutput"
+                options.Keywords.Add "Panel"
                 options.AllowNone <- true
                 let r = ed.GetKeywords options
                 if r.Status <> PromptStatus.OK then
@@ -55,4 +56,11 @@ type CaddisCommands() =
                         | "Mode" -> askMode ed server.Service.Fsi.Mode
                         | "Cancel" -> App.cancel ()
                         | "Reset" -> App.reset ()
+                        | "Panel" -> Panel.show ()
                         | _ -> ()
+
+    /// Also run by AutoCAD at its start, if the panel was open when AutoCAD closed.
+    [<CommandMethod("CADDISPANEL")>]
+    member _.CaddisPanel() =
+        try Panel.show ()
+        with e -> AutoCADLog.error $"Caddis: showing the panel failed: {e}"

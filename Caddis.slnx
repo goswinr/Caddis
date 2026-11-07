@@ -6,6 +6,8 @@
   <Project Path="Caddis.Revit.Bootstrapper/Caddis.Revit.Bootstrapper.fsproj" />
   <Project Path="Caddis.Rhino/Caddis.Rhino.fsproj" />
   <Project Path="Caddis.AutoCAD/Caddis.AutoCAD.fsproj" />
+  <Project Path="Caddis.AutoCAD.Loader/Caddis.AutoCAD.Loader.csproj" />
+  <Project Path="Caddis.AutoCAD.Bootstrapper/Caddis.AutoCAD.Bootstrapper.fsproj" />
   <Folder Name="/Tests/">
     <Project Path="Tests/Caddis.Core.Tests/Caddis.Core.Tests.fsproj" />
     <Project Path="Tests/Caddis.UI.Tests/Caddis.UI.Tests.fsproj" />

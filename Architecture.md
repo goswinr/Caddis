@@ -32,7 +32,7 @@ This describes the code of version 0.2.1 plus the unreleased changes in [CHANGEL
 
 ## 1. Overview
 
-Caddis hosts an F# Interactive (FSI) session inside the process of Rhino or Revit, and an HTTP server in the same process
+Caddis hosts an F# Interactive (FSI) session inside the process of Rhino, Revit or AutoCAD, and an HTTP server in the same process
 through which AI agents and scripts run F# code in that session.
 The agent writes RhinoCommon or Revit API code, Caddis compiles and runs it inside the app and returns what happened:
 as text written for the model via MCP, or as JSON via REST.
@@ -41,7 +41,7 @@ as text written for the model via MCP, or as JSON via REST.
 flowchart LR
     agent["AI agent<br/>Claude Code, Codex, ..."] -- "MCP: POST /mcp" --> server
     client["curl, scripts"] -- "REST: /eval, /runs, ..." --> server
-    subgraph app["Rhino or Revit process"]
+    subgraph app["Rhino, Revit or AutoCAD process"]
         server["CaddisServer<br/>HttpListener, Origin check"] --> service["CaddisService<br/>the operations"]
         service --> fsi["FsiHost<br/>one F# session,<br/>one run at a time"]
         service --> docs["ApiDocs<br/>reflection and XML docs"]
@@ -55,8 +55,8 @@ flowchart LR
 
 Everything that does not depend on the app is in **Caddis.Core**: the F# session, runs, the HTTP server, REST and MCP.
 An app plugs in by implementing one interface, `ICaddisHost`, and supplying its texts and names in a `HostInfo` record.
-**Caddis.UI** is a panel shared by Rhino and Revit. **Caddis.Rhino**, **Caddis.Revit** and **Caddis.AutoCAD** are the hosts; AutoCAD's is a first version, without panel and installer.
-**Caddis.Revit.Loader** and **Caddis.Revit.Bootstrapper** exist only to deploy into Revit.
+**Caddis.UI** is a panel shared by Rhino, Revit and AutoCAD. **Caddis.Rhino**, **Caddis.Revit** and **Caddis.AutoCAD** are the hosts.
+**Caddis.Revit.Loader**, **Caddis.Revit.Bootstrapper**, **Caddis.AutoCAD.Loader** and **Caddis.AutoCAD.Bootstrapper** exist only to deploy into Revit and AutoCAD.
 
 ### Design decisions
 
@@ -99,7 +99,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - Export to the file formats of the app, as a run with its files.
 - Rhino: command macros like typed at the command line (`caddis_command`), with cancellation of commands that wait for input; a yellow border around the viewports while a run is in progress; echo of script output to the command line; the SynchronizationContext for Rhino.Scripting and its Esc state cleared before each run; the MCP instructions suggest Rhino.Scripting.FSharp when NuGet packages can be used; runs and the scripts of Fesh.Rhino don't overlap.
 - Revit: runs in Revit's API context through an external event; a transaction group per run, rolled back if the run fails; Revit's warnings as notes and errors as rolled-back transactions instead of dialogs; changed elements counted per category; listing Revit's blocking dialogs and pressing their buttons (`caddis_dialog`).
-- AutoCAD: a document lock per run, which is its undo step; command macros (`caddis_command`) through `Editor.Command` in AutoCAD's command context, with cancellation of commands that wait for input and the command line from AutoCAD's history.
+- AutoCAD: a document lock per run, which is its undo step; command macros (`caddis_command`) through `Editor.Command` in AutoCAD's command context, with cancellation of commands that wait for input and the command line from AutoCAD's history; the panel in a palette set, and a ribbon tab.
 
 **Server**
 - MCP over Streamable HTTP at `/mcp`, with single JSON responses, and plain REST endpoints.
@@ -134,12 +134,14 @@ Caddis.Rhino/                  the Rhino plugin, a .rhp, and yak.yml
 Caddis.Revit/                  the Revit add-in, and install-dev.ps1
 Caddis.Revit.Loader/           C# add-in for Revit 2025 and later, loads the net8.0 or net10.0 build
 Caddis.Revit.Bootstrapper/     the Velopack app of the Revit installer
-Caddis.AutoCAD/                the AutoCAD plugin, loaded with NETLOAD
+Caddis.AutoCAD/                the AutoCAD plugin
+Caddis.AutoCAD.Loader/         C# plugin for AutoCAD, in the bundle Caddis.bundle, loads the net8.0 or net10.0 build
+Caddis.AutoCAD.Bootstrapper/   the Velopack app of the AutoCAD installer
 Dev/                           a .cmd per app, e.g. Rhino8.cmd, and Start-Dev.ps1: start Rhino, Revit or AutoCAD with a local build instead of the installed Caddis
 Tests/Caddis.Core.Tests/       xUnit tests of the core with a headless host
 Tests/Caddis.UI.Tests/         xUnit v3 tests of the panel with Avalonia's headless platform
 Docs/img/                      logo, favicon and makeAllSizes.ps1, which renders them from logo.png
-.github/                       workflows, packaging actions, signing metadata, release notes of the Revit installer
+.github/                       workflows, packaging actions, signing metadata, release notes of the Revit and AutoCAD installers
 ```
 
 | Project | Language | Target frameworks | Output | References |
@@ -150,7 +152,9 @@ Docs/img/                      logo, favicon and makeAllSizes.ps1, which renders
 | Caddis.Revit | F#, WPF | net48, net8.0-windows, net10.0-windows; x64 | `Caddis.Revit.dll` | Core, UI, Revit API (compile only), Avalonia.Win32 |
 | Caddis.Revit.Loader | C# | net8.0; x64 | `Caddis.Revit.Loader.dll` | RevitAPIUI 2025 (compile only) |
 | Caddis.Revit.Bootstrapper | F#, WPF | net48; x64; WinExe | `Caddis.Revit.Bootstrapper.exe` | Velopack |
-| Caddis.AutoCAD | F#, WPF | net8.0-windows, net10.0-windows; x64 | `Caddis.AutoCAD.dll` | Core, AutoCAD .NET API (compile only) |
+| Caddis.AutoCAD | F#, WPF | net8.0-windows, net10.0-windows; x64 | `Caddis.AutoCAD.dll` | Core, UI, AutoCAD .NET API (compile only), Avalonia.Win32 |
+| Caddis.AutoCAD.Loader | C# | net8.0; x64 | `Caddis.AutoCAD.Loader.dll` | AutoCAD .NET API 2025 (compile only) |
+| Caddis.AutoCAD.Bootstrapper | F#, WPF | net48; x64; WinExe | `Caddis.AutoCAD.Bootstrapper.exe` | Velopack |
 | Caddis.Core.Tests | F# | net8.0, net10.0, net48 | test library | Core, xUnit 2 |
 | Caddis.UI.Tests | F# | net8.0, net10.0 | test exe | UI, xUnit v3, Avalonia.Headless.XUnit |
 
@@ -164,12 +168,15 @@ flowchart BT
     Revit --> Core
     Loader["Caddis.Revit.Loader"] -. "Assembly.LoadFrom when Revit starts" .-> Revit
     Boot["Caddis.Revit.Bootstrapper"] -. "writes Caddis.addin, runs updates" .-> Loader
-    AutoCAD["Caddis.AutoCAD"] --> Core
+    AutoCAD["Caddis.AutoCAD"] --> UI
+    AutoCAD --> Core
+    ALoader["Caddis.AutoCAD.Loader"] -. "Assembly.LoadFrom when AutoCAD starts" .-> AutoCAD
+    ABoot["Caddis.AutoCAD.Bootstrapper"] -. "writes Caddis.bundle, runs updates" .-> ALoader
     CoreTests["Caddis.Core.Tests"] --> Core
     UITests["Caddis.UI.Tests"] --> UI
 ```
 
-The loader and the bootstrapper have no project reference to Caddis.Revit: they find it by path at runtime.
+The loaders and the bootstrappers have no project reference to Caddis.Revit or Caddis.AutoCAD: they find them by path at runtime.
 
 ---
 
@@ -185,8 +192,8 @@ Each build pairs an FSharp.Compiler.Service with the exact FSharp.Core it pins, 
 | Revit 2024 | .NET Framework 4.8 | Caddis.Revit `net48` | 43.12.401 | 10.1.401 | 11.3.22 |
 | Revit 2025 and 2026 up to their .4 updates | .NET 8 | Caddis.Revit `net8.0-windows`, via the loader | 43.8.403 | 8.0.403 | 12.1.3 |
 | Revit 2025.5, 2026.5 and later, Revit 2027 | .NET 10 | Caddis.Revit `net10.0-windows`, via the loader | 43.12.401 | 10.1.401 | 12.1.3 |
-| AutoCAD 2025 and 2026 as released | .NET 8 | Caddis.AutoCAD `net8.0-windows` | 43.8.403 | 8.0.403 | no panel |
-| AutoCAD 2025 from its update 25.0.189 on | .NET 10 | Caddis.AutoCAD `net10.0-windows` | 43.12.401 | 10.1.401 | no panel |
+| AutoCAD 2025 and 2026 as released | .NET 8 | Caddis.AutoCAD `net8.0-windows`, via the loader | 43.8.403 | 8.0.403 | 12.1.3 |
+| AutoCAD 2025 from its update 25.0.189 on | .NET 10 | Caddis.AutoCAD `net10.0-windows`, via the loader | 43.12.401 | 10.1.401 | 12.1.3 |
 
 Why these constraints exist:
 
@@ -196,7 +203,7 @@ Why these constraints exist:
 - **Revit builds compile against the oldest Revit they run in**, 2024.0 for net48 and 2025.0 for net8.0 and net10.0, because Revit on .NET refuses add-ins that reference a newer RevitAPI than its own.
 - **Revit loads only one FSharp.Core.** Revit 2025 and 2026 change from .NET 8 to .NET 10 with their .5 update, while the `.addin` file stays the same. So the `.addin` points at a loader in C#, which loads no FSharp.Core and picks the build at start.
 - **The Revit add-in is loaded into Revit's default load context**, so Caddis.Core is loaded once and scripts share `Caddis.Script` with the add-in.
-- **AutoCAD changes its .NET with an update too.** AutoCAD 2025 runs on .NET 10 from its update 25.0.189 on, its `acdbmgd.runtimeconfig.json` names the version. Both builds compile against the API of AutoCAD 2025, the package AutoCAD.NET 25.0.1. There is no loader yet that picks the build, `NETLOAD` takes the one for AutoCAD's .NET.
+- **AutoCAD changes its .NET with an update too.** AutoCAD 2025 runs on .NET 10 from its update 25.0.189 on, its `acdbmgd.runtimeconfig.json` names the version. Both builds compile against the API of AutoCAD 2025, the package AutoCAD.NET 25.0.1. As for Revit, the bundle points at a loader in C#, which picks the build at start.
 
 ---
 
@@ -213,13 +220,13 @@ Why these constraints exist:
 | Avalonia.HarfBuzz | 12.1.3, not on net48 | UI | text shaping; Avalonia 11's Skia backend includes it |
 | Avalonia.AvaloniaEdit | 12.0.0, or 11.4.1 on net48 | UI | the read-only code view with highlighting, line numbers and search |
 | Fantomas.Core | 7.0.5 | UI | the `Formatted` view of the code; its parser is independent of the FCS of the session |
-| Avalonia.Win32 | 12.1.3, or 11.3.22 on net48 | Rhino, Revit | Avalonia's Windows backend |
+| Avalonia.Win32 | 12.1.3, or 11.3.22 on net48 | Rhino, Revit, AutoCAD | Avalonia's Windows backend |
 | Avalonia.Native | 12.1.3, not on net48 | Rhino | Avalonia's Mac backend |
 | RhinoCommon | 8.19.25132.1001; 9.0.26209.18303-beta on net10.0 | Rhino | compile only, Rhino supplies it |
 | System.Drawing.Common | 7.0.0 (net8.0), 8.0.0 (net10.0) | Rhino | compile only, a dependency of RhinoCommon |
 | Revit_All_Main_Versions_API_x64 | 2024.0.0 (net48), 2025.0.0 | Revit, Loader | compile only: RevitAPI, RevitAPIUI, AdWindows |
-| AutoCAD.NET | 25.0.1, with AutoCAD.NET.Core and AutoCAD.NET.Model 25.0.0 | AutoCAD | compile only: AcMgd, AcCoreMgd, AcDbMgd. Its 25.0.0 depends on a prerelease package |
-| Velopack | 1.2.161 | Revit Bootstrapper | install, update and uninstall hooks, GitHub releases as update source |
+| AutoCAD.NET | 25.0.1, with AutoCAD.NET.Core and AutoCAD.NET.Model 25.0.0 | AutoCAD, its loader | compile only: AcMgd, AcCoreMgd, AcDbMgd, AdWindows. Its 25.0.0 depends on a prerelease package |
+| Velopack | 1.2.161 | Revit and AutoCAD Bootstrappers | install, update and uninstall hooks, GitHub releases as update source |
 | Ionide.KeepAChangelog.Tasks | 0.3.3 | every project, build only | sets the version from CHANGELOG.md |
 | xunit, xunit.runner.visualstudio, Microsoft.NET.Test.Sdk | 2.9.3, 3.1.5, 18.0.1 | Core tests | |
 | xunit.v3, Avalonia.Headless.XUnit | 3.2.2, 12.1.3 | UI tests | |
@@ -237,7 +244,8 @@ Why these constraints exist:
 | UI Automation (`System.Windows.Automation`) | reading and pressing Revit's dialogs in Tests |
 | Win32 via P/Invoke, `user32` and `kernel32` | parenting the Avalonia window, focus and keyboard input, DPI messages, finding Revit's modal dialog, loading native libraries on .NET Framework |
 | Eto.Forms, supplied by Rhino | Rhino's panel shell `NativeControlHost`, clipboard, save dialog, timer |
-| AdWindows (`Autodesk.Windows`), supplied by Revit | the checkboxes on the ribbon, which RevitAPIUI doesn't offer |
+| AdWindows (`Autodesk.Windows`), supplied by Revit and AutoCAD | the checkboxes on Revit's ribbon, which RevitAPIUI doesn't offer; AutoCAD's whole ribbon tab and its task dialog |
+| `PaletteSet` of AutoCAD (AcMgd) | the dockable window of the panel in AutoCAD |
 | WPF `Dispatcher` of AutoCAD's main thread | calls from other threads into AutoCAD, run by AutoCAD's message loop |
 
 ### Not used, on purpose
@@ -256,7 +264,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | File | Types and modules | What |
 |---|---|---|
 | [Compat.fs](Caddis.Core/Compat.fs) | `Compat` (AutoOpen), `NetFramework`; net48 only | .NET Core members Caddis uses, for .NET Framework; line numbers from portable PDBs; a `LegacyReferenceResolver` so type-checking finds the framework assemblies |
-| [ReleaseVersion.fs](Caddis.Core/ReleaseVersion.fs) | `ReleaseVersion` | compares versions of releases, for the update checks in Rhino and Revit |
+| [ReleaseVersion.fs](Caddis.Core/ReleaseVersion.fs) | `ReleaseVersion` | compares versions of releases, for the update checks in Rhino, Revit and AutoCAD |
 | [ErrorLog.fs](Caddis.Core/ErrorLog.fs) | `ErrorLog` | the latest internal errors, with a count of unseen ones |
 | [Json.fs](Caddis.Core/Json.fs) | `Json` | builds and reads `JsonNode`s |
 | [Settings.fs](Caddis.Core/Settings.fs) | `ThreadMode`, `CaddisSettings`, `SettingsStore` | the settings record and its defaults; the settings and discovery files |
@@ -331,21 +339,34 @@ F# compiles files in the order of the project file, listed here in that order. L
 | File | Types and modules | What |
 |---|---|---|
 | [UiThread.fs](Caddis.AutoCAD/UiThread.fs) | `UiThread` (internal) | the WPF dispatcher of AutoCAD's main thread: `invoke`, `post`, and `postLater`, which waits until AutoCAD is back in its message loop |
-| [Log.fs](Caddis.AutoCAD/Log.fs) | `AutoCADLog` | messages to the command line and `autocad.log`, the latest errors |
+| [Log.fs](Caddis.AutoCAD/Log.fs) | `AutoCADLog` | messages to the command line and `autocad.log`, the latest messages and errors |
+| [Updates.fs](Caddis.AutoCAD/Updates.fs) | `Updates` (internal) | starts the bootstrapper for updates, the version and whether a newer one is available |
 | [AutoCADInfo.fs](Caddis.AutoCAD/AutoCADInfo.fs) | `AutoCADInfo` | `HostInfo` and the MCP texts for AutoCAD, handles as object ids |
 | [Macro.fs](Caddis.AutoCAD/Macro.fs) | `AutoCADMacro` (internal) | splits a macro of `caddis_command` into the inputs of `Editor.Command` |
 | [CommandLine.fs](Caddis.AutoCAD/CommandLine.fs) | `AutoCADCommandLine`, `PromptListener` (internal) | the command line history and what it added, the prompt, whether a modal dialog is open; the prompt events of the editor |
 | [AutoCADHost.fs](Caddis.AutoCAD/AutoCADHost.fs) | `AutoCADHost` | the `ICaddisHost` for AutoCAD |
-| [App.fs](Caddis.AutoCAD/App.fs) | `App` | the server of this AutoCAD and the actions of the command |
-| [Commands.fs](Caddis.AutoCAD/Commands.fs) | `CaddisCommands` | the command `CADDIS` |
+| [App.fs](Caddis.AutoCAD/App.fs) | `App` | the server of this AutoCAD, the actions of the command, ribbon and panel, the Info dialog |
+| [AvaloniaHost.fs](Caddis.AutoCAD/AvaloniaHost.fs) | `AvaloniaHost`, `KeyboardFilter` (internal) | Avalonia in a WPF `HwndHost`, a copy of Revit's; the keys typed in Avalonia's windows given to them in AutoCAD's `PreTranslateMessage` |
+| [PanelTheme.fs](Caddis.AutoCAD/PanelTheme.fs) | `PanelTheme` (internal) | AutoCAD's light and dark colors, from `COLORTHEME` |
+| [Panel.fs](Caddis.AutoCAD/Panel.fs) | `PanelServices` (private), `CaddisPanel`, `Panel` (internal) | the panel in a `PaletteSet` |
+| [RibbonIcons.fs](Caddis.AutoCAD/RibbonIcons.fs) | `RibbonIcons` (internal) | the vector icons of Revit's ribbon, a copy, drawn per size and theme |
+| [Ribbon.fs](Caddis.AutoCAD/Ribbon.fs) | `Ribbon` (internal) | the ribbon tab, made with AdWindows |
+| [Commands.fs](Caddis.AutoCAD/Commands.fs) | `CaddisCommands` | the commands `CADDIS` and `CADDISPANEL` |
 | [Extension.fs](Caddis.AutoCAD/Extension.fs) | `CaddisExtension`, `AssemblyAttributes` | the entry point, an `IExtensionApplication`, and the attributes through which AutoCAD finds it and the commands |
 
 FSI references AutoCAD's own AcDbMgd, AcCoreMgd and AcMgd, not `Caddis.AutoCAD.dll`: scripts use AutoCAD's API directly and `Caddis.Script` from Core.
+The types with Avalonia or WPF in their signature are internal all the same, as in Revit, in case a script helper like `Caddis.Revit.Script` is added.
 
 ### Caddis.Revit.Loader and Caddis.Revit.Bootstrapper
 
 - [CaddisLoader.cs](Caddis.Revit.Loader/CaddisLoader.cs): `Caddis.Revit.Loader.CaddisLoader`, an `IExternalApplication`. Its full name is written into the `.addin` files, don't rename it.
 - [Revit.fs](Caddis.Revit.Bootstrapper/Revit.fs), [Dialog.fs](Caddis.Revit.Bootstrapper/Dialog.fs), [Updates.fs](Caddis.Revit.Bootstrapper/Updates.fs), [Main.fs](Caddis.Revit.Bootstrapper/Main.fs): namespace `Caddis.Revit.Bootstrapper` with `Message`, `Revit` (registration), `Dialog` (task dialogs), `Updates` (Velopack) and `Main` (entry point).
+
+### Caddis.AutoCAD.Loader and Caddis.AutoCAD.Bootstrapper
+
+- [CaddisLoader.cs](Caddis.AutoCAD.Loader/CaddisLoader.cs): `Caddis.AutoCAD.Loader.CaddisLoader`, an `IExtensionApplication`, see [its README](Caddis.AutoCAD.Loader/README.md).
+- [AutoCAD.fs](Caddis.AutoCAD.Bootstrapper/AutoCAD.fs), [Dialog.fs](Caddis.AutoCAD.Bootstrapper/Dialog.fs), [Updates.fs](Caddis.AutoCAD.Bootstrapper/Updates.fs), [Main.fs](Caddis.AutoCAD.Bootstrapper/Main.fs): namespace `Caddis.AutoCAD.Bootstrapper` with `Message`, `AutoCAD` (the bundle), `Dialog`, `Updates` and `Main`.
+  Dialog, Updates and Main are copies of the Revit bootstrapper's, with AutoCAD in their texts and file names. The two could share them later.
 
 ### Tests
 
@@ -632,7 +653,7 @@ Files are listed with their local path.
 | `caddis_export` | `format` (required), `name` ("export"), `objects` (`all` or `selected`), `objectIds`, `waitMs` (50000) | idempotent | a run of kind `export`; `objectIds` must be nonempty and valid |
 | `caddis_dialog` | `button`, `dialog` | destructive | Revit only; without `button` it lists the open dialog |
 
-Every tool has `openWorldHint: false`. The descriptions of most tools come from the host's `McpTexts`, so they are specific to Rhino or Revit.
+Every tool has `openWorldHint: false`. The descriptions of most tools come from the host's `McpTexts`, so they are specific to Rhino, Revit or AutoCAD.
 
 ### 8.2 REST endpoints
 
@@ -715,7 +736,7 @@ Caddis.Revit.Script.Transact(fun doc -> ...)          // the same, named 'Caddis
 
 ### 8.5 Caddis.Core as a library for a new host
 
-Caddis.Core has no dependency on Rhino or Revit. A new app needs an `ICaddisHost` and a `HostInfo`, then:
+Caddis.Core has no dependency on Rhino, Revit or AutoCAD. A new app needs an `ICaddisHost` and a `HostInfo`, then:
 
 ```fsharp
 open Caddis
@@ -743,21 +764,22 @@ Caddis.Core is not published as a NuGet package.
 
 ## 9. The shared panel: Caddis.UI
 
-Rhino and Revit show the same Avalonia view, [`PanelView`](Caddis.UI/PanelView.fs), embedded as a native child window in the app's own docking container.
+Rhino, Revit and AutoCAD show the same Avalonia view, [`PanelView`](Caddis.UI/PanelView.fs), embedded as a native child window in the app's own docking container.
 
 ```
 PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
   └─ EmbeddedView: EmbeddableControlRoot, its native handle, DPI sync
        ├─ Rhino: AvaloniaHost : Eto.Forms.NativeControlHost   inside Rhino.UI.Panel CaddisPanel
-       └─ Revit: AvaloniaHost : System.Windows.Interop.HwndHost inside WPF UserControl CaddisPanel, a dockable pane
+       ├─ Revit: AvaloniaHost : System.Windows.Interop.HwndHost inside WPF UserControl CaddisPanel, a dockable pane
+       └─ AutoCAD: AvaloniaHost : System.Windows.Interop.HwndHost inside WPF UserControl CaddisPanel, in a PaletteSet
 ```
 
 - **Avalonia start**: [`AvaloniaSetup.ensure`](Caddis.UI/AvaloniaSetup.fs) configures `PanelApp` with the app's backend and `SetupWithoutStarting`, so the app keeps its own message loop. If another plugin already started Avalonia, the panel adds the Fluent theme to itself instead. Rendering is in software everywhere, so no ANGLE libraries are shipped.
 - **Native libraries**: apps don't read the plugin's `deps.json`, so SkiaSharp's and HarfBuzzSharp's natives are found by a `DllImportResolver` in `runtimes/<rid>/native`, or on .NET Framework loaded with `LoadLibrary` from `x64` or `arm64`.
-- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, the clipboard, optional settings that only Rhino has, a save-file dialog, a message line (Revit), the version and an update notice, the `ErrorLog`, the palette, and a theme-change subscription.
-- **Theme**: the app supplies 16 named colors, applied as `Caddis.*` brushes within the panel's own `ThemeVariantScope`, so styles never leak into the app. Rhino takes them from `ThemeSettings`, Revit from fixed light and dark palettes.
+- **`PanelHost`**: the app's name, tooltip texts, optional command-line title, the noun for changed things (`objects` or `elements`), the server, the actions, the clipboard, optional settings that only Rhino and AutoCAD have, a save-file dialog, a message line (Revit), the version and an update notice, the `ErrorLog`, the palette, and a theme-change subscription.
+- **Theme**: the app supplies 16 named colors, applied as `Caddis.*` brushes within the panel's own `ThemeVariantScope`, so styles never leak into the app. Rhino takes them from `ThemeSettings`, Revit and AutoCAD from fixed light and dark palettes.
 - **Refresh**: a 1 s timer of the app calls `Refresh`, which reads the server's state. The run list is rebuilt only when ids or statuses changed.
-- **Contents**: server and session state; Start or Stop, Cancel run (only for background runs), Reset; while the server runs, a row per AI agent; Settings with the mode, autostart, echo and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.
+- **Contents**: server and session state; Start or Stop, Cancel run (only for background runs), Reset; while the server runs, a row per AI agent; Settings with the mode, autostart, echo (Rhino and AutoCAD) and cancel-waiting-commands (Rhino only), and the .NET, FSharp.Core and FCS versions; an `Errors` button while there are errors, bold for unseen ones, with a list newest first and Clear; the recent runs newest first; an `Output` tab from [`RunDetails`](Caddis.UI/RunDetails.fs); a `Code` tab, read-only AvaloniaEdit with line numbers, Ctrl+F search and F# highlighting.
 - **Code actions**: `Formatted` formats with Fantomas on the thread pool, cached per run; code Fantomas can't parse is shown as it was run. `Run again` starts the selected F# run's code as a new run, keeping a user's script path for its relative `#load`. `Export` and `Export all` save `.fsx` files as shown, via the app's save dialog; `Export all` takes the successful F# runs, oldest first, each after a comment with its id and time ([`ScriptExport`](Caddis.UI/ScriptExport.fs)).
 - **AI agents**: a row each for Claude Code, Codex and, if it is installed, Claude Desktop, with a dot and their state from their config files, see [7.8](#78-settings-and-files):
   `active` (green) if the agent's URL for the app's MCP name has this server's port, `not set up` (gray) with `Set up`, or `inactive` (amber) with `Activate`, whose tooltip names the other instance on that port from its discovery file and its main window's title.
@@ -855,11 +877,18 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 
 ## 12. AutoCAD: Caddis.AutoCAD
 
-A first version: the host with `caddis_command`, the command `CADDIS` and a dev start. No panel, ribbon, installer or `caddis_dialog` yet. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
+The host with `caddis_command`, the panel, a ribbon tab, the commands `CADDIS` and `CADDISPANEL`, an installer with updates, and a dev start. No `caddis_dialog` yet. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
-**Loading**: `NETLOAD` of `Caddis.AutoCAD.dll`, whose assembly attributes name the `IExtensionApplication` [`CaddisExtension`](Caddis.AutoCAD/Extension.fs) and the command class.
-`Initialize` runs on AutoCAD's main thread: it keeps that thread's WPF dispatcher, installs the assembly resolver, creates the server with `settings-autocad.json` and port 7830, stops it on `BeginQuit`, and starts it if `autoStart` is on.
-[Dev/Start-Dev.ps1](Dev/README.md) starts `acad.exe /b load.scr`, whose AutoLISP calls `NETLOAD` with the local build: AutoCAD has no plugin folder for one start only.
+**Loading**: the installer writes the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.bundle`, which AutoCAD loads at its start, and right away if it is running.
+Its `PackageContents.xml` names the module `./Contents/Caddis.AutoCAD.Loader.dll`, for every AutoCAD-based product from series R25.0 on. Bundles name their modules relative to their folder,
+so [`Caddis.AutoCAD.Bootstrapper`](Caddis.AutoCAD.Bootstrapper/AutoCAD.fs) copies the loader into the bundle, with `install-folder.txt`, the folder of the installation.
+The [loader](Caddis.AutoCAD.Loader/README.md) loads `net8.0` or `net10.0\Caddis.AutoCAD.dll` from there with `Assembly.LoadFrom`, by `Environment.Version`, unless a Caddis.AutoCAD is loaded already.
+AutoCAD registers the commands of every assembly loaded into its process and calls its `IExtensionApplication`, also for this one, as tested. `NETLOAD` of `Caddis.AutoCAD.dll` works too.
+The assembly attributes of `Caddis.AutoCAD.dll` name the `IExtensionApplication` [`CaddisExtension`](Caddis.AutoCAD/Extension.fs) and the command class.
+`Initialize` runs on AutoCAD's main thread: it keeps that thread's WPF dispatcher, installs the assembly resolver, creates the server with `settings-autocad.json` and port 7830, stops it on `BeginQuit`,
+adds the ribbon tab, starts the server if `autoStart` is on, and starts the bootstrapper to check for updates. `Terminate` starts it to install a downloaded update when the last AutoCAD closes.
+[Dev/Start-Dev.ps1](Dev/README.md) starts `acad.exe /b load.scr` with `CADDIS_AUTOCAD_DEV`: the script's AutoLISP calls `NETLOAD` with the local loader, which loads the local build.
+AutoCAD has no plugin folder for one start only. An installed loader reads `CADDIS_AUTOCAD_DEV` too and loads the local build first, then the local loader does nothing.
 
 **Context**: Caddis' calls on the main thread come through the dispatcher, from AutoCAD's message loop: application context, like a modeless window, not a command.
 So `Editor.Command` fails with `eInvalidInput`; a script queues commands with `Document.SendStringToExecute`, and they run after the run.
@@ -881,9 +910,22 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - *Export*: `Database.Wblock()` for the whole drawing, `Wblock(ids, origin)` for selected objects or handles in model space, under a document lock, which it needs; then `SaveAs` for DWG or `DxfOut` for DXF. The drawing and its file name stay as they are.
 - *Ids*: handles as hexadecimal strings, found with `Database.GetObjectId(false, handle, 0)`.
 - *Messages*: [`AutoCADLog`](Caddis.AutoCAD/Log.fs) writes to the command line of the active drawing through the dispatcher, and to `%AppData%\Caddis\autocad.log`, which also has what was written while no drawing was open.
+  It keeps the latest messages and errors for the Info dialog, AutoCAD's `Autodesk.Windows.TaskDialog`, like Revit's Info dialog.
+
+**Panel and ribbon**:
+- *Panel*: [`Panel`](Caddis.AutoCAD/Panel.fs) creates a `PaletteSet` with its own id the first time it is shown, and adds the WPF `CaddisPanel` with `AddVisual`, which hosts the shared Avalonia view in an `HwndHost` like Revit's pane.
+  AutoCAD saves the size, place and docking of a palette set by its id, and raises `Load` when it applies them. Without them it shows the palette set floating at the top left in its minimum size, so then Caddis docks it on the right, 420 by 760.
+  The palette set names the command `CADDISPANEL`, which AutoCAD runs at its start if the panel was open when it closed. `KeepFocus` keeps the focus in it when the mouse leaves it.
+- *Keyboard*: AutoCAD sends the keys typed in a window it doesn't know to its command line before the window gets them, also those in Avalonia's window: the search box got nothing in a test.
+  [`KeyboardFilter`](Caddis.AutoCAD/AvaloniaHost.fs) handles `Application.PreTranslateMessage`: a key message for a window whose class starts with `Avalonia` is translated and dispatched to it, and marked handled.
+  So while the panel or one of its popups has the focus, it gets all keys, also AutoCAD's shortcuts.
+- *Theme*: the system variable `COLORTHEME`, 0 dark and 1 light. `SystemVariableChanged` redraws the panel and the ribbon icons. The colors are Revit's: both use the same blue gray.
+- *Ribbon*: [`Ribbon`](Caddis.AutoCAD/Ribbon.fs) adds a tab `Caddis` to `ComponentManager.Ribbon` of AdWindows, or once AdWindows has created the ribbon, on `ComponentManager.ItemInitialized`.
+  Its buttons and checkboxes call `App` through `ICommand`s in the application context, as the panel does. A timer updates them twice a second, and adds the tab again if AutoCAD rebuilt its ribbon, e.g. after a change of the workspace or the theme.
 
 **Commands** (`caddis_command`), in `runCommands` of `AutoCADHost`:
 - *Running*: [`AutoCADMacro.parse`](Caddis.AutoCAD/Macro.fs) splits each macro at spaces into inputs, a quoted input keeps its spaces and `""` is Enter.
+  Commands that open or close drawings are refused: in a test `QUIT` froze AutoCAD, `QNEW` succeeded without a new drawing, and `CLOSE` closed the drawing while the commands ran.
   `RunCommands` checks the macros and handles, then queues one callback with `ExecuteInCommandContextAsync` and returns a task. In the callback `Editor.Command` runs each macro, which blocks until its command has ended.
   All of it is one `EXECUTEFUNCTION`, so one undo step, also if nothing changed. The task completes in a `UiThread.postLater` call after `EXECUTEFUNCTION` has ended, when AutoCAD has written the last input to the command line history.
 - *Selection*: `EXECUTEFUNCTION` clears the pickfirst set when it starts. So the callback runs `SELECT` with the objects of `select`, or those selected before, and sets the pickfirst set again with `SetImpliedSelection`.
@@ -904,17 +946,19 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 
 - **Shared settings** ([Directory.Build.props](Directory.Build.props)): the version from CHANGELOG.md via Ionide.KeepAChangelog.Tasks, no implicit FSharp.Core, English satellite resources only, XML docs, warning 1182 on (unused variables), FS3370 off.
 - **Native libraries**: [Directory.Build.targets](Directory.Build.targets) keeps only the `x64` and `arm64` SkiaSharp and HarfBuzz DLLs on net48. Rhino keeps only win-x64, win-arm64 and osx natives; Revit only win-x64 and drops `arm64` on net48. Both drop ANGLE and native `.pdb`s, among them 210 MB of SkiaSharp's debug symbols, as noted in Caddis.Rhino.fsproj.
-- **Versions**: Caddis.Rhino and the bootstrapper write the version to `bin/ChangelogVersion.txt`; the build fails if CHANGELOG.md has no versioned release. Bullets in CHANGELOG.md must be single lines and the file must keep one kind of line ending, or the changelog task fails.
+- **Versions**: Caddis.Rhino and the bootstrappers write the version to `bin/ChangelogVersion.txt`; the build fails if CHANGELOG.md has no versioned release. Bullets in CHANGELOG.md must be single lines and the file must keep one kind of line ending, or the changelog task fails.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, the three packaging actions |
+| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, the four packaging actions |
 | [release-rhino.yml](.github/workflows/release-rhino.yml) | tag `x.y.z` | build, test, package, check tag against CHANGELOG.md, then push `rh8` and `rh9` to Yak in separate jobs with `YAK_TOKEN` |
-| [release-revit.yml](.github/workflows/release-revit.yml) | tag `x.y.z` | in environment `releaseRevit`: build, test, package, check tag, Azure login with OIDC, `vpk pack` signed with Azure Trusted Signing, `vpk upload` to the GitHub release, then attach the two Claude Desktop extensions to it |
+| [release-revit.yml](.github/workflows/release-revit.yml) | tag `x.y.z` | in environment `releaseRevit`: build, test, package for Revit and AutoCAD, check tag, Azure login with OIDC, `vpk pack` signed with Azure Trusted Signing and `vpk upload` to the GitHub release, for Revit and then for AutoCAD, then attach the three Claude Desktop extensions to it |
 
 - [package-rhino](.github/actions/package-rhino/action.yml) publishes the three Rhino builds, adds manifest, logo and license, downloads `yak.exe` 0.19.1 with a SHA256 check, and builds `caddis-<v>-rh8_19-any.yak` (net8.0 and net48) and `caddis-<v>-rh9_0-any.yak` (net10.0).
 - [package-revit](.github/actions/package-revit/action.yml) publishes the three Revit builds, the loader and the bootstrapper into `bin/publish/revit`, the folder Velopack packs.
-- [package-claude-desktop](.github/actions/package-claude-desktop/action.yml) writes the extensions `caddis-rhino` (Windows and Mac) and `caddis-revit` with [bundles.fsx](.github/actions/package-claude-desktop/bundles.fsx), which uses the Release build of Caddis.Core like the panel does, but without instructions and tools, then validates and packs them into `bin/publish/claude-desktop/<name>.mcpb` with the MCPB CLI 2.1.2 from npm. The Anthropic directory takes no `.mcpb` files anymore, so the GitHub release is where they are published.
+- [package-autocad](.github/actions/package-autocad/action.yml) publishes the two AutoCAD builds, the loader and the bootstrapper into `bin/publish/autocad`.
+  Velopack packs it in the channel `autocad`, into the same GitHub release as Revit's with `vpk upload --merge`: in the default channel the files that list a channel's releases, e.g. `releases.win.json`, would replace Revit's.
+- [package-claude-desktop](.github/actions/package-claude-desktop/action.yml) writes the extensions `caddis-rhino` (Windows and Mac), `caddis-revit` and `caddis-autocad` with [bundles.fsx](.github/actions/package-claude-desktop/bundles.fsx), which uses the Release build of Caddis.Core like the panel does, but without instructions and tools, then validates and packs them into `bin/publish/claude-desktop/<name>.mcpb` with the MCPB CLI 2.1.2 from npm. The Anthropic directory takes no `.mcpb` files anymore, so the GitHub release is where they are published.
 - **To release**: add a versioned entry to CHANGELOG.md, commit, push a tag with the same version without `v`.
 
 ---
@@ -995,7 +1039,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | STEP export in Revit 2024 | Needs Revit 2025. |
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, other apps | None. `ICaddisHost` is the extension point. |
-| The panel, a ribbon, an installer and updates in AutoCAD | Not yet. `NETLOAD` the build, and use the command `CADDIS`. |
+
 | `caddis_dialog` in AutoCAD | Not yet. A command that opens a modal dialog waits until someone closes it in AutoCAD. |
 | AutoCAD 2024 and older, AutoCAD LT, AutoCAD for Mac | Not supported: AutoCAD 2024 runs on .NET Framework, LT and Mac have no .NET API. |
 | Summaries of the AutoCAD API in `caddis_describe` | None, only signatures: AutoCAD doesn't install the XML docs of its API. |
@@ -1007,7 +1051,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 
 | Expected | In Caddis |
 |---|---|
-| Automated tests inside Rhino or Revit | None. CI tests the core with a headless host and the panel with Avalonia's headless platform; the apps are tested by hand. |
+| Automated tests inside Rhino, Revit or AutoCAD | None. CI tests the core with a headless host and the panel with Avalonia's headless platform; the apps are tested by hand. |
 | Panel tests on .NET Framework, with Avalonia 11 | The UI tests run on net8.0 and net10.0 only. |
 | Localization | English only. |
 
@@ -1033,6 +1077,9 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Fesh.Rhino** is reached by reflection too, via `Fesh.Rhino.Sync.isEvaluating`, and reads `Caddis.Rhino.Interop.isRunning` the same way. A rename on either side silently lets runs overlap again.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
 - **Undo in AutoCAD**: `caddis_undo` sends `UNDO 1` when Caddis believes the run is the latest undo step. It knows of commands, changes of a database and changes of the view. Anything else that AutoCAD records as an undo step, e.g. a change by another plugin that touches none of these, would be undone instead of the run.
+- **AutoCAD's bundle**: the bundle in `%AppData%\Autodesk\ApplicationPlugins` and the release in the channel `autocad` are not tested yet, only the loader from a folder like the bundle's and `PackageContents.xml` as XML.
+  Whether AutoCAD asks before it loads the loader with `SECURELOAD` 1 is not known: it is 0 on the computer of the tests.
+- **Keys in AutoCAD's panel**: while the panel has the focus, AutoCAD's shortcuts, e.g. Ctrl+S, go to the panel. Tested with key messages posted into AutoCAD's message queue, not with a keyboard.
 - **Commands in AutoCAD**: the command line of command runs comes from AutoCAD's internal and undocumented `Utils.GetLastCommandLines`; if a version changes it, results lack the command line, nothing else.
   `caddis_cancel` of a command that is busy without a prompt, e.g. one that shows its progress, queues `^C^C` too. If the command ends without taking it, AutoCAD runs it at the next prompt, which can be one of a later macro.
 - **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
@@ -1050,14 +1097,17 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | Revit AddInId | `4D0EC386-3A78-491A-95FA-9B5A65CAA89C` |
 | Revit DockablePaneId | `7b1c58a4-3e0f-4b8e-9a5d-2f6c1d9e8a31` |
 | Revit entry points | `Caddis.Revit.CaddisApplication` (net48 and dev installs), `Caddis.Revit.Loader.CaddisLoader` (installer, 2025 and later) |
+| AutoCAD palette set id | `5c3f1f8e-2b6d-4a77-9c1e-8d4b2a6f7e15` |
+| AutoCAD bundle | `Caddis.bundle`, ProductCode `{B6E4C0F1-7A2D-4E5B-9C3F-1D8A6E2B4C70}`, UpgradeCode `{3F9A1C2E-5B7D-4A6E-8C0F-2E4D6B8A1C93}` |
 | Default ports | Rhino 7810, Revit 7820, AutoCAD 7830, the headless host 7810 |
 | MCP server names | `caddis-rhino`, `caddis-revit`, `caddis-autocad`, `caddis` for the headless host |
-| AutoCAD | the command `CADDIS`, `settings-autocad.json`, `autocad.log`, the dev startup script `%LocalAppData%Caddis.DevAutoCAD<year>oad.scr` |
+| AutoCAD | the commands `CADDIS` and `CADDISPANEL`, the ribbon tab `Caddis.Tab`, `settings-autocad.json`, `autocad.log`, `autocad-update.json`, the dev startup script `%LocalAppData%\Caddis.Dev\AutoCAD<year>\load.scr` |
 | Settings folder | `%AppData%\Caddis`, `~/.config/Caddis` on Mac |
 | The agents' config files | `~/.claude.json` or `$CLAUDE_CONFIG_DIR/.claude.json`, `~/.codex/config.toml` or `$CODEX_HOME/config.toml`, Claude Desktop's `%APPDATA%\Claude\extensions-installations.json` and `Claude Extensions Settings\<id>.json` |
-| Claude Desktop extensions | `caddis-rhino.mcpb`, `caddis-revit.mcpb`, with the names of the MCP servers |
+| Claude Desktop extensions | `caddis-rhino.mcpb`, `caddis-revit.mcpb`, `caddis-autocad.mcpb`, with the names of the MCP servers |
 | Output folders | `%TEMP%\Caddis\<pid>\<run id>`, `%TEMP%\Caddis\<pid>\logs` |
 | Revit installation | `%LocalAppData%\Caddis.Revit\current` |
+| AutoCAD installation | `%LocalAppData%\Caddis.AutoCAD\current`, the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.bundle` |
 | Revit add-in files | `%AppData%\Autodesk\Revit\Addins\<year>\Caddis.addin` |
 | Velopack package id | `Caddis.Revit` |
 | Yak package | `caddis`, distributions `rh8_19-any` and `rh9_0-any` |

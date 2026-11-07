@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- The app of the Velopack installer for AutoCAD. It registers Caddis with AutoCAD 2025 and later through a bundle,
+    and runs Velopack's updates for Caddis in AutoCAD. For .NET Framework 4.8, which every Windows 10 and 11 has,
+    so that the installer needs no runtime. The same as Caddis.Revit.Bootstrapper. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Caddis.AutoCAD.Bootstrapper</RootNamespace>
+    <AssemblyName>Caddis.AutoCAD.Bootstrapper</AssemblyName>
+    <AssemblyTitle>Caddis for AutoCAD</AssemblyTitle>
+    <Product>Caddis for AutoCAD</Product>
+    <Company>Goswin Rothenthal</Company> <!-- shown in the details of the exe in Windows Explorer -->
+    <Description>Installs, updates and registers Caddis with AutoCAD.</Description>
+    <ApplicationIcon>../Docs/img/installer/favicon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" Version="10.1.401" />
+    <!-- the same version as vpk in .github/workflows/release-revit.yml -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="AutoCAD.fs" />
+    <Compile Include="Dialog.fs" />
+    <Compile Include="Updates.fs" />
+    <Compile Include="Main.fs" />
+  </ItemGroup>
+
+  <!-- for the check of the git tag in .github/workflows/release-revit.yml -->
+  <Target Name="WriteChangelogVersion" AfterTargets="AfterBuild" DependsOnTargets="SetVersionFromChangelog">
+    <Error Condition="'@(CurrentReleaseChangelog)' == ''" Text="CHANGELOG.md must contain a versioned release for the AutoCAD installer." />
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/bin/ChangelogVersion.txt" Lines="@(CurrentReleaseChangelog)" Overwrite="true" />
+  </Target>
+</Project>

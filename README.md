@@ -28,7 +28,7 @@ AI agents like Claude or Codex generate the F# code and send it for evaluation a
 
 
 Plus, you get the F# code it ran too, so you could make a permanent plugin form from it.
-This makes it ideal for AI-driven automation and rapid prototyping within Rhino and Revit.
+This makes it ideal for AI-driven automation and rapid prototyping within Rhino, Revit and AutoCAD.
 
 > Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0-beta and AutoCAD 2025 on Windows, not yet on Mac.
 
@@ -37,10 +37,10 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino 
 |---|---|---|---|
 | Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | In Rhino's `PackageManager`, search for `Caddis` or use [food4rhino](https://www.food4rhino.com/en/app/caddis) | [Caddis for Rhino](Caddis.Rhino/README.md) |
 | Revit | Revit 2024 to 2027 on Windows | Run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
-| AutoCAD | AutoCAD 2025 and later on Windows, a first version | Not packaged yet: build it and load it with `NETLOAD` | [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
+| AutoCAD | AutoCAD 2025 and later on Windows | Run `Caddis.AutoCAD-autocad-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
 
 Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
-It works for every version of Rhino and Revit. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).
+It works for every version of Rhino, Revit and AutoCAD. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).
 
 ## What it does
 - Hosts one persistent F# Interactive session inside the app.
@@ -54,7 +54,7 @@ It works for every version of Rhino and Revit. Caddis runs without it, only NuGe
 - Shows the server state, the recent runs, and the output and code of the selected run in a panel docked in the app, in the app's light or dark theme.
 - In Rhino it also runs Rhino commands like typed at the command line, in Revit it reports Revit's blocking dialogs and presses their buttons.
 
-What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md) and [Caddis for Revit](Caddis.Revit/README.md).
+What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md), [Caddis for Revit](Caddis.Revit/README.md) and [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
 ## Connect an AI agent
 Start the server in the app and open the Caddis panel. While the server runs, it shows for Claude Code, Codex and Claude Desktop whether they connect to Caddis in this app:
@@ -67,7 +67,7 @@ The tooltips of the buttons show the commands they run, a right-click on an agen
 Sessions of an agent that were open before it was set up see Caddis after a restart.
 
 Without the panel, run the commands yourself in a terminal. Rhino prints them to its command line when the server starts,
-Revit shows them in the `Info` dialog of the `Caddis` ribbon tab, where Ctrl+C copies its text. For Claude Code:
+Revit and AutoCAD show them in the `Info` dialog of the `Caddis` ribbon tab, where Ctrl+C copies its text. For Claude Code:
 ```
 claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/mcp
 ```
@@ -85,7 +85,7 @@ from Anthropic's servers, which can't reach your computer. So Caddis comes as a 
 whose small relay passes Claude Desktop's messages to Caddis on this computer. Claude Desktop brings the Node.js that runs it.
 
 The panel's `Set up` makes the extension for the running app, with its port and its tools. Each [release](https://github.com/goswinr/Caddis/releases)
-also has `caddis-rhino.mcpb` and `caddis-revit.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
+also has `caddis-rhino.mcpb`, `caddis-revit.mcpb` and `caddis-autocad.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
 On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
 `More apps` > `Look for another app on this PC` and `%LOCALAPPDATA%\AnthropicClaude\claude.exe`, with `Always`.
 Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Extensions.
@@ -211,6 +211,7 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 | `revit.log` | Caddis' own messages in Revit |
 | `revit-update.json` | The result of the latest update check in Revit, which the panel and `Info` show |
 | `autocad.log` | Caddis' own messages in AutoCAD |
+| `autocad-update.json` | The result of the latest update check in AutoCAD, which the panel and `Info` show |
 
 ## Security
 Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.
@@ -232,11 +233,13 @@ dotnet test Caddis.slnx
 | `Caddis.Revit` | The Revit add-in, see [Caddis for Revit](Caddis.Revit/README.md) |
 | `Caddis.Revit.Loader` | Loads the build of `Caddis.Revit` for the .NET of Revit 2025 and later |
 | `Caddis.Revit.Bootstrapper` | The app of the Revit installer, it registers the add-in and installs updates |
-| `Caddis.AutoCAD` | The AutoCAD plugin, a first version without panel and installer, see [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
+| `Caddis.AutoCAD` | The AutoCAD plugin, see [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
+| `Caddis.AutoCAD.Loader` | Loads the build of `Caddis.AutoCAD` for the .NET of AutoCAD |
+| `Caddis.AutoCAD.Bootstrapper` | The app of the AutoCAD installer, it registers the plugin and installs updates |
 | `Tests` | Tests of Core, and of the shared panel with Avalonia's headless platform on both runtimes |
 
 `Caddis.Core` and `Caddis.UI` target `net8.0;net10.0` with Avalonia 12, and `net48` for Rhino and Revit 2024 on .NET Framework, with Avalonia 11.
-Each app supplies the panel's actions, theme colors and docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit.
+Each app supplies the panel's actions, theme colors and docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit and AutoCAD.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
 See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
 

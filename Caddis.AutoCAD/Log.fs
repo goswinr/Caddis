@@ -24,13 +24,18 @@ module AutoCADLog =
         with _ ->
             ()
 
-    let private append (line: string) =
-        lock sync (fun () ->
-            try
-                Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
-                File.AppendAllText(path, DateTime.Now.ToString "yyyy-MM-dd HH:mm:ss" + " " + line + Environment.NewLine)
-            with _ ->
-                ())
+    /// The latest messages without the errors, for the Info dialog.
+    let private recent = Collections.Generic.Queue<string>()
+
+    let private stamp (line: string) = DateTime.Now.ToString "yyyy-MM-dd HH:mm:ss" + " " + line
+
+    /// Called under the lock.
+    let private appendToFile (line: string) =
+        try
+            Directory.CreateDirectory(Path.GetDirectoryName path) |> ignore
+            File.AppendAllText(path, line + Environment.NewLine)
+        with _ ->
+            ()
 
     /// Writes text to the command line of the active drawing, from any thread. Lost if no drawing is open.
     /// Starts a new line itself if the text starts with a line break, as AutoCAD's own messages do.
@@ -42,11 +47,19 @@ module AutoCADLog =
 
     /// A message of Caddis, on its own line on the command line and in the log file. Called from any thread.
     let writeLine (s: string) =
-        append s
+        let line = stamp s
+        lock sync (fun () ->
+            recent.Enqueue line
+            while recent.Count > 30 do
+                recent.Dequeue() |> ignore
+            appendToFile line)
         write ("\n" + s)
 
     /// An internal error, marked with ERROR in the log file. Called from any thread.
     let error (s: string) =
         errors.Add s
-        append ("ERROR " + s)
+        lock sync (fun () -> appendToFile (stamp ("ERROR " + s)))
         write ("\n" + s)
+
+    /// The latest messages without the errors, oldest first, with their time.
+    let recentLines () : string list = lock sync (fun () -> List.ofSeq recent)

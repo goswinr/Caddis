@@ -1,7 +1,7 @@
 # Run a local build in Rhino, Revit or AutoCAD
 
-The files in this folder build Caddis and start Rhino, Revit or AutoCAD with only that build, also when Caddis is installed from Yak or with the Revit installer.
-The installed Caddis stays installed: Rhino or Revit started in any other way loads it as before, so there is nothing to switch back.
+The files in this folder build Caddis and start Rhino, Revit or AutoCAD with only that build, also when Caddis is installed from Yak or with the Revit or AutoCAD installer.
+The installed Caddis stays installed: the app started in any other way loads it as before, so there is nothing to switch back.
 Double-click one of them, or pin a shortcut to it on the taskbar:
 
 | File | Starts |
@@ -31,7 +31,9 @@ All of them run [Start-Dev.ps1](Start-Dev.ps1). If something fails, the window s
   set only for the Revit started here. Nothing else changes.
 - **Revit 2024**, or an installed Caddis up to 0.2.1: `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>` is replaced by one for the local build
   until Revit has loaded it, then put back. Revit asks whether to load the unsigned add-in, choose `Always Load` or `Load Once`.
-- **AutoCAD 2025 and later** is started with `/b load.scr`, a startup script in `%LocalAppData%\Caddis.Dev\AutoCAD<year>` that loads the local build with `NETLOAD`.
-  Nothing else changes, there is no installed Caddis for AutoCAD yet. AutoCAD asks whether to load the unsigned `Caddis.AutoCAD.dll`, unless its folder is in AutoCAD's trusted locations.
+- **AutoCAD 2025 and later** is started with `/b load.scr`, a startup script in `%LocalAppData%\Caddis.Dev\AutoCAD<year>` that loads the local [loader](../Caddis.AutoCAD.Loader/README.md) with `NETLOAD`,
+  and with the environment variable `CADDIS_AUTOCAD_DEV`, from which the loader loads the local build. If Caddis is installed, its loader reads the variable too and loads the local build when AutoCAD starts;
+  the local loader then does nothing. Nothing else changes. AutoCAD asks whether to load the unsigned `Caddis.AutoCAD.Loader.dll`, unless its folder is in AutoCAD's trusted locations.
+  Close AutoCAD with its command `QUIT`, not by killing it: AutoCAD saves the place of the panel only then.
 
 To register a local build in Revit for every start instead, see [install-dev.ps1](../Caddis.Revit/README.md#installation-for-development).

@@ -17,8 +17,10 @@ In Revit 2025 and later, if the installed loader reads CADDIS_REVIT_DEV, that is
 Otherwise, e.g. in Revit 2024, Caddis.addin is replaced by one for the local build until Revit has loaded it, then put back.
 Revit then asks whether to load the unsigned add-in.
 
-AutoCAD 2025 and later get the startup script load.scr with /b, it loads the local build with NETLOAD. Nothing else changes.
-AutoCAD then asks whether to load the unsigned Caddis.AutoCAD.dll, unless its folder is in AutoCAD's trusted locations.
+AutoCAD 2025 and later get CADDIS_AUTOCAD_DEV, and the startup script load.scr with /b, which loads the local build of Caddis.AutoCAD.Loader with NETLOAD.
+The loader loads Caddis.AutoCAD from the folder in CADDIS_AUTOCAD_DEV. If Caddis is installed, its loader in Caddis.bundle reads CADDIS_AUTOCAD_DEV too,
+and loads the local build already when AutoCAD starts. Then the local loader finds Caddis.AutoCAD loaded and does nothing. Nothing else changes.
+AutoCAD asks whether to load the unsigned Caddis.AutoCAD.Loader.dll, unless its folder is in AutoCAD's trusted locations.
 
 If the script is stopped before it put the installed Caddis back, its next run does it.
 
@@ -54,6 +56,7 @@ $stageRoot = Join-Path $env:LOCALAPPDATA "Caddis.Dev"
 # On the same drive as Rhino's packages and Revit's add-ins, so that moving them there is a rename.
 $hiddenRoot = Join-Path $env:APPDATA "Caddis\dev\hidden"
 $revitDevVariable = "CADDIS_REVIT_DEV" # see Caddis.Revit.Loader/CaddisLoader.cs
+$autocadDevVariable = "CADDIS_AUTOCAD_DEV" # see Caddis.AutoCAD.Loader/CaddisLoader.cs
 
 # True if another process has the file open, e.g. Rhino or Revit has loaded the assembly.
 function Test-Locked([string]$file) {
@@ -234,6 +237,7 @@ function New-AutoCADTarget([int]$year) {
     $major = [int]($tfm -replace '^net(\d+).*$', '$1')
     $framework = if ($major -ge 10) { "net10.0" } else { "net8.0" }
     $stage = Join-Path $stageRoot "AutoCAD$year"
+    # the folder names of the installer, which the loader expects, see Caddis.AutoCAD.Loader/README.md
     $stageBuild = Join-Path $stage $framework
     $script = Join-Path $stage "load.scr"
     [pscustomobject]@{
@@ -242,6 +246,7 @@ function New-AutoCADTarget([int]$year) {
         Project = "Caddis.AutoCAD"; Tfm = "$framework-windows"
         Stage = $stage; StageBuild = $stageBuild; Script = $script
         Loaded = Join-Path $stageBuild "Caddis.AutoCAD.dll"
+        Loader = Join-Path $stage "loader\Caddis.AutoCAD.Loader.dll"
     }
 }
 
@@ -282,13 +287,22 @@ function Select-Target {
     return $targets[$choice - 1]
 }
 
-# Copies the build output, deleting files that are not in it anymore.
+# Copies a build output, deleting files that are not in it anymore.
+function Copy-Output([string]$output, [string]$destination) {
+    robocopy $output $destination /MIR /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Host
+    if ($LASTEXITCODE -ge 8) { throw "Copying $output to $destination failed." }
+    $global:LASTEXITCODE = 0
+}
+
 function Copy-Build($target) {
     $output = Join-Path $repo "$($target.Project)\bin\$Configuration\$($target.Tfm)"
     if (-not (Test-Path -LiteralPath $output)) { throw "$output not found, build it first: dotnet build $($target.Project) -c $Configuration -f $($target.Tfm)" }
-    robocopy $output $target.StageBuild /MIR /NFL /NDL /NJH /NJS /NP /R:1 /W:1 | Out-Host
-    if ($LASTEXITCODE -ge 8) { throw "Copying $output to $($target.StageBuild) failed." }
-    $global:LASTEXITCODE = 0
+    Copy-Output $output $target.StageBuild
+    if ($target.Kind -eq "AutoCAD") {
+        $loader = Join-Path $repo "Caddis.AutoCAD.Loader\bin\$Configuration\net8.0"
+        if (-not (Test-Path -LiteralPath $loader)) { throw "$loader not found, build it first: dotnet build Caddis.AutoCAD.Loader -c $Configuration" }
+        Copy-Output $loader (Split-Path $target.Loader)
+    }
 }
 
 # Starts the app with these environment variables, only for its process.
@@ -355,13 +369,14 @@ function Start-Revit($target) {
     }
 }
 
-# AutoCAD has no folder that it loads plugins from for one start only, so a startup script loads the local build.
+# AutoCAD has no folder that it loads plugins from for one start only, so a startup script loads the local loader, which loads the local build.
+# An installed loader loads the local build too, see the description at the top.
 # AutoLISP, so that a path with spaces works. From a script NETLOAD reads the path from the command line, not from a file dialog.
 function Start-AutoCAD($target) {
-    $dll = $target.Loaded.Replace('\', '/')
+    $dll = $target.Loader.Replace('\', '/')
     [IO.File]::WriteAllText($target.Script, "(command `"_.NETLOAD`" `"$dll`")`r`n", (New-Object Text.UTF8Encoding($false)))
-    $process = Start-App $target @{}
-    Write-Host "Started $($target.Label), process $($process.Id). If it asks whether to load the unsigned Caddis.AutoCAD.dll, choose 'Load Once' or 'Always Load'."
+    $process = Start-App $target @{ $autocadDevVariable = $target.Stage }
+    Write-Host "Started $($target.Label), process $($process.Id). If it asks whether to load the unsigned Caddis.AutoCAD.Loader.dll, choose 'Load Once' or 'Always Load'."
     Wait-ForLoad $process $target
 }
 
@@ -383,6 +398,10 @@ try {
         Write-Host "dotnet build $($target.Project) -c $Configuration -f $($target.Tfm)"
         dotnet build (Join-Path $repo $target.Project) -c $Configuration -f $target.Tfm -nologo -v quiet
         if ($LASTEXITCODE -ne 0) { throw "The build failed." }
+        if ($target.Kind -eq "AutoCAD") {
+            dotnet build (Join-Path $repo "Caddis.AutoCAD.Loader") -c $Configuration -nologo -v quiet
+            if ($LASTEXITCODE -ne 0) { throw "The build of the loader failed." }
+        }
     }
     Copy-Build $target
     switch ($target.Kind) { "Rhino" { Start-Rhino $target } "Revit" { Start-Revit $target } "AutoCAD" { Start-AutoCAD $target } }

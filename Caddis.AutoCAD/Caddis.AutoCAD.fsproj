@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- One build per runtime of AutoCAD: net8.0 for AutoCAD 2025 and 2026 as released, net10.0 for their later updates, e.g. AutoCAD 2025 25.0.189.
-    WPF for the dispatcher of AutoCAD's main thread, Windows Forms for System.Drawing, which Document.CapturePreviewImage returns. -->
+    WPF for the dispatcher of AutoCAD's main thread and the shell of the panel, Windows Forms for System.Drawing, which Document.CapturePreviewImage returns.
+    The panel content is the shared Avalonia view of Caddis.UI. -->
     <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
@@ -18,6 +19,7 @@
   The package has net8.0 reference assemblies, they work from net10.0 too. Its version 25.0.0 depends on a prerelease package, 25.0.1 doesn't. -->
   <ItemGroup>
     <PackageReference Include="AutoCAD.NET" Version="25.0.1" PrivateAssets="all" ExcludeAssets="runtime" GeneratePathProperty="true" />
+    <PackageReference Include="Avalonia.Win32" Version="12.1.3" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
     <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- the version that FCS pins in the net8.0 build of Caddis.Core -->
@@ -28,17 +30,31 @@
 
   <ItemGroup>
     <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+    <ProjectReference Include="../Caddis.UI/Caddis.UI.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="UiThread.fs" />
     <Compile Include="Log.fs" />
+    <Compile Include="Updates.fs" />
     <Compile Include="AutoCADInfo.fs" />
     <Compile Include="Macro.fs" />
     <Compile Include="CommandLine.fs" />
     <Compile Include="AutoCADHost.fs" />
     <Compile Include="App.fs" />
+    <Compile Include="AvaloniaHost.fs" />
+    <Compile Include="PanelTheme.fs" />
+    <Compile Include="Panel.fs" />
+    <Compile Include="RibbonIcons.fs" />
+    <Compile Include="Ribbon.fs" />
     <Compile Include="Commands.fs" />
     <Compile Include="Extension.fs" />
   </ItemGroup>
+  <!-- AutoCAD runs on Windows x64. Software rendering needs neither ANGLE nor native debug symbols, as in Caddis.Revit. -->
+  <Target Name="RemoveUnusedNativeLibraries" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(RuntimeIdentifier)' != 'win-x64'" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(NuGetPackageId)' == 'Avalonia.Angle.Windows.Natives' or '%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>

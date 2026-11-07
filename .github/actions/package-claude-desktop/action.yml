@@ -1,5 +1,5 @@
 name: Package for Claude Desktop
-description: Build the Claude Desktop extensions caddis-rhino.mcpb and caddis-revit.mcpb.
+description: Build the Claude Desktop extensions caddis-rhino.mcpb, caddis-revit.mcpb and caddis-autocad.mcpb.
 
 # Used by build.yml and release-revit.yml. Requires a Release build of Caddis.Core for net10.0, and Node, which the runners have.
 # bundles.fsx writes the files of each extension with Caddis.Core, as the panel does, into bin/publish/claude-desktop/<name>,
@@ -13,6 +13,9 @@ outputs:
   revit-path:
     description: Path to caddis-revit.mcpb, relative to the repository root
     value: ${{ steps.pack.outputs.revit-path }}
+  autocad-path:
+    description: Path to caddis-autocad.mcpb, relative to the repository root
+    value: ${{ steps.pack.outputs.autocad-path }}
 
 runs:
   using: composite
@@ -34,7 +37,7 @@ runs:
         MCPB_VERSION: '2.1.2'
       run: |
         $ErrorActionPreference = 'Stop'
-        foreach ($app in 'rhino', 'revit') {
+        foreach ($app in 'rhino', 'revit', 'autocad') {
           $dir = "bin/publish/claude-desktop/caddis-$app"
           npx --yes "@anthropic-ai/mcpb@$env:MCPB_VERSION" pack $dir "$dir.mcpb"
           if ($LASTEXITCODE -ne 0) {
