@@ -1,6 +1,6 @@
-# Run a local build in Rhino or Revit
+# Run a local build in Rhino, Revit or AutoCAD
 
-The files in this folder build Caddis and start Rhino or Revit with only that build, also when Caddis is installed from Yak or with the Revit installer.
+The files in this folder build Caddis and start Rhino, Revit or AutoCAD with only that build, also when Caddis is installed from Yak or with the Revit installer.
 The installed Caddis stays installed: Rhino or Revit started in any other way loads it as before, so there is nothing to switch back.
 Double-click one of them, or pin a shortcut to it on the taskbar:
 
@@ -10,6 +10,7 @@ Double-click one of them, or pin a shortcut to it on the taskbar:
 | `Rhino8NetFx.cmd` | Rhino 8 on .NET Framework |
 | `Rhino9.cmd` | Rhino 9 on .NET 10 |
 | `Revit2024.cmd` to `Revit2027.cmd` | that Revit |
+| `AutoCAD2025.cmd` | AutoCAD 2025, on the .NET its `acdbmgd.runtimeconfig.json` names. `Start-Dev.cmd AutoCAD2026` starts a later AutoCAD |
 | `Start-Dev.cmd` | asks which of the installed apps to start, or takes it as argument, e.g. `Start-Dev.cmd Rhino8` |
 
 All of them run [Start-Dev.ps1](Start-Dev.ps1). If something fails, the window stays open and shows why.
@@ -30,5 +31,7 @@ All of them run [Start-Dev.ps1](Start-Dev.ps1). If something fails, the window s
   set only for the Revit started here. Nothing else changes.
 - **Revit 2024**, or an installed Caddis up to 0.2.1: `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>` is replaced by one for the local build
   until Revit has loaded it, then put back. Revit asks whether to load the unsigned add-in, choose `Always Load` or `Load Once`.
+- **AutoCAD 2025 and later** is started with `/b load.scr`, a startup script in `%LocalAppData%\Caddis.Dev\AutoCAD<year>` that loads the local build with `NETLOAD`.
+  Nothing else changes, there is no installed Caddis for AutoCAD yet. AutoCAD asks whether to load the unsigned `Caddis.AutoCAD.dll`, unless its folder is in AutoCAD's trusted locations.
 
 To register a local build in Revit for every start instead, see [install-dev.ps1](../Caddis.Revit/README.md#installation-for-development).

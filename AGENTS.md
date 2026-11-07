@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Caddis is an MCP server that hosts one persistent F# Interactive session inside Rhino or Revit,
-so that AI agents can run RhinoCommon or Revit API code in the running app.
-F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac.
+Caddis is an MCP server that hosts one persistent F# Interactive session inside Rhino, Revit or AutoCAD,
+so that AI agents can run RhinoCommon, Revit API or AutoCAD .NET API code in the running app.
+F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac. AutoCAD is a first version, without panel, installer or `caddis_command`.
 
 Before a change that isn't trivial, read the relevant part of [Architecture.md](Architecture.md):
 it covers the design decisions, every file, the request flow, threads, cancellation, and the known risks.
@@ -25,34 +25,36 @@ dotnet test Tests/Caddis.UI.Tests -f net10.0 --filter "FullyQualifiedName~PanelT
 - Core tests run on net8.0, net10.0 and net48. UI tests run on net8.0 and net10.0 only, so on net48 only the build checks the panel (Avalonia 11).
 - There is no formatter or linter config. Warning 1182 (unused variables) is on.
 
-### In Rhino or Revit
+### In Rhino, Revit or AutoCAD
 
-Rhino and Revit themselves have no automated tests. CI tests the core with `HeadlessHost` and the panel with Avalonia's headless platform.
-So changes to `RhinoHost`, `RevitHost`, the panel's hosting or anything else app-specific need a test in the app.
+Rhino, Revit and AutoCAD themselves have no automated tests. CI tests the core with `HeadlessHost` and the panel with Avalonia's headless platform.
+So changes to `RhinoHost`, `RevitHost`, `AutoCADHost`, the panel's hosting or anything else app-specific need a test in the app.
 
-- `Dev\Rhino8.cmd`, `Rhino8NetFx.cmd`, `Rhino9.cmd` and `Revit2024.cmd` to `Revit2027.cmd` build Debug and start that app with only this build. The installed Caddis stays installed. They take `-Configuration Release` and `-NoBuild`, see [Dev/README.md](Dev/README.md).
+- `Dev\Rhino8.cmd`, `Rhino8NetFx.cmd`, `Rhino9.cmd`, `Revit2024.cmd` to `Revit2027.cmd` and `AutoCAD2025.cmd` build Debug and start that app with only this build. The installed Caddis stays installed. They take `-Configuration Release` and `-NoBuild`, see [Dev/README.md](Dev/README.md).
   The build is copied first, so you can build again while the app runs, but the app loads a new build only after a restart.
-- With `"autoStart": true` in `%AppData%\Caddis\settings-rhino.json` or `settings-revit.json`, the server starts with the app.
-  Once it listens, it writes `%AppData%\Caddis\instances\<pid>.json`. Then use REST: `curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"`, with port 7820 for Revit.
+- With `"autoStart": true` in `%AppData%\Caddis\settings-rhino.json`, `settings-revit.json` or `settings-autocad.json`, the server starts with the app.
+  Once it listens, it writes `%AppData%\Caddis\instances\<pid>.json`. Then use REST: `curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"`, with port 7820 for Revit and 7830 for AutoCAD.
 - In Revit, a modal dialog blocks every run from starting. `GET /dialogs` lists it and `POST /dialog {"button": "..."}` presses one of its buttons.
+- In AutoCAD, a command that waits for input rejects every run, and neither an Esc posted to its window nor a COM call from outside cancels it. Avoid queuing commands without all their inputs while testing.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` before passing `/switch` arguments to Windows programs. Otherwise Git Bash rewrites them as paths.
 
 ## Architecture
 
 | Project | |
 |---|---|
-| `Caddis.Core` | F# session, runs, `HttpListener` server, REST, MCP, API docs. No Rhino or Revit dependency |
-| `Caddis.UI` | Avalonia panel shared by both apps |
+| `Caddis.Core` | F# session, runs, `HttpListener` server, REST, MCP, API docs. No Rhino, Revit or AutoCAD dependency |
+| `Caddis.UI` | Avalonia panel shared by Rhino and Revit |
 | `Caddis.Rhino` | Rhino plugin (`.rhp`): `RhinoHost`, the `Caddis` command, the panel in an Eto `NativeControlHost` |
 | `Caddis.Revit` | Revit add-in: `RevitHost`, the ribbon, the panel in a WPF `HwndHost` |
 | `Caddis.Revit.Loader` | C# add-in for Revit 2025 and later. It loads the net8.0 or net10.0 build of Caddis.Revit at start |
 | `Caddis.Revit.Bootstrapper` | Velopack app of the Revit installer: registers the add-in and installs updates |
+| `Caddis.AutoCAD` | AutoCAD plugin, loaded with `NETLOAD`: `AutoCADHost`, the `CADDIS` command. No panel or installer yet |
 
 - An app plugs in by implementing `ICaddisHost` and supplying a `HostInfo`, both in [Caddis.Core/Model.fs](Caddis.Core/Model.fs). The interface carries the UI thread, undo, capture, export, commands and dialogs. `HeadlessHost` implements it for the tests.
 - How a request runs: `CaddisServer` checks `Origin` and the body size. It passes the request to `Rest.handle` or `McpEndpoint`, which call `CaddisService`. `CaddisService` calls `FsiHost`, which runs the code on the app's UI thread via `host.InvokeOnUi`, or on the `Caddis FSI` background `WorkerThread`.
 - There is one F# session per app process, shared by all clients. Only one run runs at a time: a second request gets 409 or an MCP tool error and is never queued. Changing the thread mode resets the session.
 - MCP is hand-written JSON-RPC over Streamable HTTP, with one JSON response per request and no SSE. [McpView](Caddis.Core/Http/McpView.fs) writes results as text for the model plus images, without `structuredContent`, because Claude Code would then hide the text.
-- The tool descriptions are written for the model and differ per app. They are the `McpTexts` in [RhinoInfo.fs](Caddis.Rhino/RhinoInfo.fs), [RevitInfo.fs](Caddis.Revit/RevitInfo.fs) and [HeadlessHost.fs](Caddis.Core/HeadlessHost.fs). `None` for `command` or `dialog` leaves out that tool.
+- The tool descriptions are written for the model and differ per app. They are the `McpTexts` in [RhinoInfo.fs](Caddis.Rhino/RhinoInfo.fs), [RevitInfo.fs](Caddis.Revit/RevitInfo.fs), [AutoCADInfo.fs](Caddis.AutoCAD/AutoCADInfo.fs) and [HeadlessHost.fs](Caddis.Core/HeadlessHost.fs). `None` for `command` or `dialog` leaves out that tool.
   A new or changed tool or endpoint touches `Http/Mcp.fs`, `Http/Rest.fs` with its `/help`, those texts, the tables in the README and section 8 of Architecture.md.
 - F# compiles files in the order of the `<Compile>` items in each `.fsproj`. Add a new file there, after the files it uses.
 
@@ -64,6 +66,7 @@ Rhino and Revit load one copy of each assembly into their process, shared with e
 - Avoid new packages. Don't use ASP.NET Core or Kestrel, which Rhino doesn't load, the MCP C# SDK or Newtonsoft.Json. Write JSON with the in-box `System.Text.Json` `JsonNode`, via [Json.fs](Caddis.Core/Json.fs).
 - net48 builds use Avalonia 11, the other builds Avalonia 12. Panel code and XAML must work with both.
 - Revit builds compile against the oldest Revit they run in: 2024 for net48, 2025 for net8.0 and net10.0.
+- AutoCAD builds compile against AutoCAD 2025 (the package AutoCAD.NET 25.0.1) for net8.0 and net10.0. AutoCAD 2025 moved from .NET 8 to .NET 10 with its update 25.0.189.
 
 Some code depends on internals or on what the apps do at runtime:
 - Cancellation, and the script folder of `caddis_check`, read private FCS fields by reflection. `FsiAssemblyResolver` puts itself first by setting a private field of the runtime. After any FCS or .NET upgrade, test again in Rhino, with values defined in a second run and after a reset.

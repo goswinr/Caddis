@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Starts Rhino or Revit with the local build of Caddis instead of the installed one.
+Starts Rhino, Revit or AutoCAD with the local build of Caddis instead of the installed one.
 
 .DESCRIPTION
 Builds Caddis for the app, copies the build to %LocalAppData%\Caddis.Dev\<app> and starts the app with only that build.
@@ -17,6 +17,9 @@ In Revit 2025 and later, if the installed loader reads CADDIS_REVIT_DEV, that is
 Otherwise, e.g. in Revit 2024, Caddis.addin is replaced by one for the local build until Revit has loaded it, then put back.
 Revit then asks whether to load the unsigned add-in.
 
+AutoCAD 2025 and later get the startup script load.scr with /b, it loads the local build with NETLOAD. Nothing else changes.
+AutoCAD then asks whether to load the unsigned Caddis.AutoCAD.dll, unless its folder is in AutoCAD's trusted locations.
+
 If the script is stopped before it put the installed Caddis back, its next run does it.
 
 .EXAMPLE
@@ -31,7 +34,7 @@ Builds and starts Rhino 8 on .NET 8, with its settings scheme CaddisDev. Argumen
 ./Dev/Start-Dev.ps1 Revit2026 -Configuration Release -NoBuild
 #>
 param(
-    # Rhino8, Rhino8NetFx for Rhino 8 on .NET Framework, Rhino9, or Revit and its year, e.g. Revit2026. Without it the script asks.
+    # Rhino8, Rhino8NetFx for Rhino 8 on .NET Framework, Rhino9, or Revit or AutoCAD and its year, e.g. Revit2026 or AutoCAD2025. Without it the script asks.
     [Parameter(Position = 0)]
     [string]$App = "",
     [ValidateSet("Debug", "Release")]
@@ -222,7 +225,27 @@ function New-RevitTarget([int]$year) {
     }
 }
 
-# The installed Rhinos and Revits that Caddis supports.
+function New-AutoCADTarget([int]$year) {
+    $folder = Join-Path $env:ProgramFiles "Autodesk\AutoCAD $year"
+    # e.g. "tfm": "net10.0" from the update 25.0.189 of AutoCAD 2025 on. AutoCAD 2024 and older run on .NET Framework, Caddis doesn't support them.
+    $config = Join-Path $folder "acdbmgd.runtimeconfig.json"
+    if (-not (Test-Path -LiteralPath $config)) { return }
+    $tfm = (Get-Content -LiteralPath $config -Raw | ConvertFrom-Json).runtimeOptions.tfm
+    $major = [int]($tfm -replace '^net(\d+).*$', '$1')
+    $framework = if ($major -ge 10) { "net10.0" } else { "net8.0" }
+    $stage = Join-Path $stageRoot "AutoCAD$year"
+    $stageBuild = Join-Path $stage $framework
+    $script = Join-Path $stage "load.scr"
+    [pscustomobject]@{
+        Name = "AutoCAD$year"; Kind = "AutoCAD"; Label = "AutoCAD $year on .NET $major"; Year = $year
+        Exe = Join-Path $folder "acad.exe"; Arguments = @("/b", "`"$script`"")
+        Project = "Caddis.AutoCAD"; Tfm = "$framework-windows"
+        Stage = $stage; StageBuild = $stageBuild; Script = $script
+        Loaded = Join-Path $stageBuild "Caddis.AutoCAD.dll"
+    }
+}
+
+# The installed Rhinos, Revits and AutoCADs that Caddis supports.
 function Get-Targets {
     foreach ($major in 8, 9) {
         $exe = (Get-ItemProperty "HKLM:\SOFTWARE\McNeel\Rhinoceros\$major.0\Install" -ErrorAction SilentlyContinue).ExePath
@@ -237,11 +260,14 @@ function Get-Targets {
     Get-ChildItem (Join-Path $env:ProgramFiles "Autodesk") -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match '^Revit (\d{4})$' -and [int]$Matches[1] -ge 2024 -and (Test-Path (Join-Path $_.FullName "Revit.exe")) } |
         ForEach-Object { New-RevitTarget ([int]($_.Name -replace '^Revit ', '')) }
+    Get-ChildItem (Join-Path $env:ProgramFiles "Autodesk") -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^AutoCAD (\d{4})$' -and [int]$Matches[1] -ge 2025 -and (Test-Path (Join-Path $_.FullName "acad.exe")) } |
+        ForEach-Object { New-AutoCADTarget ([int]($_.Name -replace '^AutoCAD ', '')) }
 }
 
 function Select-Target {
     $targets = @(Get-Targets)
-    if ($targets.Count -eq 0) { throw "Found no Rhino 8 or 9 and no Revit from 2024 on." }
+    if ($targets.Count -eq 0) { throw "Found no Rhino 8 or 9, no Revit from 2024 on and no AutoCAD from 2025 on." }
     if ($App) {
         $target = $targets | Where-Object Name -eq $App
         if (-not $target) { throw "Unknown app '$App'. Installed are: $($targets.Name -join ', ')" }
@@ -329,6 +355,16 @@ function Start-Revit($target) {
     }
 }
 
+# AutoCAD has no folder that it loads plugins from for one start only, so a startup script loads the local build.
+# AutoLISP, so that a path with spaces works. From a script NETLOAD reads the path from the command line, not from a file dialog.
+function Start-AutoCAD($target) {
+    $dll = $target.Loaded.Replace('\', '/')
+    [IO.File]::WriteAllText($target.Script, "(command `"_.NETLOAD`" `"$dll`")`r`n", (New-Object Text.UTF8Encoding($false)))
+    $process = Start-App $target @{}
+    Write-Host "Started $($target.Label), process $($process.Id). If it asks whether to load the unsigned Caddis.AutoCAD.dll, choose 'Load Once' or 'Always Load'."
+    Wait-ForLoad $process $target
+}
+
 # One run at a time, so that one doesn't put back what another has just moved aside.
 $mutex = New-Object Threading.Mutex($false, "Local\Caddis.Start-Dev")
 try {
@@ -349,7 +385,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "The build failed." }
     }
     Copy-Build $target
-    if ($target.Kind -eq "Rhino") { Start-Rhino $target } else { Start-Revit $target }
+    switch ($target.Kind) { "Rhino" { Start-Rhino $target } "Revit" { Start-Revit $target } "AutoCAD" { Start-AutoCAD $target } }
 } finally {
     $mutex.ReleaseMutex()
     $mutex.Dispose()

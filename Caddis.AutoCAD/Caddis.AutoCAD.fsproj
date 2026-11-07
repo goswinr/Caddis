@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- One build per runtime of AutoCAD: net8.0 for AutoCAD 2025 and 2026 as released, net10.0 for their later updates, e.g. AutoCAD 2025 25.0.189.
+    WPF for the dispatcher of AutoCAD's main thread, Windows Forms for System.Drawing, which Document.CapturePreviewImage returns. -->
+    <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>Caddis.AutoCAD</RootNamespace>
+    <AssemblyName>Caddis.AutoCAD</AssemblyName>
+    <AssemblyTitle>Caddis</AssemblyTitle>
+    <Description>An F# interactive host for AutoCAD, controlled via HTTP and MCP.</Description>
+    <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the dll, as for Revit -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- AutoCAD provides its API at runtime. Each build references the oldest AutoCAD it runs in, 2025.
+  The package has net8.0 reference assemblies, they work from net10.0 too. Its version 25.0.0 depends on a prerelease package, 25.0.1 doesn't. -->
+  <ItemGroup>
+    <PackageReference Include="AutoCAD.NET" Version="25.0.1" PrivateAssets="all" ExcludeAssets="runtime" GeneratePathProperty="true" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="FSharp.Core" Version="8.0.403" /> <!-- the version that FCS pins in the net8.0 build of Caddis.Core -->
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <PackageReference Include="FSharp.Core" Version="10.1.401" /> <!-- the version that FCS pins in the net10.0 build of Caddis.Core -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Caddis.Core/Caddis.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="UiThread.fs" />
+    <Compile Include="Log.fs" />
+    <Compile Include="AutoCADInfo.fs" />
+    <Compile Include="AutoCADHost.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Commands.fs" />
+    <Compile Include="Extension.fs" />
+  </ItemGroup>
+</Project>

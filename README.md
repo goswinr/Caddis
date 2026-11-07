@@ -30,13 +30,14 @@ AI agents like Claude or Codex generate the F# code and send it for evaluation a
 Plus, you get the F# code it ran too, so you could make a permanent plugin form from it.
 This makes it ideal for AI-driven automation and rapid prototyping within Rhino and Revit.
 
-> Early development. Tested in Revit 2024 and 2026.5 and Rhino 8.35 and 9.0-beta on Windows, not yet on Mac.
+> Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0-beta and AutoCAD 2025 on Windows, not yet on Mac.
 
 
 | App | Runs in | Install | Read more |
 |---|---|---|---|
 | Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | In Rhino's `PackageManager`, search for `Caddis` or use [food4rhino](https://www.food4rhino.com/en/app/caddis) | [Caddis for Rhino](Caddis.Rhino/README.md) |
 | Revit | Revit 2024 to 2027 on Windows | Run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
+| AutoCAD | AutoCAD 2025 and later on Windows, a first version | Not packaged yet: build it and load it with `NETLOAD` | [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
 
 Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
 It works for every version of Rhino and Revit. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).
@@ -91,12 +92,13 @@ Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: dr
 Its setting `Port` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
 While the app isn't running, the extension still lists its tools, and their results say to start the app.
 
-Rhino and Revit have their own port and MCP name, so that both can run and stay registered in Claude Code at the same time:
+Each app has its own port and MCP name, so that they can run and stay registered in Claude Code at the same time:
 
 | App | Default port | MCP name |
 |---|---|---|
 | Rhino | 7810 | `caddis-rhino` |
 | Revit | 7820 | `caddis-revit` |
+| AutoCAD | 7830 | `caddis-autocad` |
 
 If the port is taken, the next free one is used, and the panel shows the agents set up for the port as inactive.
 
@@ -203,10 +205,12 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 |---|---|
 | `settings-rhino.json` | The settings of Caddis in Rhino |
 | `settings-revit.json` | The settings of Caddis in Revit |
+| `settings-autocad.json` | The settings of Caddis in AutoCAD |
 | `panel-rhino8.json`, `panel-rhino9.json` | Whether the panel is shown in Rhino and where, restored when Rhino starts |
 | `instances\<process id>.json` | The port of each running server |
 | `revit.log` | Caddis' own messages in Revit |
 | `revit-update.json` | The result of the latest update check in Revit, which the panel and `Info` show |
+| `autocad.log` | Caddis' own messages in AutoCAD |
 
 ## Security
 Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.
@@ -222,12 +226,13 @@ dotnet test Caddis.slnx
 
 | Project | |
 |---|---|
-| `Caddis.Core` | The F# session, HTTP server, REST and MCP, without a Rhino or Revit dependency, tested with a headless host |
+| `Caddis.Core` | The F# session, HTTP server, REST and MCP, without a Rhino, Revit or AutoCAD dependency, tested with a headless host |
 | `Caddis.UI` | The shared Avalonia panel, styles, output formatting and code viewer |
 | `Caddis.Rhino` | The Rhino plugin, see [Caddis for Rhino](Caddis.Rhino/README.md) |
 | `Caddis.Revit` | The Revit add-in, see [Caddis for Revit](Caddis.Revit/README.md) |
 | `Caddis.Revit.Loader` | Loads the build of `Caddis.Revit` for the .NET of Revit 2025 and later |
 | `Caddis.Revit.Bootstrapper` | The app of the Revit installer, it registers the add-in and installs updates |
+| `Caddis.AutoCAD` | The AutoCAD plugin, a first version without panel and installer, see [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
 | `Tests` | Tests of Core, and of the shared panel with Avalonia's headless platform on both runtimes |
 
 `Caddis.Core` and `Caddis.UI` target `net8.0;net10.0` with Avalonia 12, and `net48` for Rhino and Revit 2024 on .NET Framework, with Avalonia 11.
@@ -235,8 +240,8 @@ Each app supplies the panel's actions, theme colors and docking wrapper: Eto in 
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
 See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
 
-### Run a local build in Rhino or Revit
-To start Rhino or Revit with a local build instead of the installed Caddis, double-click e.g. `Dev\Rhino8.cmd` or `Dev\Revit2026.cmd`, see [Dev/README.md](Dev/README.md).
+### Run a local build in Rhino, Revit or AutoCAD
+To start Rhino, Revit or AutoCAD with a local build instead of the installed Caddis, double-click e.g. `Dev\Rhino8.cmd`, `Dev\Revit2026.cmd` or `Dev\AutoCAD2025.cmd`, see [Dev/README.md](Dev/README.md).
 
 ### Releases
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
