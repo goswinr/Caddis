@@ -127,7 +127,7 @@ let ``MCP commands without Rhino are a tool error`` () =
     Assert.True(flag [ "isError" ] result)
     let text = resultText result
     Assert.Matches(@"^Run c\d+: runtimeError", text)
-    Assert.Contains("Running commands needs a host app like Rhino.", text)
+    Assert.Contains("Running commands needs a host app like Rhino or AutoCAD.", text)
 
 [<Fact>]
 let ``REST runs a single command given as string`` () =
@@ -135,7 +135,7 @@ let ``REST runs a single command given as string`` () =
     Assert.Equal(HttpStatusCode.OK, status)
     let run = JsonNode.Parse body
     Assert.Equal("commands", str [ "kind" ] run)
-    Assert.Equal("Running commands needs a host app like Rhino.", str [ "message" ] run)
+    Assert.Equal("Running commands needs a host app like Rhino or AutoCAD.", str [ "message" ] run)
     Assert.Equal("_Zoom _All _Extents", server.Value.Service.Runs.TryGet(str [ "id" ] run).Value.Code)
 
 [<Fact>]

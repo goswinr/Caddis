@@ -123,7 +123,7 @@ type CaddisService(host: ICaddisHost, store: SettingsStore, runs: RunRegistry) =
             args.commands
             |> Array.map (fun m -> m.TrimStart().TrimStart('!').TrimStart())
             |> Array.filter (String.IsNullOrWhiteSpace >> not)
-        if macros.Length = 0 then invalidArg "commands" "Provide 'commands', e.g. [\"-_Line 0,0,0 10,0,0\"]."
+        if macros.Length = 0 then invalidArg "commands" $"Provide 'commands', the {host.Info.appName} commands to run."
         fsi.StartCommands {
             macros = macros
             select = args.select

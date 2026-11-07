@@ -68,7 +68,7 @@ type HeadlessHost(log: string -> unit) =
         member _.Undo _ = Error "Undo needs a host app like Rhino or Revit."
         member _.Dialogs() = []
         member _.PressDialogButton(_, _) = Error "There is no host app with dialogs."
-        member _.RunCommands(_, _) = failwith "Running commands needs a host app like Rhino."
+        member _.RunCommands(_, _) = failwith "Running commands needs a host app like Rhino or AutoCAD."
 
     interface IDisposable with
         member _.Dispose() = ui.Stop()

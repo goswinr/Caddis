@@ -1,8 +1,8 @@
 # Caddis for AutoCAD
 
 The AutoCAD plugin of Caddis, an F# interactive host for AutoCAD 2025 and later, controlled through HTTP and MCP.
-It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino,
-except `caddis_command` and `caddis_dialog`, which are not there yet.
+It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino, also `caddis_command`,
+but not yet `caddis_dialog`.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
 > A first version, not packaged yet. Tested in AutoCAD 2025 with its update 25.0.189, on .NET 10.
@@ -47,7 +47,7 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 
 - **Application context.** Caddis runs code from AutoCAD's message loop, like the code of a modeless window, not inside a command.
   `Editor.Command` fails there with `eInvalidInput`, and the `Editor.Get*` prompts wait for the person.
-  To run a command from a script, queue it with `doc.SendStringToExecute("_.ZOOM _E ", true, false, false)`: AutoCAD runs it after the run has ended.
+  To run commands, use `caddis_command`. A script can only queue a command with `doc.SendStringToExecute("_.ZOOM _E ", true, false, false)`: AutoCAD runs it after the run has ended.
 - **Document lock.** In UI-thread mode Caddis locks the active drawing for the whole run, so the script can change it without locking it itself.
   AutoCAD counts each lock as a command. A run that changed something is one undo step, named after the run, e.g. `Caddis r12`.
   AutoCAD keeps no undo step for a run that changed nothing.
@@ -58,6 +58,26 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 - **Background mode.** Every call of the AutoCAD API must be inside `Caddis.Script.OnUi(fun () -> ...)`. Caddis locks the drawing for each call,
   so each call that changes something is its own undo step. `caddis_undo` works only for a run with exactly one of them.
 - **Redraw.** The views are redrawn after each run.
+
+## AutoCAD commands
+
+`caddis_command` runs commands as if typed at the command line, e.g. `["_.LINE 0,0 10,0 10,5 \"\"", "_.ZOOM _E"]`, one after the other until one does not succeed.
+
+- **Inputs** are separated by spaces. Unlike in scripts a space is no Enter: an empty input `""` is Enter, e.g. to end LINE.
+  An input that starts with a quote ends at the next quote, e.g. `_.-LAYER _M "Wall 1" ""`. Other quotes are part of the input, e.g. `2'6"`. A leading `^C^C` of menu macros is left out.
+- **How**: Caddis calls `Editor.Command` with the inputs of each macro, all in one call of `DocumentCollection.ExecuteInCommandContextAsync`.
+  AutoCAD runs that call as its command `EXECUTEFUNCTION`, once Caddis' call on the main thread has returned. So all commands of a call are one undo step, which `caddis_undo` reverts with `UNDO 1`.
+  As with `(command ...)` in AutoLISP, commands use their command line version, e.g. UNITS. Commands defined in AutoLISP can't be run this way.
+- **Selection**: `select` takes handles, otherwise the commands get the objects that are selected in AutoCAD. `EXECUTEFUNCTION` clears the selection when it starts, so Caddis selects them again.
+  A command uses the selected objects only if no inputs follow its name, e.g. `_.ERASE`. Otherwise it asks at `Select objects:`, where `_P ""` gives it the selected objects, e.g. `_.MOVE _P "" 0,0 10,0`:
+  Caddis runs SELECT with them first, which makes them the previous selection set.
+- **Waiting for input**: a command that waits at a prompt for input that the macro does not give is cancelled after `inputTimeoutMs` (3 s), and `caddis_cancel` cancels it at once.
+  Caddis' calls on the main thread still run while a command waits. One of them queues `^C^C` with `SendStringToExecute`, which the prompt takes as its input.
+  The `PromptingFor*` and `PromptedFor*` events of the editor tell whether a prompt waits, and its message.
+- **Dialogs**: a command that opens a modal dialog, e.g. OPTIONS, waits until someone closes it in AutoCAD, and the result says so. Caddis doesn't cancel it:
+  the dialog doesn't take the `^C^C`, AutoCAD would run it later, e.g. at a prompt of the next command. A `caddis_cancel` meanwhile keeps the next macros from running.
+- **Results**: the English name and result of each command, the handles of the entities in layouts that the commands created, changed and erased, and the selection if it changed.
+  Also the command line from AutoCAD's history, e.g. what LIST or DIST print, read with the internal API `Autodesk.AutoCAD.Internal.Utils.GetLastCommandLines`. AutoCAD keeps its last 400 lines.
 
 ## Status, capture and export
 
@@ -71,9 +91,8 @@ Caddis writes its messages to the command line and to `%AppData%\Caddis\autocad.
 
 | Missing | Notes |
 |---|---|
-| `caddis_command` | A command that waits for input can't be cancelled from outside AutoCAD: it ignores an Esc posted to its window, and refuses COM calls while it waits. Caddis' own calls on the main thread still run then, so the plan is to queue `^C^C` with `SendStringToExecute` from one of them, not tested yet. |
 | `caddis_dialog` | The Win32 and UI Automation code of Revit's dialogs could be shared. |
 | The panel, a ribbon tab | AutoCAD's `PaletteSet` can host the Avalonia panel through WPF, as Revit's dockable pane does. |
 | An installer and updates | A bundle in `ApplicationPlugins`, with a loader that picks the net8.0 or net10.0 build, as in Revit. |
 | Summaries in `caddis_describe` | AutoCAD doesn't install the XML docs of its API. They are in the AutoCAD.NET packages, whose license allows passing them on only with the license. |
-| The command line in results | AutoCAD has no API to read its command line. Output of `Editor.WriteMessage` is not in the result, use `printfn`. |
+| The command line in results of `caddis_eval` | Output of `Editor.WriteMessage` is not in the result, use `printfn`. Command runs show the command line from AutoCAD's history, F# runs could too. |

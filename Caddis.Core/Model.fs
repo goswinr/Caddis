@@ -705,5 +705,6 @@ type ICaddisHost =
 
     /// Runs commands of the host app, e.g. Rhino command macros, writes what they print to run.CommandLine,
     /// sets run.Commands and the undo records, and returns the outcome. Called on the UI thread.
+    /// The task may complete after this call has returned, e.g. in AutoCAD, which runs commands only once the UI thread is idle again.
     /// A command that waits for input is cancelled after request.inputTimeout, or when run.CancelRequested is set.
-    abstract RunCommands: run: Run * request: CommandRequest -> RunOutcome
+    abstract RunCommands: run: Run * request: CommandRequest -> Task<RunOutcome>

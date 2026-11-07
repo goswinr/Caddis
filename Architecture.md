@@ -99,6 +99,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - Export to the file formats of the app, as a run with its files.
 - Rhino: command macros like typed at the command line (`caddis_command`), with cancellation of commands that wait for input; a yellow border around the viewports while a run is in progress; echo of script output to the command line; the SynchronizationContext for Rhino.Scripting and its Esc state cleared before each run; the MCP instructions suggest Rhino.Scripting.FSharp when NuGet packages can be used; runs and the scripts of Fesh.Rhino don't overlap.
 - Revit: runs in Revit's API context through an external event; a transaction group per run, rolled back if the run fails; Revit's warnings as notes and errors as rolled-back transactions instead of dialogs; changed elements counted per category; listing Revit's blocking dialogs and pressing their buttons (`caddis_dialog`).
+- AutoCAD: a document lock per run, which is its undo step; command macros (`caddis_command`) through `Editor.Command` in AutoCAD's command context, with cancellation of commands that wait for input and the command line from AutoCAD's history.
 
 **Server**
 - MCP over Streamable HTTP at `/mcp`, with single JSON responses, and plain REST endpoints.
@@ -329,9 +330,11 @@ F# compiles files in the order of the project file, listed here in that order. L
 
 | File | Types and modules | What |
 |---|---|---|
-| [UiThread.fs](Caddis.AutoCAD/UiThread.fs) | `UiThread` (internal) | the WPF dispatcher of AutoCAD's main thread: `invoke` and `post` |
+| [UiThread.fs](Caddis.AutoCAD/UiThread.fs) | `UiThread` (internal) | the WPF dispatcher of AutoCAD's main thread: `invoke`, `post`, and `postLater`, which waits until AutoCAD is back in its message loop |
 | [Log.fs](Caddis.AutoCAD/Log.fs) | `AutoCADLog` | messages to the command line and `autocad.log`, the latest errors |
 | [AutoCADInfo.fs](Caddis.AutoCAD/AutoCADInfo.fs) | `AutoCADInfo` | `HostInfo` and the MCP texts for AutoCAD, handles as object ids |
+| [Macro.fs](Caddis.AutoCAD/Macro.fs) | `AutoCADMacro` (internal) | splits a macro of `caddis_command` into the inputs of `Editor.Command` |
+| [CommandLine.fs](Caddis.AutoCAD/CommandLine.fs) | `AutoCADCommandLine`, `PromptListener` (internal) | the command line history and what it added, the prompt, whether a modal dialog is open; the prompt events of the editor |
 | [AutoCADHost.fs](Caddis.AutoCAD/AutoCADHost.fs) | `AutoCADHost` | the `ICaddisHost` for AutoCAD |
 | [App.fs](Caddis.AutoCAD/App.fs) | `App` | the server of this AutoCAD and the actions of the command |
 | [Commands.fs](Caddis.AutoCAD/Commands.fs) | `CaddisCommands` | the command `CADDIS` |
@@ -391,7 +394,7 @@ There is one `CaddisServer` per app process. A second load of the Rhino plugin i
 | `Export` | on the UI thread | `WriteFile` for 3dm, else `-_Export` | `Document.Export` | `Database.Wblock`, then DWG or DXF | fails |
 | `Undo` | on the UI thread | `_Undo`, once per undo step | posts Revit's Undo command | queues `UNDO 1` | error |
 | `Dialogs`, `PressDialogButton` | from any thread | none, error | Win32 and UI Automation | none, error | none, error |
-| `RunCommands` | on the UI thread | `RhinoApp.RunScript` per macro | fails | fails | fails |
+| `RunCommands` | on the UI thread, returns a task | `RhinoApp.RunScript` per macro, finished when it returns | fails | `Editor.Command` per macro in one `ExecuteInCommandContextAsync`, finished after the call has returned | fails |
 
 `HostInfo` has the app name, the MCP server name, where the person copies the MCP command, the kind and a validator of object ids (GUIDs in Rhino, `Int64` element ids in Revit), and `McpTexts`, the tool descriptions written for the model.
 `McpTexts.command = None` leaves out `caddis_command` and makes `POST /command` a 400. `McpTexts.dialog = None` leaves out `caddis_dialog`.
@@ -412,6 +415,7 @@ The ids share one counter per process, e.g. `r1`, `c2`, `x3`, `v4`, `r5`. They r
 
 - **Status**: `running`, `ok`, `compileError`, `runtimeError`, `cancelled`, `timeout`, or `rejected` when the app can't run it now, e.g. during a Rhino command.
 - **Lifecycle**: `FsiHost` creates the run under its lock and makes it the current one. The evaluation thread sets `Started` when it picks it up; a run on Revit's UI thread may wait for Revit to become idle first. `Complete(outcome)` sets the outcome once, later calls are ignored, e.g. of an abandoned thread that finishes late. It then lists the files in the run's output folder and completes `Completion`.
+  A command run ends when the task of `RunCommands` completes: at once in Rhino, on the UI thread; in AutoCAD only after the call on the UI thread has returned, and AutoCAD has run the commands.
 - **Output**: four `CaptureBuffer`s, stdout, stderr, FSI output and the app's command line, each up to `maxOutputChars` (200,000), keeping the first and the latest half when more arrives.
 - **Set by the host**: `Notes`, `Commands` (a `CommandReport` of steps and object ids), `UndoSerial`, `UndoSteps`, `DocSerial`, `InputTimeout`.
 - **Files**: each run, capture and export gets a folder `%TEMP%/Caddis/<pid>/<id>`, which is `Caddis.Script.OutDir`. Everything in it is returned with the result. Shortened output and long id lists go to `%TEMP%/Caddis/<pid>/logs/<id>-<stream>.txt`, downloadable as `/files/logs/...`.
@@ -615,7 +619,7 @@ Files are listed with their local path.
 | Tool | Arguments | Annotations | Notes |
 |---|---|---|---|
 | `caddis_eval` | `code`, `path`, `waitMs` (50000), `timeoutMs`, `recordUndo` (true) | destructive | needs `code` or `path`; returns `running` after `waitMs` |
-| `caddis_command` | `commands` (required, array or single string), `select`, `inputTimeoutMs` (3000, 0 waits for the person), `waitMs` (50000) | destructive | Rhino only; a leading `!` is dropped |
+| `caddis_command` | `commands` (required, array or single string), `select`, `inputTimeoutMs` (3000, 0 waits for the person), `waitMs` (50000) | destructive | Rhino and AutoCAD; a leading `!` is dropped |
 | `caddis_get_run` | `runId` (required), `waitMs` (50000), `stdoutOffset` | read-only, idempotent | only the latest 200 runs are kept |
 | `caddis_check` | `code`, `path` | read-only, idempotent | errors and warnings, or `No errors or warnings.` |
 | `caddis_describe` | `name`, `filter`, `search` | read-only, idempotent | `name` wins over `search` |
@@ -851,7 +855,7 @@ For development, [Dev/Start-Dev.ps1](Dev/README.md) starts one Revit with a loca
 
 ## 12. AutoCAD: Caddis.AutoCAD
 
-A first version: the host, the command `CADDIS` and a dev start. No panel, ribbon, installer, `caddis_command` or `caddis_dialog` yet. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
+A first version: the host with `caddis_command`, the command `CADDIS` and a dev start. No panel, ribbon, installer or `caddis_dialog` yet. See [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
 **Loading**: `NETLOAD` of `Caddis.AutoCAD.dll`, whose assembly attributes name the `IExtensionApplication` [`CaddisExtension`](Caddis.AutoCAD/Extension.fs) and the command class.
 `Initialize` runs on AutoCAD's main thread: it keeps that thread's WPF dispatcher, installs the assembly resolver, creates the server with `settings-autocad.json` and port 7830, stops it on `BeginQuit`, and starts it if `autoStart` is on.
@@ -859,6 +863,7 @@ A first version: the host, the command `CADDIS` and a dev start. No panel, ribbo
 
 **Context**: Caddis' calls on the main thread come through the dispatcher, from AutoCAD's message loop: application context, like a modeless window, not a command.
 So `Editor.Command` fails with `eInvalidInput`; a script queues commands with `Document.SendStringToExecute`, and they run after the run.
+`DocumentCollection.ExecuteInCommandContextAsync` doesn't help a run: AutoCAD calls its callback, as the command `EXECUTEFUNCTION`, only after the dispatcher call has returned, with or without a document lock.
 The dispatcher runs calls also while a command waits for input. `CannotRunReason` then rejects the run, from `Document.CommandInProgress`, and also while `Application.IsQuiescent` is false.
 In background mode it asks the main thread, and rejects the run if it doesn't answer within 2 s.
 
@@ -877,8 +882,21 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - *Ids*: handles as hexadecimal strings, found with `Database.GetObjectId(false, handle, 0)`.
 - *Messages*: [`AutoCADLog`](Caddis.AutoCAD/Log.fs) writes to the command line of the active drawing through the dispatcher, and to `%AppData%\Caddis\autocad.log`, which also has what was written while no drawing was open.
 
-**Cancelling commands**: a command waiting for input ignores an Esc posted to AutoCAD's main window, and AutoCAD refuses COM calls from other processes while it waits (`RPC_E_CALL_REJECTED`).
-Caddis' own dispatcher calls still run then, so `caddis_command` would cancel by queuing `^C^C` with `SendStringToExecute` from one of them. Not built or tested yet.
+**Commands** (`caddis_command`), in `runCommands` of `AutoCADHost`:
+- *Running*: [`AutoCADMacro.parse`](Caddis.AutoCAD/Macro.fs) splits each macro at spaces into inputs, a quoted input keeps its spaces and `""` is Enter.
+  `RunCommands` checks the macros and handles, then queues one callback with `ExecuteInCommandContextAsync` and returns a task. In the callback `Editor.Command` runs each macro, which blocks until its command has ended.
+  All of it is one `EXECUTEFUNCTION`, so one undo step, also if nothing changed. The task completes in a `UiThread.postLater` call after `EXECUTEFUNCTION` has ended, when AutoCAD has written the last input to the command line history.
+- *Selection*: `EXECUTEFUNCTION` clears the pickfirst set when it starts. So the callback runs `SELECT` with the objects of `select`, or those selected before, and sets the pickfirst set again with `SetImpliedSelection`.
+  A command takes the pickfirst set only if no inputs follow its name; with inputs it asks at `Select objects:`, also with `CommandAsync`. There `_P` gives it the previous selection set, which `SELECT` made.
+- *Results*: `CommandEnded`, `CommandCancelled` and `CommandFailed` of the drawing give each command's `GlobalCommandName` and result while a macro runs. The database events record the touched objects, reported are the entities owned by a layout.
+  The command line comes from `Autodesk.AutoCAD.Internal.Utils.GetLastCommandLines`, newest line first, at most 400. [`AutoCADCommandLine.added`](Caddis.AutoCAD/CommandLine.fs) finds the new lines by the newest lines from before, not by their count, which stops growing at 400.
+  An unknown command makes `Editor.Command` throw `eInvalidInput` without any command event. Commands defined in AutoLISP fail the same way, `Utils.IsLispCommandDefined` tells them apart.
+- *Waiting for input*: a command waiting for input ignores an Esc posted to AutoCAD's main window, and AutoCAD refuses COM calls from other processes while it waits (`RPC_E_CALL_REJECTED`).
+  Caddis' dispatcher calls still run while it waits: a watchdog checks every 200 ms on the main thread. [`PromptListener`](Caddis.AutoCAD/CommandLine.fs) counts the open prompts through all `PromptingFor*` and `PromptedFor*` events of the editor and keeps the message of the latest.
+  After `inputTimeout` at an open prompt, or at once for `caddis_cancel`, the watchdog queues `^C^C` with `SendStringToExecute`, which the prompt takes as its input; `Editor.Command` then returns without an exception.
+- *Dialogs*: a modal dialog disables AutoCAD's main window; `CMDACTIVE` has no dialog bit for every dialog, e.g. not for OPTIONS. The watchdog sends nothing then: a dialog doesn't take the `^C^C`, and AutoCAD would run it later, e.g. at a prompt of the next command.
+  A cancel requested meanwhile stops the run before its next macro.
+- *Cancel before the start*: if `caddis_cancel` comes before AutoCAD started the callback, the run ends as cancelled, and the callback does nothing when it runs.
 
 ---
 
@@ -978,7 +996,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | Mac | Rhino on Mac is built for and packaged, but not tested. Revit is Windows only. |
 | Linux, Grasshopper components, other apps | None. `ICaddisHost` is the extension point. |
 | The panel, a ribbon, an installer and updates in AutoCAD | Not yet. `NETLOAD` the build, and use the command `CADDIS`. |
-| `caddis_command` and `caddis_dialog` in AutoCAD | Not yet. Scripts can queue commands with `Document.SendStringToExecute`, they run after the run. |
+| `caddis_dialog` in AutoCAD | Not yet. A command that opens a modal dialog waits until someone closes it in AutoCAD. |
 | AutoCAD 2024 and older, AutoCAD LT, AutoCAD for Mac | Not supported: AutoCAD 2024 runs on .NET Framework, LT and Mac have no .NET API. |
 | Summaries of the AutoCAD API in `caddis_describe` | None, only signatures: AutoCAD doesn't install the XML docs of its API. |
 | Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user, and Claude Desktop. Others are set up by hand with the URL. |
@@ -1015,6 +1033,8 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 - **Fesh.Rhino** is reached by reflection too, via `Fesh.Rhino.Sync.isEvaluating`, and reads `Caddis.Rhino.Interop.isRunning` the same way. A rename on either side silently lets runs overlap again.
 - **Revit temp folder**: `Path.GetTempPath()` is a folder per Revit session, so stale output folders of earlier Revit sessions are not cleaned up.
 - **Undo in AutoCAD**: `caddis_undo` sends `UNDO 1` when Caddis believes the run is the latest undo step. It knows of commands, changes of a database and changes of the view. Anything else that AutoCAD records as an undo step, e.g. a change by another plugin that touches none of these, would be undone instead of the run.
+- **Commands in AutoCAD**: the command line of command runs comes from AutoCAD's internal and undocumented `Utils.GetLastCommandLines`; if a version changes it, results lack the command line, nothing else.
+  `caddis_cancel` of a command that is busy without a prompt, e.g. one that shows its progress, queues `^C^C` too. If the command ends without taking it, AutoCAD runs it at the next prompt, which can be one of a later macro.
 - **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
 - **Claude Desktop**: the extension is validated and packed with the MCPB CLI and its relay is tested with Node, but installing it in Claude Desktop is tested by hand only.
 - **Not tested yet**: Mac, Windows on ARM64, AutoCAD 2026, the net8.0 build of Caddis.AutoCAD, zooming with the mouse in AutoCAD before caddis_undo, the port-change warning in Rhino, several Revit ribbon buttons, the Revit pane's Start/Stop and Cancel. Handing the port over is tested with two servers in one process, not yet with two Revits, nor with open sessions of Claude Code and Codex.

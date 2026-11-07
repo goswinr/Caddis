@@ -39,3 +39,8 @@ module internal UiThread =
         if isNull dispatcher then ()
         elif dispatcher.CheckAccess() then (try f () with _ -> ())
         else dispatcher.BeginInvoke(Action(fun () -> try f () with _ -> ())) |> ignore
+
+    /// Runs a function on the main thread once AutoCAD is back in its message loop, also when called on that thread,
+    /// e.g. after the command that is running now has ended. Errors are ignored.
+    let postLater (f: unit -> unit) =
+        if not (isNull dispatcher) then dispatcher.BeginInvoke(Action(fun () -> try f () with _ -> ())) |> ignore

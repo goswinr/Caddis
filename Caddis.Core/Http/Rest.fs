@@ -23,7 +23,7 @@ let private help () : JsonNode =
             "Evaluate F#. Body: {code?, path?, waitMs?, timeoutMs?, recordUndo?}. Returns the run, with status 202 if it is still running after waitMs (default: wait until it finished). timeoutMs cancels background runs."
         "POST /command",
         Json.ofString
-            "Run commands of the host app like typed at its command line, e.g. Rhino. Body: {commands: ['-_Line 0,0,0 10,0,0'], select?: [id], inputTimeoutMs?, waitMs?}. Returns the run like /eval."
+            "Run commands of the host app like typed at its command line, in Rhino and AutoCAD. Body: {commands: ['-_Line 0,0,0 10,0,0'], select?: [id], inputTimeoutMs?, waitMs?}. Returns the run like /eval."
         "GET /runs", Json.ofString "The recent runs."
         "GET /runs/{id}", Json.ofString "One run. Query: waitMs, to wait for a run that is still running (default 0)."
         "POST /cancel", Json.ofString "Cancel the current run (background mode only). Body: {runId?}"

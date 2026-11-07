@@ -21,7 +21,8 @@ module AutoCADInfo =
                 "The AutoCAD .NET API is referenced (AcDbMgd, AcCoreMgd, AcMgd). Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument is the active drawing, with its Database and Editor. caddis_status shows it with its units, layers, current space and extents."
                 "Read and change the drawing in a transaction: 'use tr = db.TransactionManager.StartTransaction()', tr.GetObject(id, OpenMode.ForWrite), for new objects btr.AppendEntity and tr.AddNewlyCreatedDBObject, then tr.Commit(). Without Commit all changes of the transaction are rolled back."
                 "Code runs like the code of a modeless window, not inside a command: Editor.Command fails with eInvalidInput, and the Editor.Get* prompts wait for the person. Caddis locks the active drawing during a run, so the run can change it."
-                "To run an AutoCAD command, queue it with doc.SendStringToExecute(\"_.ZOOM _E \", true, false, false): it runs after the run has ended, a space or \\n stands for Enter. Its result is not part of the run, check the drawing in the next caddis_eval."
+                "Do most work with the AutoCAD .NET API in caddis_eval: reading and creating objects, logic, loops and geometry math. caddis_command runs AutoCAD commands like typed at the command line, only for what commands do better than the API, e.g. ZOOM, HATCH, OFFSET, or to read what LIST, DIST or AREA print."
+                "Within caddis_eval a command can only be queued with doc.SendStringToExecute(\"_.ZOOM _E \", true, false, false): it runs after the run has ended, a space or \\n stands for Enter, and its result is not part of the run."
                 "On the 'ui' thread (the default) each run that changes the drawing is one undo step in AutoCAD, named after the run, which caddis_undo can revert. The views are redrawn after a run."
                 "Objects are identified by their handle as a hexadecimal string, e.g. '2A3F' from entity.Handle.ToString(). Get the ObjectId of a handle with db.GetObjectId(false, Handle(Convert.ToInt64(\"2A3F\", 16)), 0)."
                 "AutoCAD rejects a run while a command is active in it. Then the person in AutoCAD has to finish or cancel the command."
@@ -45,7 +46,27 @@ module AutoCADInfo =
                 "In background mode every AutoCAD API call must be wrapped in Caddis.Script.OnUi(fun () -> ...)."
             ]
         recordUndo = "'ui' thread only: make the run one undo step in AutoCAD that caddis_undo can revert. Default: true."
-        command = None
+        command =
+            Some {
+                description =
+                    String.concat " " [
+                        "Runs AutoCAD commands in the active drawing as if typed at the command line, with Editor.Command."
+                        "Each item of 'commands' is one command with its inputs, they run one after the other until one does not succeed."
+                        "Inputs are separated by spaces, and unlike in scripts a space is no Enter: an empty input \"\" is Enter, e.g. to end LINE or PLINE. Quote inputs that contain spaces, e.g. \"Wall 1\"."
+                        "Prefix command names with '_.' and options with '_' for their English names. Use the version of a command for the command line where there is one, e.g. _.-LAYER, _.-HATCH, _.-INSERT: a command that opens a dialog blocks AutoCAD until someone closes it."
+                        "A command without inputs after its name works on the selected objects, e.g. '_.ERASE'. Other commands ask for objects at 'Select objects:', where '_P \"\"' gives them the selected objects, e.g. '_.MOVE _P \"\" 0,0 10,0'. See 'select'."
+                        "Returns the result of each command, the handles of the entities they created, changed and erased, the selection if it changed,"
+                        "and what they printed to the command line, e.g. the results of LIST, DIST or AREA."
+                        "A command that waits for input which the macro does not give is cancelled, the result shows the prompt with its options."
+                        "All commands of a call are one undo step in AutoCAD, which caddis_undo can revert. Not possible while a run is in progress."
+                    ]
+                commands =
+                    "The command macros, e.g. [\"_.LINE 0,0 10,0 10,5 \\\"\\\"\", \"_.ZOOM _E\", \"_.-LAYER _M \\\"Wall 1\\\" \\\"\\\"\"]. Inputs: points as x,y or x,y,z, numbers, option keywords like '_D', '_P' for the selected objects, and \"\" for Enter."
+                select =
+                    "Handles of objects to select before the first command, replacing the selection, e.g. ['2A3F']. They are the pickfirst set and the previous selection set '_P'."
+                inputTimeoutMs =
+                    $"Cancel a command that waits this long at a prompt for input. 0 waits until the person in AutoCAD gives it. Default: {CaddisService.DefaultInputTimeoutMs}."
+            }
         describe =
             String.concat " " [
                 "Looks up the types and members of the loaded assemblies, e.g. the AutoCAD .NET API (Autodesk.AutoCAD.DatabaseServices, Autodesk.AutoCAD.Geometry, Autodesk.AutoCAD.ApplicationServices, Autodesk.AutoCAD.EditorInput) or a NuGet package loaded via #r,"
@@ -57,11 +78,11 @@ module AutoCADInfo =
         status =
             "Returns the state of the F# session (e.g. 'ready', 'evaluating'), the thread mode, the current run, versions of AutoCAD, F# and .NET, the command in progress, and the active drawing with its units, layers, current space, extents and selection."
         cancel =
-            "Cancels the current run. Only runs in background mode can be cancelled. Queued Script.OnUi calls are skipped; an already-started call must finish first. If the remaining background code does not stop within a few seconds the session is reset."
+            "Cancels the current run. Only runs in background mode can be cancelled, and the AutoCAD commands of caddis_command while they wait for input. Queued Script.OnUi calls are skipped; an already-started call must finish first. If the remaining background code does not stop within a few seconds the session is reset."
         setMode =
             "Sets on which thread code runs. 'ui': AutoCAD's main thread, the AutoCAD API can be used directly and each run is one undo step, but AutoCAD is blocked while code runs and runs can't be cancelled. 'background': a separate thread, runs can be cancelled and time out, AutoCAD stays responsive, every AutoCAD API call must be wrapped in Caddis.Script.OnUi. Changing the mode resets the session."
         undo =
-            "Undoes the changes of a run in AutoCAD by sending its UNDO command, which runs right after this call. Only works if the run is one undo step, as every run with changes on the 'ui' thread, and nothing else was done in AutoCAD after it."
+            "Undoes the changes of a run in AutoCAD by sending its UNDO command, which runs right after this call. Only works if the run is one undo step, as every run with changes on the 'ui' thread and every caddis_command call, and nothing else was done in AutoCAD after it."
         capture = "Returns a PNG image of the active view of the active drawing, to see the result of a script. Not possible while a run on the 'ui' thread is in progress."
         captureView = "Not supported in AutoCAD: leave it empty for the active view. Switch views or layouts with caddis_eval first."
         captureDisplayMode = "Not supported in AutoCAD yet: leave it empty for the current visual style."

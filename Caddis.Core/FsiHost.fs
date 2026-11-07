@@ -620,8 +620,8 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
 
     /// Starts a run of the host app on the UI thread, in any mode and also while the session is not ready, e.g. of commands or an export.
     /// It is the current run like an F# run, so the two never overlap. Raises a BusyException if another run is in progress.
-    /// work: called on the UI thread with the run and its output folder, returns the outcome.
-    member private _.StartHostRun(kind: RunKind, idPrefix: string, code: string, work: Run -> RunOutcome) : Run =
+    /// work: called on the UI thread with the run and its output folder, returns the outcome, which may complete later.
+    member private _.StartHostRun(kind: RunKind, idPrefix: string, code: string, work: Run -> Task<RunOutcome>) : Run =
         let run =
             lock sync (fun () ->
                 match current with
@@ -632,16 +632,25 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
                 runs.Add run
                 current <- Some run
                 run)
+        let finishWith (t: Task<RunOutcome>) =
+            let outcome =
+                match t.Status with
+                | TaskStatus.RanToCompletion -> t.Result
+                // e.g. objects to select not found, the stack trace would only show Caddis code
+                | TaskStatus.Faulted -> RunOutcome.withMessage RuntimeError (stripInvocation t.Exception).Message
+                | _ -> RunOutcome.withMessage Cancelled "The run was cancelled."
+            finishRun run outcome
         let onUi () =
             run.Started <- true
             let outcome =
                 match (try host.CannotRunReason() with e -> Some e.Message) with
-                | Some reason -> RunOutcome.withMessage Rejected reason
+                | Some reason -> Task.FromResult(RunOutcome.withMessage Rejected reason)
                 | None ->
-                    // e.g. objects to select not found, the stack trace would only show Caddis code
                     try work run
-                    with e -> RunOutcome.withMessage RuntimeError e.Message
-            finishRun run outcome
+                    with e -> Task.FromException<RunOutcome> e
+            // a host that finished at once, e.g. Rhino, ends the run on the UI thread
+            if outcome.IsCompleted then finishWith outcome
+            else outcome.ContinueWith(Action<Task<RunOutcome>> finishWith) |> ignore
         (host.InvokeOnUi onUi)
             .ContinueWith(
                 Action<Task<unit>>(fun t ->
@@ -669,8 +678,10 @@ type FsiHost(host: ICaddisHost, getSettings: unit -> CaddisSettings, runs: RunRe
             $"export {what} to {baseName}.{ext}",
             fun run ->
                 host.Export(selection, Path.Combine(run.OutDir, baseName + "." + ext))
-                if FileItem.listFolder run.OutDir |> Array.isEmpty then RunOutcome.withMessage RuntimeError $"Nothing was exported to '.{ext}'."
-                else RunOutcome.ofStatus Succeeded
+                Task.FromResult(
+                    if FileItem.listFolder run.OutDir |> Array.isEmpty then RunOutcome.withMessage RuntimeError $"Nothing was exported to '.{ext}'."
+                    else RunOutcome.ofStatus Succeeded
+                )
         )
 
     /// Parses and type-checks code against the current session, so definitions of earlier runs are known, without running it.

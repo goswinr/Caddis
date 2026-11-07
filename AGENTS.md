@@ -2,7 +2,7 @@
 
 Caddis is an MCP server that hosts one persistent F# Interactive session inside Rhino, Revit or AutoCAD,
 so that AI agents can run RhinoCommon, Revit API or AutoCAD .NET API code in the running app.
-F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac. AutoCAD is a first version, without panel, installer or `caddis_command`.
+F# on .NET 8, .NET 10 and .NET Framework 4.8; Windows, and Rhino also on Mac. AutoCAD is a first version, without panel, installer or `caddis_dialog`.
 
 Before a change that isn't trivial, read the relevant part of [Architecture.md](Architecture.md):
 it covers the design decisions, every file, the request flow, threads, cancellation, and the known risks.
@@ -35,7 +35,7 @@ So changes to `RhinoHost`, `RevitHost`, `AutoCADHost`, the panel's hosting or an
 - With `"autoStart": true` in `%AppData%\Caddis\settings-rhino.json`, `settings-revit.json` or `settings-autocad.json`, the server starts with the app.
   Once it listens, it writes `%AppData%\Caddis\instances\<pid>.json`. Then use REST: `curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"`, with port 7820 for Revit and 7830 for AutoCAD.
 - In Revit, a modal dialog blocks every run from starting. `GET /dialogs` lists it and `POST /dialog {"button": "..."}` presses one of its buttons.
-- In AutoCAD, a command that waits for input rejects every run, and neither an Esc posted to its window nor a COM call from outside cancels it. Avoid queuing commands without all their inputs while testing.
+- In AutoCAD, a command that waits for input rejects every run, and neither an Esc posted to its window nor a COM call from outside cancels it. Avoid queuing commands without all their inputs with `SendStringToExecute` while testing; a backslash in the string is a pause for input too. `caddis_command` cancels its own commands when they wait.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` before passing `/switch` arguments to Windows programs. Otherwise Git Bash rewrites them as paths.
 
 ## Architecture

@@ -1,6 +1,7 @@
 namespace Caddis.AutoCAD
 
 open System
+open System.Collections.Generic
 open System.Diagnostics
 open System.IO
 open System.Text
@@ -107,27 +108,71 @@ type AutoCADHost() =
     /// True while Caddis redraws the views after a run, which is no undo step.
     let mutable redrawing = false
 
-    let onObjectChanged () =
-        if runActive then docChanged <- true
-        else lastUndo <- None // a change made in AutoCAD, e.g. by a command or another plugin
+    // --- state of a command run of caddis_command, on the main thread ---
 
-    let objectHandler = ObjectEventHandler(fun _ _ -> onObjectChanged ())
-    let erasedHandler = ObjectErasedEventHandler(fun _ _ -> onObjectChanged ())
+    /// True while the commands of a command run run, inside AutoCAD's command EXECUTEFUNCTION.
+    let mutable commandRunActive = false
+
+    /// True while one macro of a command run is in progress, in Editor.Command.
+    let mutable macroActive = false
+
+    /// The commands that ended during the current macro, with their English name and result.
+    let endedCommands = ResizeArray<string * string>()
+
+    /// How many prompts of the current macro wait for input, and the message of the latest one, e.g. "Specify next point or [Undo]:".
+    let mutable openPrompts = 0
+    let mutable promptMessage = ""
+
+    /// The objects the command run added, changed or erased, in order, and whether the first event of each was an add.
+    let touchedObjects = ResizeArray<ObjectId>()
+    let addedFirst = Dictionary<ObjectId, bool>()
+
+    let touched (id: ObjectId) (added: bool) =
+        if commandRunActive && not (addedFirst.ContainsKey id) then
+            addedFirst[id] <- added
+            touchedObjects.Add id
+
+    let onObjectChanged (id: ObjectId) (added: bool) =
+        if runActive || commandRunActive then
+            docChanged <- true
+            touched id added
+        else
+            lastUndo <- None // a change made in AutoCAD, e.g. by a command or another plugin
+
+    let appendedHandler = ObjectEventHandler(fun _ e -> onObjectChanged e.DBObject.ObjectId true)
+    let modifiedHandler = ObjectEventHandler(fun _ e -> onObjectChanged e.DBObject.ObjectId false)
+    let erasedHandler = ObjectErasedEventHandler(fun _ e -> onObjectChanged e.DBObject.ObjectId false)
     // every command is an undo step of its own, also those that change only the view, e.g. ZOOM
     let commandHandler = CommandEventHandler(fun _ _ -> lastUndo <- None)
+    let endedHandler (result: string) = CommandEventHandler(fun _ e -> if macroActive then endedCommands.Add(e.GlobalCommandName, result))
+    let succeededHandler = endedHandler "Success"
+    let cancelledHandler = endedHandler "Cancel"
+    let failedHandler = endedHandler "Failure"
+    let prompts =
+        PromptListener(fun opened e ->
+            if macroActive then
+                if opened then
+                    openPrompts <- openPrompts + 1
+                    promptMessage <- PromptListener.Message e
+                else
+                    openPrompts <- max 0 (openPrompts - 1))
     // zooming and panning with the mouse are undo steps too
     let viewHandler =
         EventHandler(fun _ _ ->
-            if runActive then otherChanged <- true
+            if runActive || commandRunActive then otherChanged <- true
             elif not redrawing then lastUndo <- None)
 
     let watch (doc: Document) =
         if not (isNull doc) then
             doc.CommandWillStart.AddHandler commandHandler
+            doc.CommandEnded.AddHandler succeededHandler
+            doc.CommandCancelled.AddHandler cancelledHandler
+            doc.CommandFailed.AddHandler failedHandler
             doc.ViewChanged.AddHandler viewHandler
+            prompts.Attach doc.Editor
             let db = doc.Database
-            db.ObjectAppended.AddHandler objectHandler
-            db.ObjectModified.AddHandler objectHandler
+            db.ObjectAppended.AddHandler appendedHandler
+            db.ObjectModified.AddHandler modifiedHandler
             db.ObjectErased.AddHandler erasedHandler
 
     do
@@ -136,7 +181,8 @@ type AutoCADHost() =
             watch doc
         documents.DocumentCreated.AddHandler(DocumentCollectionEventHandler(fun _ e -> watch e.Document))
         CoreApp.SystemVariableChanged.AddHandler(
-            Autodesk.AutoCAD.ApplicationServices.SystemVariableChangedEventHandler(fun _ _ -> if runActive then otherChanged <- true)
+            Autodesk.AutoCAD.ApplicationServices.SystemVariableChangedEventHandler(fun _ _ ->
+                if runActive || commandRunActive then otherChanged <- true)
         )
 
     /// Locks the drawing for a run, like a command does. Each lock is one undo step in AutoCAD, named after the run.
@@ -252,6 +298,245 @@ type AutoCADHost() =
             | Some ids -> db.Wblock(ids, Point3d.Origin)
         if ext = ".dwg" then copy.SaveAs(path, DwgVersion.Current)
         else copy.DxfOut(path, 16, DwgVersion.Current)
+
+    // --- command runs of caddis_command ---
+
+    /// The objects selected in the drawing, its pickfirst set.
+    let selection (ed: Editor) : ObjectId[] =
+        match ed.SelectImplied() with
+        | r when r.Status = PromptStatus.OK && not (isNull r.Value) -> r.Value.GetObjectIds()
+        | _ -> [||]
+
+    /// When the watchdog found the current macro waiting at a prompt, the prompt at which Caddis cancelled it,
+    /// and whether it showed a dialog, which Caddis can't close.
+    let mutable waitingSince: DateTime option = None
+    let mutable cancelledAt: string option = None
+    let mutable waitedInDialog = false
+
+    let resetWaiting () =
+        waitingSince <- None
+        cancelledAt <- None
+        waitedInDialog <- false
+        openPrompts <- 0
+        promptMessage <- ""
+
+    /// Runs on the main thread. While a macro runs, Caddis' calls get there only when the command waits in a message loop:
+    /// for input that the macro does not give, in a dialog, or e.g. while it shows its progress.
+    /// A command that waits at a prompt is cancelled after the input timeout, and also when it waits otherwise for caddis_cancel, but never in a dialog.
+    /// A command ignores an Esc posted to AutoCAD's window, but takes a ^C queued with SendStringToExecute as its input.
+    /// A dialog doesn't take it: AutoCAD would run it later, e.g. at a prompt of the next command.
+    let checkWaiting (run: Run) (inputTimeout: TimeSpan option) (doc: Document) =
+        if macroActive && cancelledAt.IsNone then
+            let now = DateTime.UtcNow
+            if AutoCADCommandLine.dialogActive () then
+                waitedInDialog <- true
+                waitingSince <- None
+            else
+                waitingSince <- if openPrompts > 0 then Some(waitingSince |> Option.defaultValue now) else None
+                let timedOut =
+                    match waitingSince, inputTimeout with
+                    | Some since, Some t -> now - since >= t
+                    | _ -> false
+                if run.CancelRequested || timedOut then
+                    cancelledAt <- Some(if openPrompts > 0 && promptMessage <> "" then promptMessage else AutoCADCommandLine.prompt ())
+                    doc.SendStringToExecute("\x03\x03", true, false, false)
+
+    /// Calls a function on the main thread every 200 ms until the returned function is called.
+    let startWatching (check: unit -> unit) : unit -> unit =
+        let watching = ref true
+        backgroundTask {
+            while watching.Value do
+                do! Task.Delay 200
+                // awaits the main thread, so that no checks pile up while it is busy
+                if watching.Value then
+                    try do! UiThread.invoke (fun () -> if watching.Value then check ())
+                    with _ -> ()
+        }
+        |> ignore
+        fun () -> watching.Value <- false
+
+    /// For a macro whose command showed a dialog.
+    let dialogNote (step: CommandStep) =
+        let name = step.commands |> List.tryHead |> Option.map fst |> Option.defaultValue step.macro
+        $"{name} showed a dialog, which Caddis can't close, and waited until someone closed it in AutoCAD. Use the version of the command for the command line if there is one, e.g. '_.-LAYER' or '_.-HATCH'."
+
+    /// The outcome of a macro that did not succeed, None if it did. error: the message if Editor.Command failed.
+    let macroFailure (run: Run) (step: CommandStep) (inputs: string[]) (error: string option) (inDialog: bool) : RunOutcome option =
+        let fail status (message: string) = Some(RunOutcome.withMessage status message)
+        match step.commands |> List.tryFind (fun (_, result) -> result <> "Success"), error with
+        | Some(_, "Cancel"), _ when inDialog -> fail Cancelled (dialogNote step)
+        | Some(name, "Cancel"), _ ->
+            match step.waitedAt with
+            | Some prompt when run.CancelRequested -> fail Cancelled $"{name} was cancelled via caddis_cancel at the prompt '{prompt}'."
+            | Some prompt ->
+                fail
+                    Cancelled
+                    $"Caddis cancelled {name} because it waited for input at the prompt '{prompt}', which the macro '{step.macro}' does not give. Add the missing inputs or options to the macro, end a prompt that repeats with an empty input \"\", e.g. '_.LINE 0,0 10,0 \"\"', or pass a larger inputTimeoutMs if {name} was still busy."
+            | None -> fail Cancelled $"{name} was cancelled, e.g. with Esc in AutoCAD."
+        | Some(name, result), _ -> fail RuntimeError $"{name} ended with the result '{result}', see the AutoCAD command line."
+        | None, Some _ when step.commands.IsEmpty ->
+            let name = AutoCADMacro.commandName inputs
+            let lisp =
+                try Autodesk.AutoCAD.Internal.Utils.IsLispCommandDefined("C:" + name)
+                with _ -> false
+            if lisp then
+                fail
+                    RuntimeError
+                    $"'{step.macro}' ran no command: {name} is defined in AutoLISP, and Editor.Command runs only the commands of AutoCAD and its plugins. Queue it in caddis_eval with doc.SendStringToExecute(\"{name} \", true, false, false), it runs after that run."
+            else
+                fail RuntimeError $"'{step.macro}' ran no command: AutoCAD has no command '{name}' that a macro can run."
+        | None, Some message -> fail RuntimeError $"AutoCAD could not run '{step.macro}': {message}"
+        | None, None -> None
+
+    /// Commands after which caddis_undo can't tell what UNDO 1 would undo.
+    let undoCommands = set [ "UNDO"; "U"; "REDO"; "MREDO"; "OOPS" ]
+
+    /// The handles of the entities in layouts among the touched objects, i.e. not e.g. the block table record of model space
+    /// that changes when a command adds to it, or the entities of a block definition. Created, changed and erased, in order.
+    let touchedEntities (db: Database) : string[] * string[] * string[] =
+        use tr = db.TransactionManager.StartOpenCloseTransaction()
+        let inLayout (id: ObjectId) =
+            try
+                id.Database = db
+                && match tr.GetObject(id, OpenMode.ForRead, true) with
+                   | :? Entity as e ->
+                       match tr.GetObject(e.OwnerId, OpenMode.ForRead, true) with
+                       | :? BlockTableRecord as btr -> btr.IsLayout
+                       | _ -> false
+                   | _ -> false
+            with _ ->
+                false
+        let entities = touchedObjects |> Seq.filter inLayout |> Array.ofSeq
+        tr.Commit()
+        let pick (wasAdded: bool) (exists: bool) =
+            entities |> Array.filter (fun id -> addedFirst[id] = wasAdded && not id.IsErased = exists) |> Array.map (fun id -> id.Handle.ToString())
+        pick true true, pick false true, pick false false
+
+    /// Runs the macros with Editor.Command, like typed at the command line, one after the other until one does not succeed.
+    /// Editor.Command works only in a command context: AutoCAD runs DocumentCollection.ExecuteInCommandContextAsync, as the command
+    /// EXECUTEFUNCTION, only once this call on its main thread has returned. All macros run in one such call, so they are one undo step.
+    let runCommands (run: Run) (req: CommandRequest) : Task<RunOutcome> =
+        let doc = activeDoc ()
+        let ed = doc.Editor
+        let macros =
+            req.macros
+            |> Array.map (fun m ->
+                match AutoCADMacro.parse m with
+                | Ok inputs -> m, inputs
+                | Error message -> failwith message)
+        // EXECUTEFUNCTION clears the selection when it starts, the commands get it back
+        let toSelect =
+            match req.select with
+            | Some handles -> handles |> Array.map (objectIdOf doc.Database)
+            | None -> selection ed
+        let result = TaskCompletionSource<RunOutcome>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let started = ref false
+        let stopWatching = ref ignore
+        let steps = ResizeArray<CommandStep>()
+        let failure: RunOutcome option ref = ref None
+        let note: string option ref = ref None
+        let linesBefore: string[] ref = ref [||]
+
+        /// In the command context.
+        let runMacros () =
+            if CoreApp.DocumentManager.MdiActiveDocument <> doc then failwith "Another drawing became the active one before AutoCAD started the commands."
+            // A command uses the pickfirst set only if no inputs follow its name, e.g. '_.ERASE'. Otherwise it asks for objects
+            // at 'Select objects:', where '_P' gives the previous selection set, which SELECT sets. SELECT clears the pickfirst set.
+            if toSelect.Length > 0 then
+                try
+                    ed.Command([| box "_.SELECT"; SelectionSet.FromObjectIds toSelect; "" |])
+                    ed.SetImpliedSelection toSelect
+                with e ->
+                    failwith $"AutoCAD could not select the objects: {e.Message}"
+                // ends the line of SELECT's last prompt, else the first command line of the macros would start with it
+                ed.WriteMessage "\n"
+            linesBefore.Value <- AutoCADCommandLine.history ()
+            touchedObjects.Clear()
+            addedFirst.Clear()
+            docChanged <- false
+            otherChanged <- false
+            commandRunActive <- true
+            for macro, inputs in macros do
+                // e.g. after a command that waited in a dialog when caddis_cancel was called
+                if failure.Value.IsNone && run.CancelRequested then
+                    failure.Value <- Some(RunOutcome.withMessage Cancelled $"The run was cancelled via caddis_cancel before '{macro}'.")
+                if failure.Value.IsNone then
+                    endedCommands.Clear()
+                    resetWaiting ()
+                    macroActive <- true
+                    let error =
+                        try
+                            try
+                                ed.Command(Array.map box inputs)
+                                None
+                            with e ->
+                                Some e.Message
+                        finally
+                            macroActive <- false
+                    let step = { macro = macro; commands = List.ofSeq endedCommands; waitedAt = (if waitedInDialog then None else cancelledAt) }
+                    steps.Add step
+                    failure.Value <- macroFailure run step inputs error waitedInDialog
+                    if waitedInDialog && failure.Value.IsNone then note.Value <- Some(dialogNote step)
+
+        /// Back in the application context, after EXECUTEFUNCTION has ended and AutoCAD has written its last input to the command line history.
+        let finish () =
+            try
+                stopWatching.Value ()
+                let lines = AutoCADCommandLine.added linesBefore.Value (AutoCADCommandLine.history ())
+                // the history ends with the empty line of the prompt after the commands
+                let lines = if lines.Length > 0 && String.IsNullOrWhiteSpace lines[lines.Length - 1] then lines[.. lines.Length - 2] else lines
+                for line in lines do
+                    run.CommandLine.Append(line + "\n")
+                let created, changed, deleted = touchedEntities doc.Database
+                let selectedAfter = selection ed
+                let undoCommand = steps |> Seq.exists (fun s -> s.commands |> List.exists (fun (name, _) -> undoCommands.Contains name))
+                // EXECUTEFUNCTION is an undo step of its own, also if it changed nothing
+                lastUndo <- if undoCommand then None else Some(run.Id, doc.UnmanagedObject)
+                if docChanged && not undoCommand then
+                    undoCounter <- undoCounter + 1u
+                    run.UndoSerial <- Some undoCounter
+                run.Commands <-
+                    Some {
+                        steps = List.ofSeq steps
+                        notRun = req.macros |> Array.skip steps.Count |> List.ofArray
+                        created = created
+                        changed = changed
+                        changedGroups = []
+                        deleted = deleted
+                        selected = if HashSet(toSelect).SetEquals selectedAfter then None else Some(selectedAfter |> Array.map (fun id -> id.Handle.ToString()))
+                    }
+                result.TrySetResult(failure.Value |> Option.defaultValue { RunOutcome.ofStatus Succeeded with message = note.Value }) |> ignore
+            with e ->
+                result.TrySetException e |> ignore
+
+        let callback (_: obj) : Task =
+            // not if caddis_cancel cancelled the run before AutoCAD got to it
+            if not result.Task.IsCompleted then
+                started.Value <- true
+                try
+                    try
+                        runMacros ()
+                    finally
+                        macroActive <- false
+                        commandRunActive <- false
+                    UiThread.postLater finish
+                with e ->
+                    stopWatching.Value ()
+                    result.TrySetException e |> ignore
+            Task.CompletedTask
+
+        stopWatching.Value <-
+            startWatching (fun () ->
+                if started.Value then
+                    checkWaiting run req.inputTimeout doc
+                elif run.CancelRequested && result.TrySetResult(RunOutcome.withMessage Cancelled "Caddis cancelled the commands before AutoCAD started them.") then
+                    stopWatching.Value ())
+        try
+            CoreApp.DocumentManager.ExecuteInCommandContextAsync(Func<obj, Task> callback, null) |> ignore
+        with _ ->
+            stopWatching.Value ()
+            reraise ()
+        result.Task
 
     // --- status ---
 
@@ -427,4 +712,4 @@ type AutoCADHost() =
 
         member _.PressDialogButton(_, _) = Error "Caddis can't press buttons of dialogs in AutoCAD yet."
 
-        member _.RunCommands(_, _) = failwith "Caddis can't run AutoCAD commands yet, use caddis_eval."
+        member _.RunCommands(run, request) = runCommands run request

@@ -685,4 +685,4 @@ type RhinoHost() =
 
         member _.PressDialogButton(_, _) = Error "Caddis can't press buttons of dialogs in Rhino."
 
-        member _.RunCommands(run, request) = runCommands run request
+        member _.RunCommands(run, request) = Task.FromResult(runCommands run request)

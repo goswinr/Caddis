@@ -34,6 +34,8 @@
     <Compile Include="UiThread.fs" />
     <Compile Include="Log.fs" />
     <Compile Include="AutoCADInfo.fs" />
+    <Compile Include="Macro.fs" />
+    <Compile Include="CommandLine.fs" />
     <Compile Include="AutoCADHost.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Commands.fs" />

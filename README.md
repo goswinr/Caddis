@@ -117,7 +117,7 @@ If the port is taken, the next free one is used, and the panel shows the agents 
 | `caddis_undo` | Undo a run in the app |
 | `caddis_capture_viewport` | PNG of a viewport |
 | `caddis_export` | Export to a file |
-| `caddis_command` | Rhino only: run Rhino command macros, see [Rhino commands](Caddis.Rhino/README.md#rhino-commands) |
+| `caddis_command` | Rhino and AutoCAD: run commands like typed at the command line, see [Rhino commands](Caddis.Rhino/README.md#rhino-commands) and [AutoCAD commands](Caddis.AutoCAD/README.md#autocad-commands) |
 | `caddis_dialog` | Revit only: list Revit's open dialogs or press one of their buttons, see [Differences to Rhino](Caddis.Revit/README.md#differences-to-rhino) |
 
 `caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
@@ -171,7 +171,7 @@ curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
 | `GET /viewport?view=&width=&height=&displayMode=` | PNG of a viewport |
 | `POST /export` | `{format, name?, objects?: "all" \| "selected", objectIds?, waitMs?}`, an export is a run like `/eval` |
 | `GET /files/{id}/{name}` | A file of a run, capture or export |
-| `POST /command` | Rhino only: `{commands, select?, inputTimeoutMs?, waitMs?}`, runs Rhino commands, returns the run like `/eval` |
+| `POST /command` | Rhino and AutoCAD: `{commands, select?, inputTimeoutMs?, waitMs?}`, runs commands of the app, returns the run like `/eval` |
 | `GET /dialogs`, `POST /dialog` | Revit only: Revit's open dialogs, `{button, dialog?}` presses a button of one |
 | `GET /help` | A short description of all endpoints |
 | `POST /mcp` | MCP endpoint |

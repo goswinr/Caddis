@@ -3,13 +3,14 @@ module Caddis.Tests.CommandTests
 open System
 open System.IO
 open System.Threading
+open System.Threading.Tasks
 open Xunit
 open Caddis
 open Caddis.Http
 open Caddis.Tests.Helpers
 
-/// A headless host whose commands run the given function.
-type CommandHost(runCommands: Run * CommandRequest -> RunOutcome) =
+/// A headless host whose commands run the given function, which may complete later, as in AutoCAD.
+type CommandHost(runCommands: Run * CommandRequest -> Task<RunOutcome>) =
     let inner = new HeadlessHost(ignore) :> ICaddisHost
 
     interface ICaddisHost with
@@ -32,6 +33,9 @@ type CommandHost(runCommands: Run * CommandRequest -> RunOutcome) =
         member _.PressDialogButton(d, b) = inner.PressDialogButton(d, b)
         member _.RunCommands(run, req) = runCommands (run, req)
 
+/// A host whose commands finish before RunCommands returns, as in Rhino.
+let syncHost (runCommands: Run * CommandRequest -> RunOutcome) = CommandHost(fun x -> Task.FromResult(runCommands x))
+
 let newServiceWith (host: ICaddisHost) =
     let runs = RunRegistry(Path.Combine(Path.GetTempPath(), "CaddisTests", "runs-" + Guid.NewGuid().ToString "N"))
     CaddisService(host, newStore (), runs)
@@ -47,7 +51,7 @@ let commandArgs (commands: string list) = {
 let ``a command run reports its steps and leaves out a leading exclamation mark`` () =
     let mutable received = None
     let host =
-        CommandHost(fun (run, req) ->
+        syncHost(fun (run, req) ->
             received <- Some req
             run.CommandLine.Append "Command: -_Line\n"
             run.Commands <-
@@ -79,7 +83,7 @@ let ``inputTimeoutMs 0 waits for the user`` () =
     let mutable received = None
     let svc =
         newServiceWith (
-            CommandHost(fun (_, req) ->
+            syncHost(fun (_, req) ->
                 received <- Some req
                 RunOutcome.ofStatus Succeeded)
         )
@@ -89,7 +93,7 @@ let ``inputTimeoutMs 0 waits for the user`` () =
 
 [<Fact>]
 let ``no commands is an argument error`` () =
-    let svc = newServiceWith (CommandHost(fun _ -> RunOutcome.ofStatus Succeeded))
+    let svc = newServiceWith (syncHost(fun _ -> RunOutcome.ofStatus Succeeded))
     Assert.Throws<ArgumentException>(fun () -> svc.StartCommands(commandArgs [ " "; "!" ]) |> ignore) |> ignore
 
 [<Theory>]
@@ -103,7 +107,7 @@ let ``command inputs do not silently discard invalid array entries`` (json: stri
 let ``a command run blocks other runs and can be cancelled`` () =
     use started = new ManualResetEventSlim()
     let host =
-        CommandHost(fun (run, _) ->
+        syncHost(fun (run, _) ->
             started.Set()
             // like RhinoHost, which cancels a waiting command when CancelRequested is set
             while not run.CancelRequested do
@@ -122,8 +126,36 @@ let ``a command run blocks other runs and can be cancelled`` () =
     assertOk (eval svc "1 + 1")
 
 [<Fact>]
+let ``a command run whose host finishes later stays the current run until then`` () =
+    let finished = TaskCompletionSource<RunOutcome>()
+    let host =
+        CommandHost(fun (run, _) ->
+            // like AutoCADHost: AutoCAD runs the commands once the UI thread is idle again
+            finished.Task.ContinueWith(fun (t: Task<RunOutcome>) ->
+                run.CommandLine.Append "Command: _.CIRCLE\n"
+                t.Result))
+    let svc = newServiceWith host
+    let run = svc.StartCommands(commandArgs [ "_.CIRCLE 0,0 5" ])
+    Assert.False(run.Completion.Wait 300)
+    Assert.True(run.Started)
+    Assert.Throws<BusyException>(fun () -> svc.StartCommands(commandArgs [ "_.ZOOM _E" ]) |> ignore) |> ignore
+    finished.SetResult(RunOutcome.ofStatus Succeeded)
+    Assert.True(run.Completion.Wait 5000)
+    assertOk run
+    Assert.Equal("Command: _.CIRCLE\n", run.CommandLine.Text)
+    assertOk (eval svc "1 + 1")
+
+[<Fact>]
+let ``a failed task of the host is the message of the run`` () =
+    let svc = newServiceWith (CommandHost(fun _ -> Task.FromException<RunOutcome>(InvalidOperationException "The active drawing changed.")))
+    let run = svc.StartCommands(commandArgs [ "_.CIRCLE 0,0 5" ])
+    Assert.True(run.Completion.Wait 5000)
+    Assert.Equal(RuntimeError, run.Status)
+    Assert.Equal(Some "The active drawing changed.", run.Outcome.message)
+
+[<Fact>]
 let ``an exception of the host is the message of the run`` () =
-    let svc = newServiceWith (CommandHost(fun _ -> failwith "Objects not found: x"))
+    let svc = newServiceWith (syncHost(fun _ -> failwith "Objects not found: x"))
     let run = svc.StartCommands(commandArgs [ "-_Loft" ])
     run.Completion.Wait(5000) |> ignore
     Assert.Equal(RuntimeError, run.Status)
