@@ -164,8 +164,28 @@ let ``MCP reports failed runs as tool errors`` () =
 
 [<Fact>]
 let ``MCP unknown method is an error`` () =
-    let _, body = mcp """{"jsonrpc":"2.0","id":9,"method":"resources/list"}"""
+    let _, body = mcp """{"jsonrpc":"2.0","id":9,"method":"prompts/list"}"""
     Assert.Equal(-32601, num [ "error"; "code" ] (JsonNode.Parse body))
+
+[<Fact>]
+let ``MCP initialize declares the tools and the resources`` () =
+    let _, body = mcp """{"jsonrpc":"2.0","id":13,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}"""
+    let root = JsonNode.Parse body
+    let capabilities = root["result"]["capabilities"]
+    Assert.NotNull(capabilities["tools"])
+    Assert.NotNull(capabilities["resources"])
+
+[<Fact>]
+let ``MCP lists the skill resources as an array`` () =
+    let _, body = mcp """{"jsonrpc":"2.0","id":14,"method":"resources/list"}"""
+    let root = JsonNode.Parse body
+    let resources = root["result"]["resources"]
+    Assert.IsType<JsonArray>(resources) |> ignore
+
+[<Fact>]
+let ``MCP reads an unknown resource as not found`` () =
+    let _, body = mcp """{"jsonrpc":"2.0","id":15,"method":"resources/read","params":{"uri":"caddis-skill://nope/1.0/skill/SKILL.md"}}"""
+    Assert.Equal(-32002, num [ "error"; "code" ] (JsonNode.Parse body))
 
 [<Fact>]
 let ``MCP unknown tool is an invalid params error`` () =

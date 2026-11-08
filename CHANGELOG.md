@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MCP resources: the skill files that NuGet packages ship in skills, e.g. the guide of Rhino.Scripting for agents, are listed by resources/list and read by resources/read once an assembly of the package is loaded.
+
 ## [0.3.5] - 2026-11-08
 
 ### Changed

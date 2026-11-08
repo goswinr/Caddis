@@ -139,6 +139,8 @@ An explicit `objectIds` array must be nonempty and contain only valid ids of the
 MCP results are text written for the model, without `structuredContent`:
 Claude Code shows the model only the `structuredContent` of a result that has one ([#55677](https://github.com/anthropics/claude-code/issues/55677)).
 
+Packages can ship guides for agents as MCP resources. Once an assembly of such a package is loaded with `#r "nuget: ..."`, `resources/list` lists its files, e.g. the guide of Rhino.Scripting, and `resources/read` returns them. They are documents to read, not tools.
+
 ### NuGet packages
 Scripts can reference NuGet packages via `#r "nuget: Name"`. F# Interactive restores them with `dotnet msbuild`, so they need a .NET SDK of the app's .NET version or newer,
 e.g. the .NET SDK 8 in Rhino 8 or Revit 2025, and any SDK on .NET Framework. Everything else works without an SDK.

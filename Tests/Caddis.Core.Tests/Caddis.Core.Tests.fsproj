@@ -45,6 +45,7 @@
     <Compile Include="DesktopTests.fs" />
     <Compile Include="OutputTests.fs" />
     <Compile Include="ApiDocsTests.fs" />
+    <Compile Include="AgentSkillsTests.fs" />
     <Compile Include="NuGetTests.fs" />
     <Compile Include="ReleaseVersionTests.fs" />
   </ItemGroup>

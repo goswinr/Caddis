@@ -30,6 +30,7 @@ module RhinoInfo =
                     "Prefer it for common tasks in the document, e.g. adding objects, layers, names, colors and user text, and use RhinoCommon for the rest: its functions take and return object ids (GUIDs) and RhinoCommon types."
                     "The first #r downloads it, which takes a while. Then caddis_describe shows its members, e.g. 'RhinoScriptSyntax.ObjectLayer', or 'RhinoScriptSyntax' with a filter like 'Layer'."
                     "Don't use its Get* functions or rs.MessageBox, they wait for the person in Rhino. In background mode, call its functions that change the document inside Caddis.Script.OnUi, as with RhinoCommon."
+                    "Its guide for agents is an MCP resource: after the first #r, resources/list shows the skill rhino.scripting-usage. Read its SKILL.md first. Its ApiTable.md is large, for one name caddis_describe is quicker."
                 ]
             )
         eval =

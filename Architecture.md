@@ -272,6 +272,7 @@ F# compiles files in the order of the project file, listed here in that order. L
 | [Model.fs](Caddis.Core/Model.fs) | `RunStatus`, `Diagnostic`, `ExceptionInfo`, `FileItem`, `RunOutcome`, `RunKind`, `CommandStep`, `CommandReport`, `Run`, `Proc`, `RunRegistry`, `CaptureSize`, `ExportSelection`, `CommandRequest`, `HostDialog`, `CommandToolTexts`, `McpTexts`, `HostInfo`, `ICaddisHost` | the data model and the host interface |
 | [Script.fs](Caddis.Core/Script.fs) | `ScriptState` (internal), `Script` | `Caddis.Script` for scripts |
 | [ApiDocs.fs](Caddis.Core/ApiDocs.fs) | `ApiDocs` | `caddis_describe` |
+| [AgentSkills.fs](Caddis.Core/AgentSkills.fs) | `AgentSkills` | the skill files of loaded NuGet packages, as MCP resources |
 | [Worker.fs](Caddis.Core/Worker.fs) | `WorkerThread` | a dedicated thread with a queue: background runs, and the UI thread of the headless host |
 | [FsiHost.fs](Caddis.Core/FsiHost.fs) | `FsiState`, `BusyException`, `FsiAssemblyResolver`, `EvalRequest`, `FsiHost` | the F# session and its runs |
 | [Service.fs](Caddis.Core/Service.fs) | `EvalArgs`, `CommandArgs`, `CaddisService` | the operations behind REST and MCP |
@@ -599,8 +600,8 @@ JSON is written indented with relaxed escaping, so code and output stay readable
 
 - **Transport**: `POST /mcp` only. Every request gets one `application/json` response; there is no SSE stream, so `GET /mcp` and other methods get 405.
 - **Protocol versions**: `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`. `initialize` answers with the client's version if supported, otherwise the newest. A request with an unsupported `MCP-Protocol-Version` header gets 400.
-- **Methods**: `initialize`, `ping`, `tools/list`, `tools/call`, `notifications/cancelled`. Other notifications get 202 without a body. Unknown methods get `-32601`, unknown tools `-32602`, invalid JSON `-32700` with HTTP 400, a message without `method` `-32600`. JSON-RPC batches are answered too, although protocol 2025-06-18 removed them.
-- **Capabilities**: only `tools`, with `listChanged: false`. `serverInfo` has the host's MCP name, the title `Caddis` and the version. `instructions` is the host's text for the model, followed by its `packages` if NuGet packages can be used, or else by the advice to install the .NET SDK. The extension of Claude Desktop gets the same text for while Caddis isn't running.
+- **Methods**: `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `notifications/cancelled`. Other notifications get 202 without a body. Unknown methods get `-32601`, unknown tools `-32602`, unknown resources `-32002`, invalid JSON `-32700` with HTTP 400, a message without `method` `-32600`. JSON-RPC batches are answered too, although protocol 2025-06-18 removed them.
+- **Capabilities**: `tools` and `resources`, both with `listChanged: false`. The resources are the skill files of loaded NuGet packages, see 7.12. `serverInfo` has the host's MCP name, the title `Caddis` and the version. `instructions` is the host's text for the model, followed by its `packages` if NuGet packages can be used, or else by the advice to install the .NET SDK. The extension of Claude Desktop gets the same text for while Caddis isn't running.
 - **Session id**: `initialize` returns a random `Mcp-Session-Id`. It is not required or checked; it keeps the request ids of different clients apart for `notifications/cancelled`. The first `tools/call` with a session id this server didn't hand out gets a note before its result: another instance of the app took over the port, or the app was restarted, so values of earlier runs, run ids and the document may differ.
 - **Tool results**: `content` is a text item followed by image items, and `isError` is true for failed runs and for errors. A tool error is a result, not a JSON-RPC error.
 
@@ -633,6 +634,15 @@ Files are listed with their local path.
   it reads each member on its own with a regular expression, escapes those, and leaves out a member that still doesn't parse: one of AcDbMgd's 8,914.
 - **Search** finds type and member names containing the text in non-framework assemblies, up to 60 results.
 - **Suggestions** for a name not found: names that contain it, are contained in it, contain all its words, or are within an edit distance of about a third of its length, up to 8.
+
+### 7.12 Agent skills of NuGet packages
+
+[`AgentSkills`](Caddis.Core/AgentSkills.fs) offers the agent skills that NuGet packages ship, as MCP resources.
+
+- **Files**: each file in `skills/<skill>/` of a package folder, e.g. `skills/rhino.scripting-usage/SKILL.md` and its supporting file `ApiTable.md` of Rhino.Scripting. Their URIs are `caddis-skill://<package>/<version>/<skill>/<file>`, with the package id in lower case as in the NuGet cache.
+- **Packages**: the folder above the `lib` folder of each loaded assembly. An assembly loads once its type is used, so `#r` alone may not list a package yet. Assemblies of the host app are not in a package.
+- **Reading**: `resources/list` and `resources/read` look the files up at each call. Only a file that is listed is read, so no path from a request is opened; an unknown URI gets `-32002`.
+- **Size**: a resource carries its size in bytes. Resources are returned whole, so a large file like `ApiTable.md` is long; the guide says to use `caddis_describe` for one name.
 
 ---
 
@@ -989,13 +999,14 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 | File | Covers |
 |---|---|
 | EvalTests (20) | values, output, definitions across runs, compile and runtime errors with lines, files, script paths, type-checks, the MCP view, the resolver with a host resolver like Rhino's, symbols, line numbers on .NET Framework, filtered FSI arguments |
-| HttpTests (26) | Origin, REST, MCP initialize and versions, tools, errors, running runs, images, describe, cancel notifications, body limit, discovery file, requests during a run on the UI thread |
+| HttpTests (29) | Origin, REST, MCP initialize and versions, tools, resources, errors, running runs, images, describe, cancel notifications, body limit, discovery file, requests during a run on the UI thread |
 | HostTests (14) | host texts and names, hosts without commands, id formats, settings per host, exports as runs, dialogs, grouped changes, runs that have not started, finalization failures |
 | AgentTests (8) | the agents' config files and commands, their state, re-reading changed configs; two servers handing the port over once idle, cancelled and done, with the note to a moved session; another app's port refused, a free one taken; `Set up` with the real `claude` and `codex` in a temporary config folder, where they are installed |
 | DesktopTests (7) | the extension's manifest and `.mcpb` file, what Claude Desktop installed and its settings, where its MSIX package keeps them, `Set up` opening the extension; the relay with Node, where it is installed: messages to Caddis and back, and without Caddis its tools, errors and the `list_changed` once Caddis starts |
 | CommandTests (10) | command runs, input timeouts, argument checks, cancellation, notes and objects in MCP |
 | BackgroundTests (9) | background evaluation, `OnUi`, 409, cancel, timeout, `OnUi` callbacks during cancellation |
 | ApiDocsTests (12) | signatures, docs, short names, curried functions, filters, out parameters, enums, large types, suggestions, namespaces, search, XML doc files that are not well-formed |
+| AgentSkillsTests (4) | package folders of assemblies, the skill files in `skills` and their URIs |
 | OutputTests (7) | the capture buffer and clipping |
 | PanelTests (9) | XAML loads with the host's options, Errors, theme scope, code view, Run again, output with commands and grouped changes, Export and Export all, the agents' states, buttons, tooltips and copied commands |
 

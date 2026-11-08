@@ -48,6 +48,7 @@
     <Compile Include="Model.fs" />
     <Compile Include="Script.fs" />
     <Compile Include="ApiDocs.fs" />
+    <Compile Include="AgentSkills.fs" />
     <Compile Include="Worker.fs" />
     <Compile Include="FsiHost.fs" />
     <Compile Include="Service.fs" />

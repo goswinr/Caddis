@@ -80,6 +80,14 @@ Some code depends on internals or on what the apps do at runtime:
 - The HTTP accept loop is a `backgroundTask`, not a `task`. `Start` runs on the app's UI thread, and a `task` would continue there, so it couldn't accept requests while a run blocks that thread.
 - During a run, output capture redirects `Console.Out` for the whole process. That is why both test projects set `DisableTestParallelization`.
 
+## Agent skills of NuGet packages
+
+- `Caddis.Core/AgentSkills.fs` offers the files of `skills/<skill>/` in the package folders of the loaded assemblies as MCP resources: `resources/list` and `resources/read`, with the `resources` capability. [Architecture.md](Architecture.md) section 7.12 has the details.
+- The package folder is the folder above the `lib` folder of an assembly's path, so a package is listed once one of its types is used. Tests call `AgentSkills.ofPackageRoots` on temporary folders, not on NuGet packages.
+- Only a file that the listing found is read. Keep it that way: no path from a request may be opened.
+- Folder names are not checked, so `skills/<package-id>-<skill>/`, the layout that Microsoft's `dotnet-package-skills` expects, works too.
+- For an end-to-end check, load a real package with `#r "nuget: Name, version"` in a run that uses one of its types, then call `AgentSkills.loaded()`. Rhino.Scripting 0.15.0 is the example. Its types need RhinoCommon, which is only in Rhino, so the run fails there, but the assembly is loaded and listed.
+
 ## Conventions
 
 - The version comes from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md), via Ionide.KeepAChangelog.Tasks. Add user-visible changes under `## [Unreleased]`.

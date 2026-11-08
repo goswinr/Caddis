@@ -20,7 +20,7 @@ type private McpTool = {
     }
 
 /// The MCP endpoint: JSON-RPC over Streamable HTTP, answering every request with a single JSON response, no SSE.
-/// Only tools are offered, no resources or prompts.
+/// Tools are offered, and the skill files of loaded NuGet packages as resources, see AgentSkills. No prompts.
 /// A session id is handed out on initialize, it is only used to tell apart the request ids of different clients,
 /// and to tell agents whose session another Caddis started that this is another one.
 /// see https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http
@@ -265,6 +265,16 @@ type McpEndpoint(svc: CaddisService) =
 
     static let text (s: string) : JsonNode = Json.obj [ "type", Json.ofString "text"; "text", Json.ofString s ]
 
+    /// A skill file as resources/list lists it.
+    static let resourceJson (f: AgentSkills.SkillFile) : JsonNode =
+        Json.obj [
+            "uri", Json.ofString f.uri
+            "name", Json.ofString f.name
+            "description", Json.ofString "A file of an agent skill that a loaded NuGet package ships, e.g. a guide to using the package."
+            "mimeType", Json.ofString f.mimeType
+            "size", Json.ofInt64 f.size
+        ]
+
     static let newSessionId () =
         Convert.ToHexString(RandomNumberGenerator.GetBytes 16).ToLowerInvariant()
 
@@ -313,7 +323,7 @@ type McpEndpoint(svc: CaddisService) =
         let version = if Array.contains requested supportedVersions then requested else supportedVersions[0]
         Json.obj [
             "protocolVersion", Json.ofString version
-            "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ] ]
+            "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ]; "resources", Json.obj [ "listChanged", Json.ofBool false ] ]
             "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString $"Caddis for {info.appName}"; "version", Json.ofString svc.Version ]
             "instructions", Json.ofString(instructionsOf info (DotnetSdk.current ()))
         ]
@@ -457,6 +467,21 @@ type McpEndpoint(svc: CaddisService) =
                 return if isNull id then None else Some(errorResponse id -32600 "Invalid request: 'method' is missing.")
             | Some "initialize" -> return Some(response id (initialize p))
             | Some "ping" -> return Some(response id (JsonObject()))
+            | Some "resources/list" ->
+                let resources: JsonNode list = AgentSkills.loaded () |> List.map resourceJson
+                return Some(response id (Json.obj [ "resources", Json.arr resources ]))
+            | Some "resources/read" ->
+                let uri = Json.tryString "uri" p |> Option.defaultValue ""
+                match AgentSkills.tryFind uri with
+                | Some f ->
+                    let content: JsonNode =
+                        Json.obj [
+                            "uri", Json.ofString f.uri
+                            "mimeType", Json.ofString f.mimeType
+                            "text", Json.ofString (System.IO.File.ReadAllText f.path)
+                        ]
+                    return Some(response id (Json.obj [ "contents", Json.arr [ content ] ]))
+                | None -> return Some(errorResponse id -32002 $"Resource not found: '{uri}'.")
             | Some "tools/list" -> return Some(response id (Json.obj [ "tools", Json.arr (List.map toolJson (tools ())) ]))
             | Some "tools/call" ->
                 let name = Json.tryString "name" p |> Option.defaultValue ""
