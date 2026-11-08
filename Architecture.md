@@ -6,7 +6,7 @@ its features and API, and what it does not do, by design or not yet.
 For what Caddis does, how to install it and how to connect an agent, see the [README](README.md),
 [Caddis for Rhino](Caddis.Rhino/README.md), [Caddis for Revit](Caddis.Revit/README.md) and [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
-This describes the code of version 0.3.4 plus the unreleased changes in [CHANGELOG.md](CHANGELOG.md), as of November 2026.
+This describes the code of version 0.3.5 plus the unreleased changes in [CHANGELOG.md](CHANGELOG.md), as of November 2026.
 
 ## Contents
 

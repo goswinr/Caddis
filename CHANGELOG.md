@@ -6,8 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-11-08
+
 ### Changed
 - The READMEs, plugin descriptions, dialogs, MCP server titles and Claude Desktop extensions use consistent app names and descriptions, including AutoCAD. The Revit guide uses the labels shown on its ribbon.
+- Revit and AutoCAD: the installer window says that the downloaded installer can be deleted after installation.
 
 ## [0.3.4] - 2026-11-07
 
