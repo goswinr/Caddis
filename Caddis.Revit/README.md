@@ -1,6 +1,6 @@
 # Caddis for Revit
 
-The Revit add-in of Caddis, an F# interactive host for Revit 2024 to 2027, controlled through HTTP and MCP.
+Caddis for Revit hosts a persistent F# Interactive session inside Revit, controlled through HTTP and MCP.
 It has the same F# session, HTTP server, REST endpoints and MCP tools as in Rhino,
 except `caddis_command`: Revit has no command line. It adds `caddis_dialog` for Revit's dialogs.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
@@ -59,12 +59,12 @@ Revit locks the dll while it runs, close Revit before building again. `install-d
 
 ## Ribbon
 
-The Caddis tab groups its buttons in the panels **Server** with `Start` / `Stop`,
-**F# Session** with `Mode`, `Reset F#` and `Cancel run`, and **Status** with `Panel` and `Info`.
+The Caddis tab groups its buttons in the panels **Server** with `Start listening` / `Stop listening`,
+**F# Session** with `Mode`, `Reset F# Session` and `Cancel run`, and **Status** with `Caddis Details Panel` and `Info`.
 Each button has its own Revit-style vector icon: pale gray surfaces with subtle depth,
 blue accents and colored action markers. Icons are drawn for the screen's scale and
 Revit's light or dark theme, with simplified details at 16 pixels. They need no icon font.
-`Start` and `Stop` show the server's state in their text and icon, `Mode` the thread mode.
+`Start listening` and `Stop listening` show the server's state in their text and icon, `Mode` the thread mode.
 
 | Dark theme | Light theme |
 | --- | --- |
@@ -77,7 +77,7 @@ Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest
 
 ## Connect an AI agent
 Revit has its own settings file `%AppData%\Caddis\settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
-so that Caddis in Rhino and in Revit can run and stay registered in Claude Code at the same time.
+so that Caddis in Rhino, Revit and AutoCAD can run and stay registered in the agents at the same time.
 The panel sets up Claude Code, Codex and Claude Desktop, see [Connect an AI agent](../README.md#connect-an-ai-agent).
 Without the panel, `Info` on the ribbon shows the commands while the server runs, Ctrl+C copies the text of its dialog:
 ```
@@ -91,13 +91,13 @@ The first Revit then listens on another port and logs that.
 
 ## Dockable panel
 
-Open the panel with **Caddis → Panel** on Revit's ribbon. It shows the server
+Open the panel with **Caddis → Caddis Details Panel** on Revit's ribbon. It shows the server
 state, whether Claude Code, Codex and Claude Desktop connect to this Revit, settings, recent runs, and the selected run's output and code.
 It docks next to the Project Browser, can be moved like any Revit pane,
 and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.
 
-Rhino and Revit use the same Avalonia view, styles and code viewer from `Caddis.UI`.
+Rhino, Revit and AutoCAD use the same Avalonia view, styles and code viewer from `Caddis.UI`.
 Revit supplies its actions and light or dark theme colors, and embeds the view in
 a WPF `HwndHost` within its dockable pane. Styles stay scoped to Caddis.
 The pane keeps its existing ID, so Revit retains the saved docking position.

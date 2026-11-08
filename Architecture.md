@@ -6,7 +6,7 @@ its features and API, and what it does not do, by design or not yet.
 For what Caddis does, how to install it and how to connect an agent, see the [README](README.md),
 [Caddis for Rhino](Caddis.Rhino/README.md), [Caddis for Revit](Caddis.Revit/README.md) and [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
 
-This describes the code of version 0.2.1 plus the unreleased changes in [CHANGELOG.md](CHANGELOG.md), as of October 2026.
+This describes the code of version 0.3.4 plus the unreleased changes in [CHANGELOG.md](CHANGELOG.md), as of November 2026.
 
 ## Contents
 
@@ -34,7 +34,7 @@ This describes the code of version 0.2.1 plus the unreleased changes in [CHANGEL
 
 Caddis hosts an F# Interactive (FSI) session inside the process of Rhino, Revit or AutoCAD, and an HTTP server in the same process
 through which AI agents and scripts run F# code in that session.
-The agent writes RhinoCommon or Revit API code, Caddis compiles and runs it inside the app and returns what happened:
+The agent writes RhinoCommon, Revit API or AutoCAD .NET API code, Caddis compiles and runs it inside the app and returns what happened:
 as text written for the model via MCP, or as JSON via REST.
 
 ```mermaid
@@ -46,8 +46,8 @@ flowchart LR
         service --> fsi["FsiHost<br/>one F# session,<br/>one run at a time"]
         service --> docs["ApiDocs<br/>reflection and XML docs"]
         fsi --> fcs["FSharp.Compiler.Service<br/>FsiEvaluationSession"]
-        fsi -- "ICaddisHost" --> host["RhinoHost or RevitHost<br/>UI thread, undo, capture,<br/>export, commands, dialogs"]
-        host --> api["RhinoCommon or Revit API"]
+        fsi -- "ICaddisHost" --> host["RhinoHost, RevitHost or AutoCADHost<br/>UI thread, undo, capture,<br/>export, commands, dialogs"]
+        host --> api["RhinoCommon, Revit API or AutoCAD .NET API"]
         fcs -- "the script's code" --> api
         panel["Caddis panel<br/>Avalonia, Caddis.UI"] --> server
     end
@@ -80,7 +80,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - One persistent F# Interactive session per app. Definitions stay until `caddis_reset`, a mode change, or a reset after an abandoned run.
 - Code is sent inline or as the path of an `.fsx` file. With a path, `__SOURCE_DIRECTORY__`, relative `#load` and `#r`, and line numbers in stack traces refer to that file.
 - `#r "nuget: ..."` works if the .NET SDK is installed on the machine.
-- Conditional compilation symbols: `CADDIS`, the app (`RHINO`, `REVIT`, `HEADLESS` in tests), `NET` and `NETCOREAPP` or `NETFRAMEWORK`, and FSI's own `INTERACTIVE`.
+- Conditional compilation symbols: `CADDIS`, the app (`RHINO`, `REVIT`, `AUTOCAD`, `HEADLESS` in tests), `NET` and `NETCOREAPP` or `NETFRAMEWORK`, and FSI's own `INTERACTIVE`.
 - More FSI arguments via `extraFsiArgs` in the settings file. Arguments that would make FCS exit the process, e.g. `--help`, are dropped with a message.
 - Runs on the UI thread or on a background thread; in background mode `Caddis.Script.OnUi` calls into the app on its UI thread.
 - Background runs can be cancelled and timed out. A run that ignores cancellation for 5 s is abandoned and the session is reset.
@@ -104,12 +104,12 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 **Server**
 - MCP over Streamable HTTP at `/mcp`, with single JSON responses, and plain REST endpoints.
 - Localhost only, without authentication; `Origin` header rejected; request bodies up to 20 MB.
-- Its own port and MCP name per app, 7810 `caddis-rhino` and 7820 `caddis-revit`, so both can run and stay registered at the same time. The next free port if one is taken.
+- Its own port and MCP name per app, 7810 `caddis-rhino`, 7820 `caddis-revit` and 7830 `caddis-autocad`, so all three can run and stay registered at the same time. The next free port if one is taken.
 - A second instance of an app, e.g. another Revit, takes over the port where the agents connect from the first one once that is idle (`POST /release`); agents connected to the port go on with it.
 - A discovery file per running server in `instances/<pid>.json`.
 
 **User interface**
-- A dockable panel in both apps, in the app's light or dark theme: server state, whether Claude Code, Codex and Claude Desktop connect to this app with `Set up` and `Activate`, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
+- A dockable panel in all three apps, in the app's light or dark theme: server state, whether Claude Code, Codex and Claude Desktop connect to this app with `Set up` and `Activate`, settings, an `Errors` list, the recent runs, the output and the code of the selected run with F# highlighting, Fantomas formatting, `Run again`, `Export` and `Export all` to `.fsx`.
 - Rhino: the command `Caddis` with options, scriptable as `-Caddis`.
 - Revit: a `Caddis` ribbon tab with vector icons drawn for the theme and screen scale, native checkboxes, and an `Info` dialog that turns red on unseen errors.
 
@@ -640,6 +640,8 @@ Files are listed with their local path.
 
 ### 8.1 MCP tools
 
+`initialize` returns the app's MCP name in `serverInfo.name` and `Caddis for <app>` in `serverInfo.title`, matching the Claude Desktop extension. The relay uses the same title while the app is not running.
+
 | Tool | Arguments | Annotations | Notes |
 |---|---|---|---|
 | `caddis_eval` | `code`, `path`, `waitMs` (50000), `timeoutMs`, `recordUndo` (true) | destructive | needs `code` or `path`; returns `running` after `waitMs` |
@@ -790,6 +792,7 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
   `Activate` calls `ActivateAgent`: it takes over the port of the agent's URL, see [7.9](#79-http-server), and while it waits the button cancels it; if the port can't be taken, or the URL isn't one of Caddis on this computer, it sets the agent up instead.
   Only one button works at a time, the agents may use the same port. The commands are only in the tooltips, a right-click on a row copies them. A note below the rows says what the last click did.
 - **Claude Desktop** runs local MCP servers over stdio only, and reaches the URLs of its connectors from Anthropic's servers, which can't reach this computer. So it gets an extension, an MCP Bundle ([`DesktopExtension`](Caddis.Core/DesktopExtension.fs)): a zip of `manifest.json`, `server/relay.js`, `server/caddis.json` and `icon.png`.
+  The display name is `Caddis for <app>`, matching the app README and installer. Its description explains that the extension connects Claude Desktop to Caddis in that app; Caddis must be installed there separately.
   Its `Set up` writes `<name>.mcpb` into the run folder of the process, with this server's port as the default of the setting `port` and its instructions and tools in `caddis.json`, and opens it; Claude Desktop asks the person to install it.
   On Windows it starts `%LOCALAPPDATA%\AnthropicClaude\claude.exe` with the file, which passes it on to the running Claude Desktop: Claude Desktop isn't the app for `.mcpb` files, so opening the file would make Windows ask which app to open it with.
   Claude Desktop from its MSIX package `Claude_pzs8sxrjxfjjc` (Microsoft Store) is started with `IApplicationActivationManager`, by its app id from the registry's list of the user's packages: its program in `C:\Program Files\WindowsApps` would run outside of its package.
@@ -853,7 +856,7 @@ The ribbon commands enter API context too, so `Script.UiApp` works there.
 ### User interface and messages
 
 - **Ribbon** ([Addin.fs](Caddis.Revit/Addin.fs)): the tab `Caddis` with the panels Server (Start/Stop), F# Session (Mode, Reset, Cancel), Status (Panel, Info) and Settings (the checkbox Start with Revit, via AdWindows). Button texts show the state. Icons are drawn with WPF at 16 and 32 px for the theme and screen scale ([RibbonIcons.fs](Caddis.Revit/RibbonIcons.fs)) and redrawn on `ThemeChanged`. The ribbon is updated on Revit's `Idling` event and by the panel.
-- **Info** shows the server, session, file paths, the latest 5 errors and 12 messages in a `TaskDialog`. Unseen errors turn the button red with their count.
+- **Info** shows the server, session, file paths, the latest 5 errors and 12 messages in a `TaskDialog`, headed `Caddis for Revit, F# Interactive for AI agents`. Unseen errors turn the button red with their count.
 - **Messages** go to `%AppData%\Caddis\revit.log`, deleted at start when larger than 1 MB; errors are marked `ERROR`. Actions started from the panel run outside API context, so they only log, and the pane shows the latest line.
 - **Clipboard**: the panel's copy of an agent's commands retries five times. While the server runs, `Info` shows the commands to add Caddis to Claude Code and Codex, for when the panel can't be shown; Ctrl+C copies the text of the dialog.
 - **Pane** ([Panel.fs](Caddis.Revit/Panel.fs)): registered at start with a fixed `DockablePaneId`, hidden by default, tabbed behind the Project Browser. [`AvaloniaHost`](Caddis.Revit/AvaloniaHost.fs) parents the Avalonia window with `SetParent`, forwards keyboard messages before WPF treats them as shortcuts, handles tab focus, and forwards DPI changes.
@@ -923,7 +926,7 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - *Dialogs*: [`AutoCADDialogs`](Caddis.AutoCAD/Dialogs.fs), a copy of `RevitDialogs`: while a modal dialog shows, AutoCAD's main window is disabled, and its last active popup is the dialog.
   Found with Win32 functions that send no messages, then read and its buttons pressed with UI Automation on the thread pool, which the dialog's message loop answers. Tested with the dialog of OPTIONS.
 - *Messages*: [`AutoCADLog`](Caddis.AutoCAD/Log.fs) writes to the command line of the active drawing through the dispatcher, and to `%AppData%\Caddis\autocad.log`, which also has what was written while no drawing was open.
-  It keeps the latest messages and errors for the Info dialog, AutoCAD's `Autodesk.Windows.TaskDialog`, like Revit's Info dialog.
+  It keeps the latest messages and errors for the Info dialog, AutoCAD's `Autodesk.Windows.TaskDialog`, titled `Caddis - Info` and headed `Caddis for AutoCAD, F# Interactive for AI agents`, like Revit's Info dialog.
 
 **Panel and ribbon**:
 - *Panel*: [`Panel`](Caddis.AutoCAD/Panel.fs) creates a `PaletteSet` with its own id the first time it is shown, and adds the WPF `CaddisPanel` with `AddVisual`, which hosts the shared Avalonia view in an `HwndHost` like Revit's pane.
@@ -1115,6 +1118,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | AutoCAD | the commands `CADDIS` and `CADDISPANEL`, the ribbon tab `Caddis.Tab`, `settings-autocad.json`, `autocad.log`, `autocad-update.json`, the dev startup script `%LocalAppData%\Caddis.Dev\AutoCAD<year>\load.scr` |
 | Settings folder | `%AppData%\Caddis`, `~/.config/Caddis` on Mac |
 | The agents' config files | `~/.claude.json` or `$CLAUDE_CONFIG_DIR/.claude.json`, `~/.codex/config.toml` or `$CODEX_HOME/config.toml`, Claude Desktop's `%APPDATA%\Claude\extensions-installations.json` and `Claude Extensions Settings\<id>.json` |
+| Product display names | `Caddis for Rhino`, `Caddis for Revit`, `Caddis for AutoCAD`; the commands, ribbon tabs and docked panels use `Caddis` |
 | Claude Desktop extensions | `caddis-rhino.mcpb`, `caddis-revit.mcpb`, `caddis-autocad.mcpb`, with the names of the MCP servers |
 | Output folders | `%TEMP%\Caddis\<pid>\<run id>`, `%TEMP%\Caddis\<pid>\logs` |
 | Revit installation | `%LocalAppData%\Caddis.Revit\current` |

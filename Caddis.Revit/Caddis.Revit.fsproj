@@ -10,7 +10,7 @@
     <RootNamespace>Caddis.Revit</RootNamespace>
     <AssemblyName>Caddis.Revit</AssemblyName>
     <AssemblyTitle>Caddis</AssemblyTitle>
-    <Description>An F# interactive host for Revit, controlled via HTTP and MCP.</Description>
+    <Description>Hosts a persistent F# Interactive session inside Revit, controlled through HTTP and MCP.</Description>
     <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the dll.
     Fesh.Revit found that without it FSharp.Core fails to load in Revit 2025. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>

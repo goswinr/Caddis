@@ -3,7 +3,7 @@ namespace Caddis
 open System
 open System.Threading.Tasks
 
-/// A host without Rhino or Revit, for tests and for trying Caddis without a host app.
+/// A host without Rhino, Revit or AutoCAD, for tests and for trying Caddis without a host app.
 /// A dedicated thread stands in for the UI thread.
 type HeadlessHost(log: string -> unit) =
 
@@ -63,9 +63,9 @@ type HeadlessHost(log: string -> unit) =
         member _.Log msg = log msg
         member _.LogError msg = log msg
         member _.Status() = []
-        member _.CaptureView(_, _, _, _, _) = failwith "Capturing a viewport needs a host app like Rhino or Revit."
-        member _.Export(_, _) = failwith "Exporting needs a host app like Rhino or Revit."
-        member _.Undo _ = Error "Undo needs a host app like Rhino or Revit."
+        member _.CaptureView(_, _, _, _, _) = failwith "Capturing a viewport needs a host app like Rhino, Revit or AutoCAD."
+        member _.Export(_, _) = failwith "Exporting needs a host app like Rhino, Revit or AutoCAD."
+        member _.Undo _ = Error "Undo needs a host app like Rhino, Revit or AutoCAD."
         member _.Dialogs() = []
         member _.PressDialogButton(_, _) = Error "There is no host app with dialogs."
         member _.RunCommands(_, _) = failwith "Running commands needs a host app like Rhino or AutoCAD."

@@ -10,7 +10,7 @@
     <RootNamespace>Caddis.AutoCAD</RootNamespace>
     <AssemblyName>Caddis.AutoCAD</AssemblyName>
     <AssemblyTitle>Caddis</AssemblyTitle>
-    <Description>An F# interactive host for AutoCAD, controlled via HTTP and MCP.</Description>
+    <Description>Hosts a persistent F# Interactive session inside AutoCAD, controlled through HTTP and MCP.</Description>
     <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the dll, as for Revit -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

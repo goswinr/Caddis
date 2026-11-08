@@ -314,7 +314,7 @@ type McpEndpoint(svc: CaddisService) =
         Json.obj [
             "protocolVersion", Json.ofString version
             "capabilities", Json.obj [ "tools", Json.obj [ "listChanged", Json.ofBool false ] ]
-            "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString "Caddis"; "version", Json.ofString svc.Version ]
+            "serverInfo", Json.obj [ "name", Json.ofString info.mcpServerName; "title", Json.ofString $"Caddis for {info.appName}"; "version", Json.ofString svc.Version ]
             "instructions", Json.ofString(instructionsOf info (DotnetSdk.current ()))
         ]
 

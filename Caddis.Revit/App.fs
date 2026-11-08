@@ -116,7 +116,7 @@ module App =
                 match RevitLog.recentLines () with
                 | [] -> "none"
                 | lines -> lines |> lastOf 12 |> String.concat Environment.NewLine
-            use d = new TaskDialog("Info", MainInstruction = "Caddis, F# Interactive for AI agents")
+            use d = new TaskDialog("Info", MainInstruction = "Caddis for Revit, F# Interactive for AI agents")
             match RevitLog.errors.Lines with
             | [] -> d.MainContent <- info s
             | errors ->

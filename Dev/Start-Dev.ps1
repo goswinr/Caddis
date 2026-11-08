@@ -5,7 +5,7 @@ Starts Rhino, Revit or AutoCAD with the local build of Caddis instead of the ins
 .DESCRIPTION
 Builds Caddis for the app, copies the build to %LocalAppData%\Caddis.Dev\<app> and starts the app with only that build.
 The app locks the copy, not the build output, so you can build again while it runs. Start it with this script again to load the new build.
-The installed Caddis stays installed: Rhino or Revit started in any other way loads it as before.
+The installed Caddis stays installed: Rhino, Revit or AutoCAD started in any other way loads it as before.
 
 Rhino loads the local build from RHINO_PACKAGE_DIRS, set only for the Rhino started here.
 Rhino would load the installed Yak package instead, it has the same plugin id. So its folder %AppData%\McNeel\Rhinoceros\packages\<version>\Caddis
@@ -58,7 +58,7 @@ $hiddenRoot = Join-Path $env:APPDATA "Caddis\dev\hidden"
 $revitDevVariable = "CADDIS_REVIT_DEV" # see Caddis.Revit.Loader/CaddisLoader.cs
 $autocadDevVariable = "CADDIS_AUTOCAD_DEV" # see Caddis.AutoCAD.Loader/CaddisLoader.cs
 
-# True if another process has the file open, e.g. Rhino or Revit has loaded the assembly.
+# True if another process has the file open, e.g. Rhino, Revit or AutoCAD has loaded the assembly.
 function Test-Locked([string]$file) {
     if (-not (Test-Path -LiteralPath $file)) { return $false }
     try {

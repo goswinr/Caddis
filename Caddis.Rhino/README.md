@@ -1,6 +1,6 @@
 # Caddis for Rhino
 
-The Rhino plugin of Caddis, an F# interactive host controlled through HTTP and MCP.
+Caddis for Rhino hosts a persistent F# Interactive session inside Rhino, controlled through HTTP and MCP.
 AI agents like Claude Code, and your own scripts, run F# code and Rhino commands in the Rhino you are working in.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
@@ -62,7 +62,7 @@ Open it with the command `Caddis` and the option `Panel`, then dock it like any 
 When Rhino closes, Caddis saves whether the panel is shown and where, in `panel-rhino8.json` or `panel-rhino9.json` in `%AppData%\Caddis`.
 At the next start it moves the panel back if Rhino shows it elsewhere, e.g. after an update of Caddis:
 docked, to the tabs of a panel it was docked with; floating, to its place on the screen, on Windows.
-Its content is the Avalonia panel shared with Revit in `Caddis.UI`, hosted in Rhino's Eto docking container.
+Its content is the Avalonia panel shared with Revit and AutoCAD in `Caddis.UI`, hosted in Rhino's Eto docking container.
 Rhino supplies its theme colors and the additional command-line settings.
 
 Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after the [exemplary run](#exemplary-run) below.
@@ -183,12 +183,12 @@ An agent sent these, the panel lists them newest first:
 - `x4` exports all objects to `towers.obj`, via `caddis_export`.
 - `r5` runs for 12 s on the background thread.
 
-## Example in the Claude app
+## Example in Claude Desktop
 
 The prompt: "Use Caddis to draw a Triangle, find the incircle center, divide into 3 triangles and recurse 10 times, fade out color".
 The agent ran F# code in Rhino and captured the Top view to check its result. After the first capture it changed the draw order, so that the darker levels show.
 
-![The Claude app with the prompt, the agent's runs with its two captures of the Top view, and Caddis for Rhino among the connectors](Docs/Screen-Claude.png)
+![Claude Desktop with the prompt, the agent's runs with its two captures of the Top view, and Caddis for Rhino among the connectors](Docs/Screen-Claude.png)
 
 In Rhino 9 Beta: the subdivided triangle in the Top view, and the Caddis panel with the code of the first run, which you can run again or export.
 

@@ -42,7 +42,7 @@ namespace Caddis.Revit.Loader
             }
             catch (Exception e)
             {
-                TaskDialog.Show("Load error", $"Caddis failed to load {path}:{Environment.NewLine}{e.Message}");
+                TaskDialog.Show("Load error", $"Caddis for Revit failed to load {path}:{Environment.NewLine}{e.Message}");
                 return Result.Failed;
             }
             return caddis.OnStartup(application);

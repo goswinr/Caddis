@@ -40,7 +40,7 @@ module AutoCAD =
     let private packageContents () =
         $"""<?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0" AutodeskProduct="AutoCAD" ProductType="Application" Name="Caddis"
-  Description="An F# interactive host for AutoCAD, controlled via HTTP and MCP." Author="Goswin Rothenthal" AppVersion="{version}"
+  Description="Hosts a persistent F# Interactive session inside AutoCAD, controlled through HTTP and MCP." Author="Goswin Rothenthal" AppVersion="{version}"
   ProductCode="{{B6E4C0F1-7A2D-4E5B-9C3F-1D8A6E2B4C70}}" UpgradeCode="{{3F9A1C2E-5B7D-4A6E-8C0F-2E4D6B8A1C93}}"
   HelpFile="https://github.com/goswinr/Caddis/blob/main/Caddis.AutoCAD/README.md">
   <CompanyDetails Name="Goswin Rothenthal" Url="https://github.com/goswinr/Caddis" />

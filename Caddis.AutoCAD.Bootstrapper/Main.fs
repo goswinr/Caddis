@@ -55,12 +55,12 @@ module Main =
 
     /// Registers Caddis again, to show where, and shows what it did.
     let private showWindow (updatedTo: string option) =
-        let messages = ResizeArray [ Info $"Caddis {version}, an F# interactive host for AutoCAD, controlled via HTTP and MCP." ]
+        let messages = ResizeArray [ Info $"Caddis for AutoCAD {version} hosts a persistent F# Interactive session inside AutoCAD, controlled through HTTP and MCP." ]
         updatedTo |> Option.iter (fun v -> messages.Add(Done $"Caddis was updated to {v}."))
         AutoCAD.register messages.Add
         messages.Add(Info "Start AutoCAD and use the Caddis tab on its ribbon, or its command CADDIS. A running AutoCAD loads Caddis right away.")
         messages.Add(Info "If AutoCAD asks whether to load Caddis.AutoCAD.Loader.dll, choose 'Always Load'.")
-        messages.Add(Info "You can close this window now. Read more about Caddis in AutoCAD at:")
+        messages.Add(Info "You can close this window and delete the installer from your downloads now. Read more about Caddis in AutoCAD at:")
         let win = Window(Title = "Caddis for AutoCAD", Width = 820.0, Height = 480.0, WindowStartupLocation = WindowStartupLocation.CenterScreen)
         let button = autoClose win 30
         DockPanel.SetDock(button, Dock.Bottom)
@@ -93,5 +93,5 @@ module Main =
                 0
             | _ -> showWindow updatedTo.Value
         with e ->
-            Dialog.error $"Caddis.AutoCAD.Bootstrapper failed:{Environment.NewLine}{e}"
+            Dialog.error $"Caddis for AutoCAD setup failed:{Environment.NewLine}{e}"
             1

@@ -54,13 +54,13 @@ module DesktopExtension =
             "name", str b.serverName
             "display_name", str $"Caddis for {b.appName}"
             "version", str b.version
-            "description", str $"Run F# scripts inside {b.appName}: the agent writes the code, Caddis runs it in {b.appName} and reports what happened."
+            "description", str $"Connect Claude Desktop to Caddis for {b.appName} to run F# scripts inside {b.appName}."
             "long_description",
             str (
                 String.concat "\n\n" [
-                    $"Caddis hosts an F# Interactive session inside {b.appName}, with an MCP endpoint on this computer. This extension relays Claude Desktop to it."
-                    $"It needs Caddis in {b.appName}: install it as described on [GitHub]({repo}), start {b.appName}, and the server in the Caddis panel."
-                    "Set the port to the one of the Caddis panel if it isn't the default."
+                    $"Caddis hosts a persistent F# Interactive session inside {b.appName}, with an MCP endpoint on this computer. This extension relays Claude Desktop to it."
+                    $"It needs Caddis in {b.appName}: install it as described on [GitHub]({repo}), start {b.appName}, then start the server in the Caddis panel."
+                    "Set the port to the one shown in the Caddis panel if it isn't the default."
                 ]
             )
             "author", Json.obj [ "name", str "Goswin Rothenthal"; "url", str repo ]

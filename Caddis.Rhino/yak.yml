@@ -5,8 +5,8 @@ icon: logo.png
 authors:
   - Goswin Rothenthal
 description: >
-  Caddis hosts a persistent F# Interactive session inside Rhino, controlled
-  through HTTP and MCP for AI agents, remote script execution and automation.
+  Caddis for Rhino hosts a persistent F# Interactive session inside Rhino,
+  controlled through HTTP and MCP for AI agents, script execution and automation.
   For Rhino 8.19 or later on .NET 8 and Rhino 9 Beta, on Windows or Mac.
   Rhino 8 on Windows can also run it on .NET Framework.
 keywords:

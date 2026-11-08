@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The READMEs, plugin descriptions, dialogs, MCP server titles and Claude Desktop extensions use consistent app names and descriptions, including AutoCAD. The Revit guide uses the labels shown on its ribbon.
+
 ## [0.3.4] - 2026-11-07
 
 ### Added

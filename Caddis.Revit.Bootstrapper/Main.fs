@@ -54,12 +54,12 @@ module Main =
 
     /// Registers Caddis again, to show where, and for a Revit installed since, and shows what it did.
     let private showWindow (updatedTo: string option) =
-        let messages = ResizeArray [ Info $"Caddis {version}, an F# interactive host for Revit, controlled via HTTP and MCP." ]
+        let messages = ResizeArray [ Info $"Caddis for Revit {version} hosts a persistent F# Interactive session inside Revit, controlled through HTTP and MCP." ]
         updatedTo |> Option.iter (fun v -> messages.Add(Done $"Caddis was updated to {v}."))
         Revit.register messages.Add
         messages.Add(Info "Start Revit and use the Caddis tab on its ribbon. If Revit asks whether to load Caddis, choose 'Always Load'.")
         messages.Add(Info $"To register Caddis with a Revit that you install later, start this program again: {Revit.installFolder}Caddis.Revit.Bootstrapper.exe")
-        messages.Add(Info "You can close this window now. Read more about Caddis in Revit at:")
+        messages.Add(Info "You can close this window and delete the installer from your downloads now. Read more about Caddis in Revit at:")
         let win = Window(Title = "Caddis for Revit", Width = 820.0, Height = 480.0, WindowStartupLocation = WindowStartupLocation.CenterScreen)
         let button = autoClose win 30
         DockPanel.SetDock(button, Dock.Bottom)
@@ -92,5 +92,5 @@ module Main =
                 0
             | _ -> showWindow updatedTo.Value
         with e ->
-            Dialog.error $"Caddis.Revit.Bootstrapper failed:{Environment.NewLine}{e}"
+            Dialog.error $"Caddis for Revit setup failed:{Environment.NewLine}{e}"
             1

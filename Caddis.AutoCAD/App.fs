@@ -114,8 +114,8 @@ module App =
                 | lines -> lines |> lastOf 12 |> String.concat Environment.NewLine
             let d =
                 Autodesk.Windows.TaskDialog(
-                    WindowTitle = "Caddis",
-                    MainInstruction = "Caddis, F# Interactive for AI agents",
+                    WindowTitle = "Caddis - Info",
+                    MainInstruction = "Caddis for AutoCAD, F# Interactive for AI agents",
                     CommonButtons = Autodesk.Windows.TaskDialogCommonButtons.Close,
                     MainIcon = Autodesk.Windows.TaskDialogIcon.Information,
                     ExpandedText = $"Latest messages:{Environment.NewLine}{recent}",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Caddis as an extension of Claude Desktop. Claude Desktop runs it with its own Node and talks MCP to it over stdio,
-// one JSON-RPC message per line. It relays each message to the MCP endpoint of Caddis in Rhino or Revit on this computer,
+// one JSON-RPC message per line. It relays each message to the MCP endpoint of Caddis in Rhino, Revit or AutoCAD on this computer,
 // which answers every request with a single JSON response, so a message is one POST.
 // Arguments: the port of Caddis, and the name of the app, e.g. 7810 Rhino. No dependencies, Node 18 or later for fetch.
 'use strict'
@@ -74,7 +74,7 @@ function offline(message) {
       return result({
         protocolVersion: (message.params && message.params.protocolVersion) || '2025-06-18',
         capabilities: { tools: { listChanged: true } },
-        serverInfo: { name: offer.name, title: 'Caddis', version: offer.version },
+        serverInfo: { name: offer.name, title: `Caddis for ${app}`, version: offer.version },
         instructions: offer.instructions ? `${offer.instructions}\n\n${notRunning}` : notRunning,
       })
     case 'ping':

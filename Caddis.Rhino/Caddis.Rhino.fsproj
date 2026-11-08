@@ -9,7 +9,7 @@
     <AssemblyTitle>Caddis</AssemblyTitle>
     <!-- Yak compares this with the package version; keep the git hash out of it. -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <Description>An F# interactive host for Rhino, controlled via HTTP and MCP.</Description>
+    <Description>Hosts a persistent F# Interactive session inside Rhino, controlled through HTTP and MCP.</Description>
     <!-- copy FSharp.Core, FSharp.Compiler.Service and Caddis.Core next to the .rhp -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

@@ -197,8 +197,8 @@ type CaddisApplication() =
                 Updates.check ()
                 Result.Succeeded
             with e ->
-                RevitLog.error $"Caddis failed to load: {e}"
-                TaskDialog.Show("Load error", $"Caddis failed to load:{Environment.NewLine}{e.Message}") |> ignore
+                RevitLog.error $"Caddis for Revit failed to load: {e}"
+                TaskDialog.Show("Load error", $"Caddis for Revit failed to load:{Environment.NewLine}{e.Message}") |> ignore
                 Result.Failed
 
         member _.OnShutdown(uiApp: UIControlledApplication) : Result =

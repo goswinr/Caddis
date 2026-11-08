@@ -95,7 +95,7 @@ let ``returns 400 with a plain message when the host fails`` () =
     use req = new HttpRequestMessage(HttpMethod.Get, "/viewport")
     let status, body = send client.Value req
     Assert.Equal(HttpStatusCode.BadRequest, status)
-    Assert.Equal("Capturing a viewport needs a host app like Rhino or Revit.", str [ "error" ] (JsonNode.Parse body))
+    Assert.Equal("Capturing a viewport needs a host app like Rhino, Revit or AutoCAD.", str [ "error" ] (JsonNode.Parse body))
 
 [<Fact>]
 let ``MCP initialize negotiates the protocol version`` () =

@@ -66,7 +66,7 @@ namespace Caddis.AutoCAD.Loader
             }
             catch (System.Exception e)
             {
-                string message = $"Caddis failed to load {path}:{Environment.NewLine}{e.Message}";
+                string message = $"Caddis for AutoCAD failed to load {path}:{Environment.NewLine}{e.Message}";
                 Log(message);
                 try { Autodesk.AutoCAD.ApplicationServices.Core.Application.ShowAlertDialog(message); } catch { }
             }
