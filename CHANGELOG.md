@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - MCP resources: the skill files that NuGet packages ship in skills, e.g. the guide of Rhino.Scripting for agents, are listed by resources/list and read by resources/read once an assembly of the package is loaded.
+- A click on the server's URL in the panel copies it, and a right-click also offers the URL that AI agents connect to.
+
+### Changed
+- The panel has a clearer layout: the server, the F# session and the agents each have a row with a dot for their state and their own buttons, and `Cancel` shows only while a run is in progress. A `Settings` row with a gear unfolds the settings right below it, one per line, so they don't move when the panel is resized. In narrow panels, e.g. AutoCAD's palette, the logo is hidden to leave room for the status.
+- The panel lists runs with an icon of their status, green for ok, red for errors, amber for timeouts, and with durations like `12.2 s` instead of `12175 ms`. A header above the tabs names the selected run with its status, duration, start time and thread, and has `Run again` and `Export` on both tabs.
+- The `Output` tab colors the section lines and errors, searches with Ctrl+F, and shows the errors of a failed run first.
+- Internal errors of Caddis show in an amber notice instead of a red button, since agents go on after most of them, so red is only for runs that failed. An update and a missing .NET SDK show in blue notices.
 
 ## [0.3.5] - 2026-11-08
 

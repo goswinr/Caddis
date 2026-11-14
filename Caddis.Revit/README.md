@@ -92,7 +92,7 @@ The first Revit then listens on another port and logs that.
 ## Dockable panel
 
 Open the panel with **Caddis → Caddis Details Panel** on Revit's ribbon. It shows the server
-state, whether Claude Code, Codex and Claude Desktop connect to this Revit, settings, recent runs, and the selected run's output and code.
+state with its URL, which a click copies, whether Claude Code, Codex and Claude Desktop connect to this Revit, settings, recent runs with an icon of their status, and the selected run's output and code.
 It docks next to the Project Browser, can be moved like any Revit pane,
 and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.
@@ -109,10 +109,10 @@ The `Formatted` check box switches between Fantomas formatting and the original 
 numbers match the diagnostics. `Run again` runs the code of the selected F# run as a new run.
 `Export` saves the code of the run to an `.fsx` file,
 `Export all` saves all successful F# runs to one, oldest first, each after a comment
-with its id and time, both as the code is shown, formatted or not. `Settings` unfolds the thread mode
+with its id and time, both as the code is shown, formatted or not. The `Settings` row unfolds the thread mode
 and **Start with Revit**, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service,
-and whether this is the latest version of Caddis. Revit's latest status message and grouped
-element changes are preserved; Rhino's command-line options are hidden.
+and whether this is the latest version of Caddis. Revit's latest status message is at the bottom of the panel,
+and the output groups element changes by category; Rhino's command-line options are hidden.
 
 The shared view is covered by headless tests on .NET 8 and .NET 10. The WPF wrapper
 has been checked in an isolated Windows host for native embedding, keyboard input,

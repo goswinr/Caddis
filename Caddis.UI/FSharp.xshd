@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- F# syntax highlighting for the code view of the panel, adapted from Fesh's SyntaxHighlightingFSharp.xshd.
-     The foreground colors are set in FSharpHighlighting.fs, in a light and a dark variant.
+     The foreground colors are set in Highlighting.fs, in a light and a dark variant.
      Regexes in element text ignore white space, and '#' starts a comment there, so it is escaped.
      A span that starts earlier wins over a rule, and of spans or rules that start at the same position the first one wins. -->
 <SyntaxDefinition name="F#" extensions=".fs;.fsi;.fsx" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">

@@ -94,7 +94,7 @@ let ``the update notice shows only while the host has one`` () =
     let mutable update = None
     let view = PanelView({ host "Rhino" with Update = fun () -> update })
     let window = Window(Content = view, Width = 600, Height = 600)
-    let notice = view.FindControl<Grid> "UpdateNotice"
+    let notice = view.FindControl<Border> "UpdateNotice"
     try
         window.Show()
         view.Refresh()
@@ -109,32 +109,37 @@ let ``the update notice shows only while the host has one`` () =
     finally window.Close()
 
 [<AvaloniaFact>]
-let ``the Errors button shows only while there are errors, and lists them newest first`` () =
+let ``the errors notice shows only while there are internal errors, and lists them newest first`` () =
     let services = host "Revit"
     let view = PanelView(services)
     let window = Window(Content = view, Width = 600, Height = 600)
+    let notice = view.FindControl<Border> "ErrorsNotice"
     let toggle = view.FindControl<ToggleButton> "ErrorsToggle"
     try
         window.Show()
         view.Refresh()
-        Assert.False toggle.IsVisible
+        Assert.False notice.IsVisible
         services.Errors.Add "Caddis: first failure"
         services.Errors.Add "Caddis: second failure"
         view.Refresh()
-        Assert.True toggle.IsVisible
-        Assert.Equal("2 errors", view.FindControl<TextBlock>("ErrorsText").Text)
+        Assert.True notice.IsVisible
+        // amber, not red like a failed run
+        Assert.Contains("warning", notice.Classes)
+        Assert.Equal("2 internal errors", view.FindControl<TextBlock>("ErrorsText").Text)
+        Assert.Equal("Show", string toggle.Content)
         Assert.Equal(FontWeight.Bold, view.FindControl<TextBlock>("ErrorsText").FontWeight)
         Assert.False(view.FindControl<Grid>("ErrorsPane").IsVisible)
         Assert.Equal(2, services.Errors.Unseen)
         toggle.IsChecked <- true
         toggle.RaiseEvent(RoutedEventArgs(Button.ClickEvent))
         Assert.True(view.FindControl<Grid>("ErrorsPane").IsVisible)
+        Assert.Equal("Hide", string toggle.Content)
         let text = view.FindControl<TextBox>("ErrorList").Text
         Assert.True(text.IndexOf "second failure" < text.IndexOf "first failure", text)
         Assert.Equal(0, services.Errors.Unseen)
         Assert.Equal(FontWeight.Normal, view.FindControl<TextBlock>("ErrorsText").FontWeight)
         click (view.FindControl<Button> "ClearErrors")
-        Assert.False toggle.IsVisible
+        Assert.False notice.IsVisible
         Assert.False(view.FindControl<Grid>("ErrorsPane").IsVisible)
         Assert.Empty services.Errors.Lines
     finally window.Close()
@@ -173,7 +178,7 @@ let ``theme is scoped and subscriptions survive detaching and reopening`` () =
     Assert.Equal(0, subscriptions)
 
 [<AvaloniaFact>]
-let ``while the server runs, the agents show whether they connect to it, and their commands are in tooltips`` () = task {
+let ``while the server runs, its URL copies on a click and the agents show whether they connect to it`` () = task {
     use engineHost = new HeadlessHost(ignore)
     let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
     store.Save { CaddisSettings.defaults with port = 27910 }
@@ -187,6 +192,7 @@ let ``while the server runs, the agents show whether they connect to it, and the
     let state name = view.FindControl<TextBlock>(name + "State").Text
     let action name = view.FindControl<Button>(name + "Action")
     let tipOf (c: Control) = string (ToolTip.GetTip c)
+    let dotOf name = view.FindControl<Shapes.Ellipse>(name + "Dot").Classes
     try
         window.Show()
         view.Refresh()
@@ -199,18 +205,37 @@ let ``while the server runs, the agents show whether they connect to it, and the
         File.WriteAllText(path ClaudeCode, """{"mcpServers":{"caddis":{"type":"http","url":""" + "\"" + server.McpUrl + "\"}}}")
         File.WriteAllText(path Codex, "[mcp_servers.caddis]\nurl = \"http://127.0.0.1:27919/mcp\"\n")
         view.Refresh()
+        // The server's URL, which a click copies, and the right-click menu, which also has the URL for agents.
+        let copyUrl = view.FindControl<Button> "CopyUrl"
+        Assert.True copyUrl.IsVisible
+        Assert.Equal(server.Url, view.FindControl<TextBlock>("ServerUrl").Text)
+        Assert.Contains("ok", view.FindControl<Shapes.Ellipse>("ServerDot").Classes)
+        click copyUrl
+        Assert.Equal(server.Url, copied.Value)
+        Assert.True(view.FindControl<TextBlock>("CopiedNote").IsVisible)
+        Assert.Equal("Copied", view.FindControl<TextBlock>("CopiedNote").Text)
+        Assert.True(view.FindControl<Shapes.Path>("CopiedIcon").IsVisible)
+        let urlMenu = copyUrl.ContextMenu.ItemsSource |> Seq.cast<MenuItem> |> Seq.toList
+        Assert.Equal($"Copy {server.McpUrl}", string urlMenu[1].Header)
+        urlMenu[1].RaiseEvent(RoutedEventArgs(MenuItem.ClickEvent))
+        Assert.Equal(server.McpUrl, copied.Value)
         Assert.True(view.FindControl<StackPanel>("Agents").IsVisible)
-        Assert.Equal("Claude Code: active", state "Claude")
+        Assert.Equal("Claude Code", state "Claude")
+        Assert.Contains("ok", dotOf "Claude")
         Assert.False((action "Claude").IsVisible)
+        Assert.Contains("Claude Code: active", tipOf (view.FindControl<TextBlock> "ClaudeState"))
         Assert.Contains(server.McpUrl, tipOf (view.FindControl<TextBlock> "ClaudeState"))
-        Assert.Equal("Codex: inactive", state "Codex")
+        Assert.Contains("warn", dotOf "Codex")
+        Assert.Contains("Codex: inactive", tipOf (view.FindControl<TextBlock> "CodexState"))
         Assert.Equal("Activate", string (action "Codex").Content)
         Assert.Contains("http://127.0.0.1:27919/mcp", tipOf (view.FindControl<TextBlock> "CodexState"))
         Assert.Contains("on port 27919", tipOf (action "Codex"))
         Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
         File.Delete(path Codex)
         view.Refresh()
-        Assert.Equal("Codex: not set up", state "Codex")
+        Assert.DoesNotContain("ok", dotOf "Codex")
+        Assert.DoesNotContain("warn", dotOf "Codex")
+        Assert.Contains("Codex: not set up", tipOf (view.FindControl<TextBlock> "CodexState"))
         Assert.Equal("Set up", string (action "Codex").Content)
         Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
         // a right-click on the row copies the command
@@ -224,16 +249,19 @@ let ``while the server runs, the agents show whether they connect to it, and the
         Directory.CreateDirectory(Path.GetDirectoryName(path ClaudeDesktop)) |> ignore
         view.Refresh()
         Assert.True(view.FindControl<StackPanel>("DesktopRow").IsVisible)
-        Assert.Equal("Claude Desktop: not set up", state "Desktop")
+        Assert.Contains("Claude Desktop: not set up", tipOf (view.FindControl<TextBlock> "DesktopState"))
         Assert.Contains("opens the extension caddis.mcpb", tipOf (action "Desktop"))
         Assert.Null(view.FindControl<StackPanel>("DesktopRow").ContextMenu)
         let extension = Json.obj [ "id", Json.ofString "x"; "manifest", DesktopExtension.manifest (server.DesktopBundle()) ]
         File.WriteAllText(path ClaudeDesktop, Json.toText (Json.obj [ "extensions", Json.obj [ "x", extension ] ]))
         view.Refresh()
-        Assert.Equal("Claude Desktop: active", state "Desktop")
+        Assert.Contains("ok", dotOf "Desktop")
+        Assert.False((action "Desktop").IsVisible)
         server.Stop()
         view.Refresh()
         Assert.False(view.FindControl<StackPanel>("Agents").IsVisible)
+        Assert.False copyUrl.IsVisible
+        Assert.Equal("Stopped", view.FindControl<TextBlock>("ServerStopped").Text)
     finally window.Close()
 }
 
@@ -254,7 +282,7 @@ let ``recommends the .NET SDK while scripts can't use NuGet packages`` () =
         window.Show()
         setHost fake
         view.Refresh()
-        Assert.True(view.FindControl<WrapPanel>("SdkNotice").IsVisible)
+        Assert.True(view.FindControl<Border>("SdkNotice").IsVisible)
         Assert.Equal($"Scripts can't use NuGet packages without the .NET SDK {Environment.Version.Major} or newer.", view.FindControl<TextBlock>("SdkText").Text)
         click (view.FindControl<Button> "GetSdk")
         Assert.Equal<string list>([ $"https://dotnet.microsoft.com/download/dotnet/{Environment.Version.Major}.0" ], opened)
@@ -263,7 +291,7 @@ let ``recommends the .NET SDK while scripts can't use NuGet packages`` () =
         File.WriteAllText(Path.Combine(sdk, "dotnet.dll"), "")
         DotnetSdk.clearCache ()
         view.Refresh()
-        Assert.False(view.FindControl<WrapPanel>("SdkNotice").IsVisible)
+        Assert.False(view.FindControl<Border>("SdkNotice").IsVisible)
     finally
         window.Close()
         setHost prev
@@ -296,7 +324,7 @@ let ``Revit uses the shared formatted code viewer and can show the original code
         Assert.Equal(0, settingsChanges)
         view.FindControl<ListBox>("Runs").SelectedIndex <- 0
         let editor = view.FindControl<TextEditor> "CodeView"
-        Assert.Contains("Test output", view.FindControl<TextBox>("Output").Text)
+        Assert.Contains("Test output", view.FindControl<TextEditor>("Output").Text)
         let deadline = DateTime.UtcNow.AddSeconds 15
         while not (editor.Text.Contains "let answer = 42") && DateTime.UtcNow < deadline do
             do! Task.Delay 20
@@ -482,3 +510,78 @@ let ``Export saves the code of the selected run and Export all the successful F#
         Assert.DoesNotContain("-_Line", all)
     finally window.Close()
 }
+
+[<Fact>]
+let ``the output of a failed run starts with what went wrong, and has no summary line`` () =
+    let failedRun = runWithId "r7" FSharpCode "let first = slabs[0].Geometry :?> Brep"
+    failedRun.StdOut.Append "92 slabs on layer Slabs"
+    let exn = { typeName = "System.InvalidCastException"; message = "Unable to cast"; text = "System.InvalidCastException: Unable to cast\n   at main@() in script.fsx:line 3"; scriptLine = Some 3 }
+    failedRun.Complete { RunOutcome.ofStatus RuntimeError with exn = Some exn } |> ignore
+    let text = RunDetails.text "objects" (Some "Rhino command line") failedRun
+    Assert.StartsWith("--- exception ---", text)
+    Assert.True(text.IndexOf "--- exception ---" < text.IndexOf "--- stdout ---", text)
+    Assert.DoesNotContain("example.fsx", text)
+    let ok = finished "r8" FSharpCode Succeeded "let y = 2"
+    ok.StdOut.Append "fine"
+    Assert.StartsWith("--- stdout ---", RunDetails.text "objects" None ok)
+
+[<Fact>]
+let ``durations read at a glance`` () =
+    Assert.Equal("140 ms", RunDetails.duration (TimeSpan.FromMilliseconds 140.0))
+    Assert.Equal("12.2 s", RunDetails.duration (TimeSpan.FromMilliseconds 12175.0))
+    Assert.Equal("2 min 5 s", RunDetails.duration (TimeSpan.FromSeconds 125.0))
+    Assert.Equal("runtime error", RunDetails.statusWord RuntimeError)
+
+[<AvaloniaFact>]
+let ``the run header names the selected run, and the list shows the status as an icon`` () =
+    use engineHost = new HeadlessHost(ignore)
+    let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
+    use server = new CaddisServer(engineHost, store)
+    let view = PanelView({ host "Rhino" with Server = (fun () -> Some server) })
+    let window = Window(Content = view, Width = 600, Height = 600)
+    try
+        window.Show()
+        view.Refresh()
+        Assert.Equal("0", view.FindControl<TextBlock>("RunCount").Text)
+        Assert.True(view.FindControl<TextBlock>("NoRuns").IsVisible)
+        Assert.Equal($"Caddis {server.Service.Version}", view.FindControl<TextBlock>("SettingsSummary").Text)
+        server.Service.Runs.Add(finished "r1" FSharpCode Succeeded "let a = 1")
+        server.Service.Runs.Add(finished "r2" FSharpCode CompileError "// a comment\nlet b =")
+        view.Refresh()
+        Assert.Equal("2", view.FindControl<TextBlock>("RunCount").Text)
+        Assert.False(view.FindControl<TextBlock>("NoRuns").IsVisible)
+        Assert.Equal("Select a run to see its output and code.", view.FindControl<TextBlock>("RunSummary").Text)
+        Assert.False(view.FindControl<Panel>("RunIcon").IsVisible)
+        let runs = view.FindControl<ListBox> "Runs"
+        runs.SelectedIndex <- 0 // newest first: the compile error
+        let rows = runs.ItemsSource :?> RunRow[]
+        Assert.Equal("let b =", rows[0].Code)
+        Assert.Equal("compile error", rows[0].Status)
+        Assert.NotEqual<IBrush>(rows[0].StatusFill, rows[1].StatusFill)
+        Assert.NotEqual<Geometry>(rows[0].StatusGlyph, rows[1].StatusGlyph)
+        Assert.True(view.FindControl<Panel>("RunIcon").IsVisible)
+        Assert.Equal("r2", view.FindControl<TextBlock>("RunId").Text)
+        let summary = view.FindControl<TextBlock>("RunSummary").Text
+        Assert.StartsWith("compile error · ", summary)
+        Assert.EndsWith(" · UI thread", summary)
+        Assert.Contains("example.fsx", string (ToolTip.GetTip(view.FindControl<TextBlock>("RunSummary"))))
+    finally window.Close()
+
+[<AvaloniaFact>]
+let ``narrow panels hide the logo, so that the status keeps the width`` () =
+    let view = PanelView(host "AutoCAD")
+    let window = Window(Content = view, Width = 600, Height = 600)
+    let logo = view.FindControl<Border> "Logo"
+    try
+        window.Show()
+        Dispatcher.UIThread.RunJobs()
+        Assert.True logo.IsVisible
+        window.Width <- 320.0
+        Dispatcher.UIThread.RunJobs()
+        window.UpdateLayout()
+        Assert.False logo.IsVisible
+        window.Width <- 500.0
+        Dispatcher.UIThread.RunJobs()
+        window.UpdateLayout()
+        Assert.True logo.IsVisible
+    finally window.Close()

@@ -10,6 +10,7 @@ open Avalonia.Controls
 open Avalonia.Input
 open Avalonia.Markup.Xaml
 open Avalonia.Media
+open Avalonia.Media.Immutable
 open Avalonia.Styling
 open Avalonia.Media.Imaging
 open Avalonia.Themes.Fluent
@@ -18,16 +19,68 @@ open AvaloniaEdit
 open Fantomas.Core
 open Caddis
 
+/// The icon of a run's status in the list and in the run header: a colored disc with a white mark, an Ellipse and a Path in PanelView.axaml.
+/// Green with a check for ok, red with a cross for a compile error and with an exclamation mark for a runtime error,
+/// amber with a clock for a timeout, gray with a dash for cancelled or rejected, blue with three dots while running.
+module internal StatusIcon =
+
+    let private brush (hex: string) = lazy (ImmutableSolidColorBrush(Color.Parse hex) :> IBrush)
+    let private green = brush "#3FA34D"
+    let private red = brush "#D13438"
+    let private amber = brush "#D69A00"
+    let private gray = brush "#8A909B"
+    let private blue = brush "#2B88D8"
+
+    /// In the 14 × 14 box of the disc. A line of length 0.1 with round caps is a dot.
+    let private geometry (data: string) = lazy (StreamGeometry.Parse data :> Geometry)
+    let private check = geometry "M 3.9,7.3 L 6,9.4 L 10.2,4.9"
+    let private cross = geometry "M 4.7,4.7 L 9.3,9.3 M 9.3,4.7 L 4.7,9.3"
+    let private exclamation = geometry "M 7,3.5 L 7,8 M 7,10.3 L 7,10.4"
+    let private clock = geometry "M 7,3.6 L 7,7.2 L 9.3,8.6"
+    let private dash = geometry "M 4.2,7 L 9.8,7"
+    let private dots = geometry "M 3.9,7 L 4,7 M 6.95,7 L 7.05,7 M 10,7 L 10.1,7"
+
+    /// The color of the disc.
+    let fill (s: RunStatus) : IBrush =
+        match s with
+        | Running -> blue.Force()
+        | Succeeded -> green.Force()
+        | CompileError
+        | RuntimeError -> red.Force()
+        | TimedOut -> amber.Force()
+        | Cancelled
+        | Rejected -> gray.Force()
+
+    /// The white mark on the disc.
+    let glyph (s: RunStatus) : Geometry =
+        match s with
+        | Running -> dots.Force()
+        | Succeeded -> check.Force()
+        | CompileError -> cross.Force()
+        | RuntimeError -> exclamation.Force()
+        | TimedOut -> clock.Force()
+        | Cancelled
+        | Rejected -> dash.Force()
+
 /// A row in the list of runs. The list's item template binds to its properties.
 /// The time of a running run counts up, so it notifies its changes; the other properties don't change.
-type RunRow(id: string, status: string, time: string, code: string) =
+type RunRow(id: string, status: RunStatus, time: string, code: string, tip: string) =
     let mutable time = time
     let propertyChanged = Event<PropertyChangedEventHandler, PropertyChangedEventArgs>()
 
     member _.Id = id
-    member _.Status = status
+    /// The status in words, e.g. "runtime error".
+    member _.Status = RunDetails.statusWord status
+    /// The color of the status icon's disc.
+    member _.StatusFill = StatusIcon.fill status
+    /// The white mark on the status icon's disc.
+    member _.StatusGlyph = StatusIcon.glyph status
+    /// The first line of the code that isn't a comment.
     member _.Code = code
+    /// The id, the status in words and the start time.
+    member _.Tip = tip
 
+    /// The duration, e.g. "140 ms" or "12.2 s".
     member this.Time
         with get () = time
         and set (value: string) =
@@ -39,7 +92,7 @@ type RunRow(id: string, status: string, time: string, code: string) =
         [<CLIEvent>]
         member _.PropertyChanged = propertyChanged.Publish
 
-/// The controls of an AI agent in the panel: a dot and a text for its state, and a button to set it up or to connect it to this app.
+/// The controls of an AI agent in the panel: a dot for its state, its name, and a button to set it up or to connect it to this app.
 type internal AgentRow = {
     Agent: McpAgent
     Row: StackPanel
@@ -48,12 +101,16 @@ type internal AgentRow = {
     Action: Button
     }
 
-/// The content of the Caddis panel: the server state and settings, the recent runs, and the output and code of the selected run.
+/// The content of the Caddis panel: the state of the server, the F# session and the agents, the settings, notices,
+/// the recent runs, and the output and code of the selected run.
 /// The layout is in PanelView.axaml and the control themes in PanelStyles.axaml, the colors and actions come from the host.
 type PanelView(host: PanelHost) as this =
     inherit UserControl()
 
     static let repoUrl = "https://github.com/goswinr/Caddis"
+
+    /// Below this width the logo is hidden, so that narrow panels, e.g. AutoCAD's palette, keep their width for the status.
+    static let narrowWidth = 420.0
 
     /// Tooltips don't wrap, so they are given line by line.
     static let tip (lines: string list) = String.concat "\n" lines
@@ -79,15 +136,19 @@ type PanelView(host: PanelHost) as this =
     let scope: ThemeVariantScope = find "Scope"
     let logo: Border = find "Logo"
     let logoImage: Image = find "LogoImage"
-    let serverStatus: TextBlock = find "ServerStatus"
-    let fsiStatus: TextBlock = find "FsiStatus"
-    let message: TextBlock = find "Message"
-    let sdkNotice: WrapPanel = find "SdkNotice"
-    let sdkText: TextBlock = find "SdkText"
-    let getSdk: Button = find "GetSdk"
-    let updateNotice: Grid = find "UpdateNotice"
-    let updateText: TextBlock = find "UpdateText"
+    let serverDot: Shapes.Ellipse = find "ServerDot"
+    let copyUrl: Button = find "CopyUrl"
+    let serverUrl: TextBlock = find "ServerUrl"
+    let copyIcon: Shapes.Path = find "CopyIcon"
+    let copiedIcon: Shapes.Path = find "CopiedIcon"
+    let copiedNote: TextBlock = find "CopiedNote"
+    let serverStopped: TextBlock = find "ServerStopped"
     let startStop: Button = find "StartStop"
+    let fsiDot: Shapes.Ellipse = find "FsiDot"
+    let fsiStatus: TextBlock = find "FsiStatus"
+    let cancel: Button = find "Cancel"
+    let reset: Button = find "Reset"
+    let agentsLabel: TextBlock = find "AgentsLabel"
     let agents: StackPanel = find "Agents"
     let agentNote: TextBlock = find "AgentNote"
     let agentRows =
@@ -99,27 +160,45 @@ type PanelView(host: PanelHost) as this =
             State = find (prefix + "State")
             Action = find (prefix + "Action")
         })
+    let settingsToggle: Primitives.ToggleButton = find "SettingsToggle"
+    let settingsSummary: TextBlock = find "SettingsSummary"
     let modeLabel: TextBlock = find "ModeLabel"
     let mode: ComboBox = find "Mode"
-    let cancel: Button = find "Cancel"
-    let reset: Button = find "Reset"
-    let settingsToggle: Primitives.ToggleButton = find "SettingsToggle"
-    let errorsToggle: Primitives.ToggleButton = find "ErrorsToggle"
-    let errorsText: TextBlock = find "ErrorsText"
-    let errorList: TextBox = find "ErrorList"
-    let clearErrors: Button = find "ClearErrors"
     let autoStart: CheckBox = find "AutoStart"
     let echo: CheckBox = find "Echo"
     let cancelWaiting: CheckBox = find "CancelWaiting"
-    let runtimeInfo: TextBlock = find "RuntimeInfo"
     let version: TextBlock = find "Version"
+    let runtimeInfo: TextBlock = find "RuntimeInfo"
+    let gitHub: Button = find "GitHub"
+    let updateNotice: Border = find "UpdateNotice"
+    let updateText: TextBlock = find "UpdateText"
+    let sdkNotice: Border = find "SdkNotice"
+    let sdkText: TextBlock = find "SdkText"
+    let getSdk: Button = find "GetSdk"
+    let errorsNotice: Border = find "ErrorsNotice"
+    let errorsText: TextBlock = find "ErrorsText"
+    let errorsToggle: Primitives.ToggleButton = find "ErrorsToggle"
+    let errorList: TextBox = find "ErrorList"
+    let clearErrors: Button = find "ClearErrors"
+    let runCount: TextBlock = find "RunCount"
+    let exportAll: Button = find "ExportAll"
     let runs: ListBox = find "Runs"
-    let output: TextBox = find "Output"
-    let codeView: TextEditor = find "CodeView"
-    let formatCheck: CheckBox = find "FormatCheck"
+    let noRuns: TextBlock = find "NoRuns"
+    let runIcon: Panel = find "RunIcon"
+    let runIconDisc: Shapes.Ellipse = find "RunIconDisc"
+    let runIconGlyph: Shapes.Path = find "RunIconGlyph"
+    let runId: TextBlock = find "RunId"
+    let runSummary: TextBlock = find "RunSummary"
     let runAgain: Button = find "RunAgain"
     let exportCode: Button = find "ExportCode"
-    let exportAll: Button = find "ExportAll"
+    let output: TextEditor = find "Output"
+    let codeView: TextEditor = find "CodeView"
+    let formatCheck: CheckBox = find "FormatCheck"
+    let message: TextBlock = find "Message"
+
+    /// The context menu of the server's URL: copy it, or the URL that AI agents connect to.
+    let copyServerUrl = MenuItem()
+    let copyMcpUrl = MenuItem()
 
     /// The ids and states of the shown runs, to only update the list when something changed.
     let mutable shownRuns = ""
@@ -140,12 +219,21 @@ type PanelView(host: PanelHost) as this =
     /// What the last click on an agent's button did, shown below the agents until the time.
     let mutable agentNoteText: (string * DateTime) option = None
 
+    /// Counts the copies to the clipboard, so that only the last one hides its check after a moment.
+    let mutable copies = 0
+
     let applyTheme () =
         let palette = host.Palette ()
         for key, color in palette.Colors do
             this.Resources["Caddis." + key] <- SolidColorBrush(color)
         scope.RequestedThemeVariant <- if palette.IsDark then ThemeVariant.Dark else ThemeVariant.Light
-        codeView.SyntaxHighlighting <- FSharpHighlighting.get palette.IsDark
+        codeView.SyntaxHighlighting <- Highlighting.fsharp palette.IsDark
+        output.SyntaxHighlighting <- Highlighting.output palette.IsDark
+
+    /// Colors a dot by its class: "ok" green, "warn" amber, "run" blue, "" gray.
+    let setDot (dot: Shapes.Ellipse) (state: string) =
+        for c in [ "ok"; "warn"; "run" ] do
+            dot.Classes.Set(c, (c = state))
 
     let firstCodeLine (code: string) =
         code.Split('\n')
@@ -205,10 +293,39 @@ type PanelView(host: PanelHost) as this =
             | Some r, Some s -> r.Kind = FSharpCode && s.Service.Fsi.Current.IsNone
             | _ -> false
 
+    /// The header above the tabs: the icon of the selected run's status, its id, and its status, duration, start time and thread.
+    /// The tooltip names its script and the folder for its files.
+    let showRunHeader (selected: Run option) =
+        match selected with
+        | Some r ->
+            runIcon.IsVisible <- true
+            runIconDisc.Fill <- StatusIcon.fill r.Status
+            runIconGlyph.Data <- StatusIcon.glyph r.Status
+            runId.Text <- r.Id
+            runSummary.Text <- RunDetails.summary host.Name r
+            let where =
+                tip [
+                    if r.Kind = FSharpCode && not (String.IsNullOrEmpty r.ScriptPath) then $"Script: {r.ScriptPath}"
+                    if not (String.IsNullOrEmpty r.OutDir) then $"Folder for its files: {r.OutDir}"
+                ]
+            ToolTip.SetTip(runId, where)
+            ToolTip.SetTip(runSummary, where)
+        | None ->
+            runIcon.IsVisible <- false
+            runId.Text <- ""
+            runSummary.Text <- "Select a run to see its output and code."
+            ToolTip.SetTip(runId, null)
+            ToolTip.SetTip(runSummary, null)
+
     let showDetails () =
         let selected = selectedRun ()
         updateRunAgain ()
-        output.Text <- selected |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
+        showRunHeader selected
+        let text = selected |> Option.map (RunDetails.text host.ChangeNoun host.CommandLineTitle) |> Option.defaultValue ""
+        // Setting the text of the editor moves the caret to the start, so only when other output is shown.
+        if output.Text <> text then
+            output.Text <- text
+            output.ScrollToHome()
         exportCode.IsEnabled <- selected |> Option.exists (fun r -> r.Kind = FSharpCode)
         exportAll.IsEnabled <- exportableRuns().Length > 0
         showCode ()
@@ -241,10 +358,13 @@ type PanelView(host: PanelHost) as this =
             }
             |> ignore
 
-    let runTime (r: Run) = $"{int r.Duration.TotalMilliseconds} ms"
+    let runRow (r: Run) =
+        RunRow(r.Id, r.Status, RunDetails.duration r.Duration, firstCodeLine r.Code, $"{r.Id}: {RunDetails.statusWord r.Status}, started at {RunDetails.startTime r}")
 
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
+        runCount.Text <- string all.Length
+        noRuns.IsVisible <- all.Length = 0
         let signature = all |> Array.map (fun r -> r.Id + RunStatus.toString r.Status) |> String.concat ","
         if signature <> shownRuns then
             shownRuns <- signature
@@ -252,16 +372,19 @@ type PanelView(host: PanelHost) as this =
                 match runs.SelectedItem with
                 | :? RunRow as row -> row.Id
                 | _ -> null
-            let rows = all |> Array.map (fun r -> RunRow(r.Id, RunStatus.toString r.Status, runTime r, firstCodeLine r.Code))
+            let rows = all |> Array.map runRow
             runs.ItemsSource <- rows
             runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = selectedId) |> Option.map box |> Option.toObj
             showDetails ()
         else
-            // The same runs with the same states: only the time of a running run changed. It is updated in its row,
+            // The same runs with the same states: only the time of a running run changed. It is updated in its row and in the run header,
             // because a new list would select the row again and show its details again, every second.
             match runs.ItemsSource with
             | :? (RunRow[]) as rows ->
-                Array.iter2 (fun (row: RunRow) (r: Run) -> if r.Status = Running then row.Time <- runTime r) rows all
+                Array.iter2 (fun (row: RunRow) (r: Run) -> if r.Status = Running then row.Time <- RunDetails.duration r.Duration) rows all
+            | _ -> ()
+            match selectedRun () with
+            | Some r when r.Status = Running -> runSummary.Text <- RunDetails.summary host.Name r
             | _ -> ()
 
     /// Selects a run in the list, e.g. the one started by Run again.
@@ -270,16 +393,18 @@ type PanelView(host: PanelHost) as this =
         | :? (RunRow[]) as rows -> runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = id) |> Option.map box |> Option.toObj
         | _ -> ()
 
-    /// The Errors button while the host has errors, in bold for new ones, and their list while it is shown.
+    /// The notice while the host has internal errors, in bold for new ones, and their list while it is shown.
     let refreshErrors () =
         match host.Errors.Lines with
         | [] ->
-            errorsToggle.IsVisible <- false
+            errorsNotice.IsVisible <- false
             errorsToggle.IsChecked <- false
         | lines ->
-            errorsToggle.IsVisible <- true
-            errorsText.Text <- if lines.Length = 1 then "1 error" else $"{lines.Length} errors"
-            if errorsToggle.IsChecked.GetValueOrDefault() then
+            errorsNotice.IsVisible <- true
+            errorsText.Text <- if lines.Length = 1 then "1 internal error" else $"{lines.Length} internal errors"
+            let shown = errorsToggle.IsChecked.GetValueOrDefault()
+            errorsToggle.Content <- if shown then "Hide" else "Show"
+            if shown then
                 host.Errors.MarkSeen()
                 // Setting the text clears the selection, so only when there are other errors.
                 let text = lines |> List.rev |> String.concat "\n\n"
@@ -296,9 +421,10 @@ type PanelView(host: PanelHost) as this =
                 s.AgentCommand agent
         ]
 
-    /// The state of each agent, and its button: Set up, Activate, or Cancel while an activation waits.
+    /// The state of each agent in its dot and its tooltip, and its button: Set up, Activate, or Cancel while an activation waits.
     let refreshAgents (s: CaddisServer) =
         agents.IsVisible <- s.IsRunning
+        agentsLabel.IsVisible <- s.IsRunning
         if s.IsRunning then
             let app = host.Name
             let serverName = s.Service.Host.Info.mcpServerName
@@ -319,26 +445,27 @@ type PanelView(host: PanelHost) as this =
                     | AgentState.Active ->
                         "active",
                         if isExtension then
-                            $"The extension of {name} relays to Caddis in this {app}, at {s.McpUrl}."
+                            [ $"The extension of {name} relays to Caddis in this {app}, at {s.McpUrl}." ]
                         else
-                            tip [
+                            [
                                 $"{name} connects to Caddis in this {app}, at {s.McpUrl}."
                                 $"Sessions of {name} that were open before it was set up see Caddis after a restart."
                             ]
-                    | AgentState.NotSetUp when isExtension -> "not set up", $"{name} has no extension '{serverName}' turned on."
-                    | AgentState.NotSetUp -> "not set up", $"{name} has no MCP server '{serverName}' for all your projects."
+                    | AgentState.NotSetUp when isExtension -> "not set up", [ $"{name} has no extension '{serverName}' turned on." ]
+                    | AgentState.NotSetUp -> "not set up", [ $"{name} has no MCP server '{serverName}' for all your projects." ]
                     | AgentState.Inactive url ->
                         let where =
                             match McpAgent.localPort url |> Option.bind s.InstanceOnPort with
                             | Some(other, "") -> [ $"where Caddis in {other} listens." ]
                             | Some(other, title) -> [ $"where Caddis in {other} listens:"; title ]
                             | None -> [ $"where no other Caddis listens." ]
-                        "inactive", tip ($"{name} connects to {url}," :: where)
-                row.State.Text <- $"{name}: {label}"
+                        "inactive", $"{name} connects to {url}," :: where
+                // The state is in the color of the dot and in the tooltip. The button shows only when there is something to do.
+                row.State.Text <- name
+                let stateTip = tip ($"{name}: {label}" :: stateTip)
                 ToolTip.SetTip(row.State, stateTip)
                 ToolTip.SetTip(row.Dot, stateTip)
-                row.Dot.Classes.Set("active", (state = AgentState.Active))
-                row.Dot.Classes.Set("inactive", (match state with AgentState.Inactive _ -> true | _ -> false))
+                setDot row.Dot (match state with AgentState.Active -> "ok" | AgentState.Inactive _ -> "warn" | AgentState.NotSetUp -> "")
                 match agentWork with
                 | Some(agent, cts) when agent = row.Agent ->
                     row.Action.IsVisible <- true
@@ -381,8 +508,56 @@ type PanelView(host: PanelHost) as this =
             ToolTip.SetTip(sdkNotice, tip lines)
             ToolTip.SetTip(getSdk, $"Open {NuGetSupport.downloadUrl nuget}")
 
+    /// The server's dot, its URL while it listens, and the button to start or stop it.
+    let refreshServer (s: CaddisServer) =
+        setDot serverDot (if s.IsRunning then "ok" else "")
+        copyUrl.IsVisible <- s.IsRunning
+        serverStopped.IsVisible <- not s.IsRunning
+        serverStopped.Text <- "Stopped"
+        if serverUrl.Text <> s.Url then
+            serverUrl.Text <- s.Url
+            copyServerUrl.Header <- $"Copy {s.Url}"
+            copyMcpUrl.Header <- $"Copy {s.McpUrl}"
+            ToolTip.SetTip(
+                copyUrl,
+                tip [ $"Caddis listens on {s.Url}, AI agents connect to {s.McpUrl}."; $"Click to copy {s.Url}, right-click to copy the URL for agents." ]
+            )
+        startStop.Content <- if s.IsRunning then "Stop" else "Start"
+        ToolTip.SetTip(startStop, (if s.IsRunning then stopTip else startTip))
+
+    /// The session's dot and state, e.g. "Ready · background thread" or "Running r5 · 1.2 s", and Cancel while a run is in progress.
+    let refreshSession (svc: CaddisService) =
+        let thread =
+            match svc.Fsi.Mode with
+            | UiThread -> "UI thread"
+            | Background -> "background thread"
+        match svc.Fsi.Current with
+        | Some r ->
+            setDot fsiDot "run"
+            fsiStatus.Text <- $"Running {r.Id} · {RunDetails.duration r.Duration}"
+        | None ->
+            let state, dot =
+                match svc.Fsi.State with
+                | Ready -> "Ready", "ok"
+                | Evaluating -> "Running", "run"
+                | Initializing -> "Starting", ""
+                | NotLoaded -> "Not started", ""
+                | Failed _ -> "Failed", "warn"
+            setDot fsiDot dot
+            fsiStatus.Text <- $"{state} · {thread}"
+        ToolTip.SetTip(
+            fsiStatus,
+            match svc.Fsi.State with
+            | Failed e -> tip [ $"The F# session failed: {e}"; ""; modeTip ]
+            | _ -> modeTip
+        )
+        cancel.IsVisible <- svc.Fsi.Current.IsSome
+        cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
+
     let refresh () =
-        message.Text <- host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
+        let note = host.Message |> Option.map (fun get -> get ()) |> Option.defaultValue ""
+        message.Text <- note
+        ToolTip.SetTip(message, (if String.IsNullOrEmpty note then null else box note))
         refreshErrors ()
         version.Text <- host.Version ()
         match host.Update () with
@@ -393,32 +568,25 @@ type PanelView(host: PanelHost) as this =
         refreshSdkNotice ()
         match host.Server () with
         | None ->
-            serverStatus.Text <- "Caddis is not loaded."
+            setDot serverDot ""
+            copyUrl.IsVisible <- false
+            serverStopped.IsVisible <- true
+            serverStopped.Text <- "Caddis is not loaded."
             agents.IsVisible <- false
+            agentsLabel.IsVisible <- false
         | Some s ->
             let svc = s.Service
             updating <- true
             try
-                let running =
-                    match svc.Fsi.Current with
-                    | Some r -> $", running {r.Id}"
-                    | None -> ""
-                let thread =
-                    match svc.Fsi.Mode with
-                    | UiThread -> "UI thread"
-                    | Background -> "background thread"
-                serverStatus.Text <- if s.IsRunning then $"Listening on {s.Url}" else "Server stopped"
-                // The thread mode is shown here too, its dropdown is in the folded settings.
-                fsiStatus.Text <- $"F# session ({thread}): {FsiState.toString svc.Fsi.State}{running}"
-                startStop.Content <- if s.IsRunning then "Stop" else "Start"
-                ToolTip.SetTip(startStop, (if s.IsRunning then stopTip else startTip))
+                refreshServer s
+                refreshSession svc
+                settingsSummary.Text <- $"Caddis {svc.Version}"
                 refreshAgents s
                 mode.SelectedIndex <- (match svc.Fsi.Mode with UiThread -> 0 | Background -> 1)
                 autoStart.IsChecked <- Nullable svc.Settings.autoStart
                 echo.IsChecked <- Nullable svc.Settings.echoOutput
                 cancelWaiting.IsChecked <- Nullable svc.Settings.cancelWaitingCommands
                 runtimeInfo.Text <- svc.RuntimeInfo
-                cancel.IsEnabled <- svc.Fsi.Current |> Option.exists (fun r -> r.Mode = Background)
                 refreshRuns s
                 updateRunAgain ()
                 host.Refreshed ()
@@ -432,6 +600,26 @@ type PanelView(host: PanelHost) as this =
             m.Click.Add(fun _ -> action ())
             m
         control.ContextMenu <- ContextMenu(ItemsSource = [ item "Copy" copy; item "Select all" selectAll ])
+
+    /// Puts the text on the clipboard. For a moment the copy icon beside the URL becomes a check with "Copied",
+    /// or a note says that another program has the clipboard.
+    let copyToClipboard (text: string) =
+        let ok = host.SetClipboard text
+        copies <- copies + 1
+        let copy = copies
+        copyIcon.IsVisible <- not ok
+        copiedIcon.IsVisible <- ok
+        copiedNote.Text <- if ok then "Copied" else "The clipboard is in use, try again."
+        copiedNote.IsVisible <- true
+        Task
+            .Delay(if ok then 1600 else 4000)
+            .ContinueWith(fun (_: Task) ->
+                Dispatcher.UIThread.Post(fun () ->
+                    if copy = copies then
+                        copyIcon.IsVisible <- true
+                        copiedIcon.IsVisible <- false
+                        copiedNote.IsVisible <- false))
+        |> ignore
 
     /// Shows what an agent's button did, below the agents, for some seconds, or until the next note for infinity.
     let noteAgent (seconds: float) (text: string) =
@@ -499,11 +687,19 @@ type PanelView(host: PanelHost) as this =
         echo.IsVisible <- host.SetEcho.IsSome
         cancelWaiting.IsVisible <- host.SetCancelWaitingCommands.IsSome
         message.IsVisible <- host.Message.IsSome
+        noRuns.Text <- $"No runs yet. Code that AI agents run in {host.Name} shows up here."
+        showRunHeader None
 
         use stream = typeof<PanelView>.Assembly.GetManifestResourceStream "Caddis.UI.Resources.Caddis.png"
         logoImage.Source <- Bitmap.DecodeToWidth(stream, 80)
 
+        // In narrow panels the logo is hidden, so that the status keeps the width.
+        this.PropertyChanged.Add(fun e ->
+            if e.Property = Avalonia.Visual.BoundsProperty then
+                logo.IsVisible <- this.Bounds.Width >= narrowWidth)
+
         ToolTip.SetTip(logo, $"Caddis on GitHub: {repoUrl}")
+        ToolTip.SetTip(gitHub, repoUrl)
         ToolTip.SetTip(startStop, startTip)
         ToolTip.SetTip(modeLabel, modeTip)
         ToolTip.SetTip(mode, modeTip)
@@ -511,7 +707,7 @@ type PanelView(host: PanelHost) as this =
             cancel,
             tip [
                 "Cancel the current run. Only runs on a background thread can be cancelled,"
-                "set 'Run scripts on' under Settings."
+                "set 'Run on' under Settings."
                 "If a run doesn't stop within 5 s, its thread is abandoned and the F# session is reset."
             ]
         )
@@ -519,12 +715,13 @@ type PanelView(host: PanelHost) as this =
             reset,
             tip [ "Start a new F# session. All values, functions and types defined by earlier runs are lost."; "Use it if the session is in a bad state." ]
         )
-        ToolTip.SetTip(errorsToggle, tip [ "Show or hide the internal errors of Caddis,"; "e.g. that the F# session could not be created." ])
-        ToolTip.SetTip(clearErrors, tip [ "Remove these errors from the list."; "The Errors button is hidden until the next error." ])
+        ToolTip.SetTip(errorsText, tip [ "Errors inside Caddis, not in the runs of scripts."; "Agents go on after most of them. The list helps to report a bug." ])
+        ToolTip.SetTip(errorsToggle, tip [ "Show or hide the internal errors of Caddis, newest first,"; "e.g. that the F# session could not be created." ])
+        ToolTip.SetTip(clearErrors, tip [ "Remove these errors from the list."; "The notice is hidden until the next error." ])
         ToolTip.SetTip(settingsToggle, "Show or hide the settings and the version of Caddis.")
+        ToolTip.SetTip(settingsSummary, host.VersionTip)
         ToolTip.SetTip(version, host.VersionTip)
         ToolTip.SetTip(updateNotice, host.VersionTip)
-        ToolTip.SetTip(fsiStatus, modeTip)
         ToolTip.SetTip(autoStart, $"Start the server when {host.Name} starts.")
         ToolTip.SetTip(echo, tip [ $"Also print the output of runs to the {host.Name} command line:"; "printfn, F# Interactive's output and errors." ])
         ToolTip.SetTip(
@@ -576,10 +773,15 @@ type PanelView(host: PanelHost) as this =
             | Some s when s.IsRunning -> host.Stop ()
             | _ -> host.Start ()
             refresh ())
+        copyUrl.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyToClipboard s.Url))
+        copyServerUrl.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyToClipboard s.Url))
+        copyMcpUrl.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> copyToClipboard s.McpUrl))
+        copyUrl.ContextMenu <- ContextMenu(ItemsSource = [ copyServerUrl; copyMcpUrl ])
         logo.PointerReleased.Add(fun e ->
             if e.InitialPressMouseButton = MouseButton.Left then
                 e.Handled <- true
                 host.OpenUrl repoUrl)
+        gitHub.Click.Add(fun _ -> host.OpenUrl repoUrl)
         for row in agentRows do
             row.Action.Click.Add(fun _ -> host.Server () |> Option.iter (fun s -> agentClicked s row))
             // Claude Desktop gets an extension, there is no command to copy

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Highlighting for the Output tab of the panel, whose text comes from RunDetails.text.
+     The foreground colors are set in Highlighting.fs, in a light and a dark variant.
+     Regexes in element text ignore white space, so a space is written [ ]. Rules match line by line, ^ is the start of a line. -->
+<SyntaxDefinition name="Caddis output" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+
+  <Color name="Section" fontWeight="bold" />
+  <Color name="Error" />
+  <Color name="Warning" />
+
+  <RuleSet>
+    <!-- the line above each section, e.g. "- - - value: float - - -" without the spaces between the dashes -->
+    <Rule color="Section">^---[ ].*[ ]---$</Rule>
+
+    <!-- diagnostics, e.g. "error FS39 line 1, column 12: The value or constructor 'x' is not defined." -->
+    <Rule color="Error">^error[ ]FS\d+.*$</Rule>
+    <Rule color="Warning">^warning[ ]FS\d+.*$</Rule>
+
+    <!-- an exception, e.g. "System.InvalidCastException: Unable to cast ...", with its inner exceptions and stack trace -->
+    <Rule color="Error">^([\w`+]+\.)+\w*Exception\b.*$</Rule>
+    <Rule color="Error">^\s+---&gt;[ ].*$</Rule>
+    <Rule color="Error">^\s+at[ ].*$</Rule>
+    <Rule color="Error">^\s+---[ ]End[ ]of[ ].*$</Rule>
+  </RuleSet>
+</SyntaxDefinition>

@@ -43,13 +43,14 @@
   <ItemGroup>
     <EmbeddedResource Include="../Docs/img/logo128.png" Link="Resources/Caddis.png" LogicalName="Caddis.UI.Resources.Caddis.png" />
     <EmbeddedResource Include="FSharp.xshd" LogicalName="Caddis.UI.Resources.FSharp.xshd" />
+    <EmbeddedResource Include="Output.xshd" LogicalName="Caddis.UI.Resources.Output.xshd" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="PanelHost.fs" />
     <Compile Include="AvaloniaSetup.fs" />
     <Compile Include="EmbeddedView.fs" />
-    <Compile Include="FSharpHighlighting.fs" />
+    <Compile Include="Highlighting.fs" />
     <Compile Include="RunDetails.fs" />
     <Compile Include="ScriptExport.fs" />
     <Compile Include="PanelView.fs" />

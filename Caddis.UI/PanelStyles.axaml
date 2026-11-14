@@ -51,10 +51,46 @@
     </Style>
   </ControlTheme>
 
-  <!-- Like a button, pressed while checked, e.g. the Settings button while the settings are shown. -->
+  <!-- Like a button, pressed while checked, e.g. Show while the internal errors are shown. -->
   <ControlTheme x:Key="{x:Type ToggleButton}" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type Button}}">
     <Style Selector="^:checked /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Caddis.Pressed}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- A button without a frame until the pointer is on it, e.g. the server's URL, which copies it. -->
+  <ControlTheme x:Key="Caddis.FlatButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Caddis.Text}" />
+    <Setter Property="Padding" Value="4,1" />
+    <Setter Property="MinHeight" Value="20" />
+    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Caddis.ListHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Caddis.Accent}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- A row across the panel that folds what is below it, e.g. the Settings row. Pressed while unfolded. -->
+  <ControlTheme x:Key="Caddis.RowToggle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Caddis.Text}" />
+    <Setter Property="Padding" Value="0,2,6,2" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Caddis.ListHover}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="^:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Caddis.Pressed}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Caddis.Accent}" />
     </Style>
   </ControlTheme>
 
@@ -175,8 +211,8 @@
     </Style>
   </ControlTheme>
 
-  <!-- For the read-only output. Scroll bars come from the Fluent theme.
-       Not the default theme of TextBox: the search box of the code view needs the Fluent one, for its option buttons. -->
+  <!-- For the read-only list of internal errors. Scroll bars come from the Fluent theme.
+       Not the default theme of TextBox: the search box of the output and code views needs the Fluent one, for its option buttons. -->
   <ControlTheme x:Key="Caddis.OutputTextBox" TargetType="TextBox">
     <Setter Property="IsReadOnly" Value="True" />
     <Setter Property="AcceptsReturn" Value="True" />
@@ -219,7 +255,7 @@
     </Style>
   </ControlTheme>
 
-  <!-- For the code, like the output above. AvaloniaEdit's own themes style its text area and search panel.
+  <!-- For the output and the code, like the error list above. AvaloniaEdit's own themes style its text area and search panel.
        Set by key: the default theme of TextEditor from AvaloniaEdit's styles is nearer to the editor than this dictionary.
        The TextEditor puts its TextArea into PART_ScrollViewer. -->
   <ControlTheme x:Key="Caddis.CodeEditor" TargetType="ae:TextEditor">
@@ -333,18 +369,22 @@
     </Style>
   </ControlTheme>
 
+  <!-- A short grip in the middle shows where to drag, in the accent color while the pointer is on it. -->
   <ControlTheme x:Key="{x:Type GridSplitter}" TargetType="GridSplitter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Focusable" Value="True" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border Background="{TemplateBinding Background}" />
+        <Border Background="{TemplateBinding Background}">
+          <Border x:Name="Grip" Width="36" Height="3" CornerRadius="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Background="{DynamicResource Caddis.Divider}" />
+        </Border>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover">
-      <Setter Property="Background" Value="{DynamicResource Caddis.Divider}" />
+    <Style Selector="^:pointerover /template/ Border#Grip">
+      <Setter Property="Background" Value="{DynamicResource Caddis.Accent}" />
     </Style>
-    <Style Selector="^:focus-visible">
+    <Style Selector="^:focus-visible /template/ Border#Grip">
       <Setter Property="Background" Value="{DynamicResource Caddis.Accent}" />
     </Style>
   </ControlTheme>

@@ -71,23 +71,26 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
 | --- | --- |
 | ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings unfolded and the output of the third run](Docs/panel-light.png) |
 
-- The header shows where the server listens, and the state and thread mode of the F# session.
-- `Start` / `Stop` the server.
-- When a newer Caddis is on Yak, a notice says so: update it in Rhino's `PackageManager`.
-  Once it is installed, the notice says that Rhino loads it when it restarts. Caddis checks Yak when Rhino starts.
-- While it runs, whether Claude Code, Codex and Claude Desktop connect to this Rhino, with `Set up` or `Activate`,
+- `Server` shows where the server listens. A click on the URL copies it, a right-click also offers the URL that agents connect to. `Start` / `Stop` the server.
+- `F# session` shows its state and thread mode, or the run in progress. `Cancel` stops a run on the background thread while it is in progress, `Reset` starts a new F# session.
+- While the server runs, `Agents` shows whether Claude Code, Codex and Claude Desktop connect to this Rhino:
+  a green dot if they do, amber if they connect to another app, gray if they aren't set up, with `Set up` or `Activate`,
   see [Connect an AI agent](../README.md#connect-an-ai-agent).
-- `Cancel run` stops a run on the background thread, `Reset FSI session` starts a new F# session.
-- `Settings` unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
-  and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core, FSharp.Compiler.Service and Caddis, and whether this is the latest Caddis.
+- The `Settings` row shows the version of Caddis and unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
+  and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service, and whether this is the latest Caddis.
   All buttons and options have tooltips.
-- The recent runs are listed newest first, with their id, status, duration and first line of code:
-  `r` for F# code, `c` for Rhino commands, `x` for exports.
-- `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run.
+- When a newer Caddis is on Yak, a blue notice says so: update it in Rhino's `PackageManager`.
+  Once it is installed, the notice says that Rhino loads it when it restarts. Caddis checks Yak when Rhino starts.
+- Internal errors of Caddis show in an amber notice, with `Show` and `Clear`. Red is only for runs that failed.
+- The recent runs are listed newest first, with an icon of their status, their id, first line of code and duration:
+  `r` for F# code, `c` for Rhino commands, `x` for exports. Green is ok, red a compile or runtime error, amber a timeout, gray cancelled.
+- Above the tabs, the selected run's status, duration, start time and thread, with `Run again` and `Export`.
+- `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run,
+  for a failed run the errors first. Errors are red, and Ctrl+F searches.
 - `Code` shows its code read-only, with F# highlighting, line numbers and search (Ctrl+F).
   It is formatted with Fantomas, unchecking `Formatted` shows the code as it was run, whose line numbers match the errors.
   `Run again` runs the code of the selected F# run as a new run.
-  `Export` saves the code of the run to an `.fsx` file, `Export all` saves all successful F# runs to one,
+  `Export` saves the code of the run to an `.fsx` file, `Export all` above the runs saves all successful F# runs to one,
   oldest first, each after a comment with its id and time. Both save the code as it is shown, formatted or not.
 
 The panel follows Rhino's light, dark or custom theme as soon as it changes.

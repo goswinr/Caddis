@@ -15,18 +15,59 @@
   </UserControl.Resources>
 
   <UserControl.Styles>
-    <!-- Groups of controls that wrap as a whole when the panel is narrow. -->
-    <Style Selector="StackPanel.row">
+    <!-- The names of the rows: Server, F# session and Agents, Settings, and the names in the settings. -->
+    <Style Selector="TextBlock.label">
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+    <!-- Beside a list of controls, at the height of the first one. -->
+    <Style Selector="TextBlock.label.top">
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <!-- In the column of the logo: the gear of the Settings row and the icons of the notices. -->
+    <Style Selector=":is(Control).icon">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.small, ToggleButton.small">
+      <Setter Property="MinHeight" Value="20" />
+      <Setter Property="Padding" Value="6,0" />
+    </Style>
+    <!-- The state of the server, the F# session and the agents: green while listening, ready or connected to this app,
+         blue while a run is in progress, amber while an agent connects to another app or the session failed, gray otherwise. -->
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Fill" Value="{DynamicResource Caddis.Disabled}" />
+    </Style>
+    <Style Selector="Ellipse.dot.ok">
+      <Setter Property="Fill" Value="#3FA34D" />
+    </Style>
+    <Style Selector="Ellipse.dot.warn">
+      <Setter Property="Fill" Value="#D69A00" />
+    </Style>
+    <Style Selector="Ellipse.dot.run">
+      <Setter Property="Fill" Value="#2B88D8" />
+    </Style>
+    <!-- An AI agent: its dot, its name, and a button to set it up or to connect it to this app, only when there is something to do. -->
+    <Style Selector="StackPanel.agent">
       <Setter Property="Orientation" Value="Horizontal" />
-      <Setter Property="Spacing" Value="4" />
-      <Setter Property="Height" Value="28" />
-      <Setter Property="Margin" Value="0,0,4,0" />
-    </Style>
-    <Style Selector="WrapPanel.settings > :is(Control)">
       <Setter Property="Height" Value="26" />
-      <Setter Property="Margin" Value="0,0,16,0" />
+      <Setter Property="Margin" Value="0,0,14,0" />
+      <Setter Property="Background" Value="Transparent" />
     </Style>
-    <!-- The chevron of the Settings button points up while the settings are shown, its color follows the button's text. -->
+    <!-- The copy icon beside the server's URL is faint until the pointer is on the URL. -->
+    <Style Selector="Button#CopyUrl:pointerover Path#CopyIcon">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- The chevron of the Settings row points up while the settings are shown, its color follows the row's text. -->
     <Style Selector="Path.chevron">
       <Setter Property="Stroke" Value="{DynamicResource Caddis.ButtonText}" />
     </Style>
@@ -36,27 +77,34 @@
     <Style Selector="ToggleButton:checked Path.chevron">
       <Setter Property="RenderTransform" Value="rotate(180deg)" />
     </Style>
-    <!-- An AI agent: whether it connects to this app, and a button to set it up or to connect it to this app. -->
-    <Style Selector="StackPanel.agent">
-      <Setter Property="Margin" Value="0,0,16,0" />
-      <Setter Property="Background" Value="Transparent" />
+    <Style Selector="ToggleButton#SettingsToggle:checked TextBlock#SettingsSummary">
+      <Setter Property="IsVisible" Value="False" />
     </Style>
-    <!-- Green while the agent connects to this app, amber while it connects to another one, gray until it is set up. -->
-    <Style Selector="Ellipse.agentDot">
-      <Setter Property="Width" Value="8" />
-      <Setter Property="Height" Value="8" />
+    <!-- Notices: an icon in the column of the logo, the text, and buttons at the right. A light tint, blue for information,
+         amber for the internal errors of Caddis. Red stays for runs that failed. -->
+    <Style Selector="Border.notice">
+      <Setter Property="Padding" Value="0,3,4,3" />
+      <Setter Property="CornerRadius" Value="2" />
+    </Style>
+    <Style Selector="Border.notice.info">
+      <Setter Property="Background" Value="#1C0078D4" />
+    </Style>
+    <Style Selector="Border.notice.warning">
+      <Setter Property="Background" Value="#20D69A00" />
+    </Style>
+    <!-- The white mark on the colored disc of a run's status, see StatusIcon in PanelView.fs. -->
+    <Style Selector="Path.glyph">
+      <Setter Property="Stroke" Value="White" />
+      <Setter Property="StrokeThickness" Value="1.7" />
+      <Setter Property="StrokeLineCap" Value="Round" />
+      <Setter Property="StrokeJoin" Value="Round" />
+    </Style>
+    <Style Selector="TextBlock.runId">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, Courier New" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0.7" />
       <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="Fill" Value="{DynamicResource Caddis.Disabled}" />
-    </Style>
-    <Style Selector="Ellipse.agentDot.active">
-      <Setter Property="Fill" Value="#3FA34D" />
-    </Style>
-    <Style Selector="Ellipse.agentDot.inactive">
-      <Setter Property="Fill" Value="#D69A00" />
-    </Style>
-    <Style Selector="Grid.runColumns > TextBlock">
-      <Setter Property="Margin" Value="6,0" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,8,0" />
     </Style>
     <Style Selector="ae|TextArea">
       <Setter Property="SelectionBrush" Value="{DynamicResource Caddis.Selection}" />
@@ -73,180 +121,284 @@
            Inside the scope, so that the colors of the search panel follow its theme variant, not the one of Windows. -->
       <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
     </ThemeVariantScope.Styles>
-    <Grid>
+    <!-- The column of the logo and the icons, and the column of the row names, have the same width
+         in the status, the Settings row, the settings and the notices: their SharedSizeGroups share this scope. -->
+    <Grid Margin="6,6,6,4" Grid.IsSharedSizeScope="True">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="2*" MinHeight="48" />
+        <RowDefinition Height="8" />
+        <RowDefinition Height="3*" MinHeight="80" />
         <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" MinHeight="48" />
-        <RowDefinition Height="6" />
-        <RowDefinition Height="*" MinHeight="60" />
       </Grid.RowDefinitions>
 
-      <!-- The logo beside the status line and the buttons. Their groups wrap below each other when the panel is narrow. -->
-      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,4">
-        <Border x:Name="Logo" Grid.RowSpan="2" VerticalAlignment="Top" Background="Transparent" Cursor="Hand" Margin="0,2,8,0">
-          <Image x:Name="LogoImage" Width="40" Height="40" />
-        </Border>
-        <WrapPanel Grid.Column="1" Margin="0,2,0,2">
-          <TextBlock x:Name="ServerStatus" TextWrapping="Wrap" Margin="0,0,16,0" />
-          <TextBlock x:Name="FsiStatus" TextWrapping="Wrap" />
-        </WrapPanel>
-        <WrapPanel Grid.Row="1" Grid.Column="1">
-          <StackPanel Classes="row">
-            <Button x:Name="StartStop" Content="Start" MinWidth="56" />
-          </StackPanel>
-          <StackPanel Classes="row">
-            <Button x:Name="Cancel" Content="Cancel run" />
-            <Button x:Name="Reset" Content="Reset FSI session" />
-            <ToggleButton x:Name="SettingsToggle">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="Settings" />
-                <Path Classes="chevron" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 8,0" StrokeThickness="1.2" />
-              </StackPanel>
-            </ToggleButton>
-          </StackPanel>
-          <!-- Only while the host has errors. Shows them below, like the settings. -->
-          <ToggleButton x:Name="ErrorsToggle" IsVisible="False" Margin="0,2,4,2">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <!-- A red disc with an exclamation mark, the same in light and dark themes. -->
-              <Grid Width="14" Height="14" VerticalAlignment="Center">
-                <Ellipse Fill="#D13438" />
-                <Rectangle Fill="White" Width="2" Height="6" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,2,0,0" />
-                <Rectangle Fill="White" Width="2" Height="2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,2" />
-              </Grid>
-              <TextBlock x:Name="ErrorsText" Text="Errors" />
-            </StackPanel>
-          </ToggleButton>
-        </WrapPanel>
-        <!-- While the server is running: whether Claude Code, Codex and Claude Desktop connect to this app, with a button to set them up
-             or to connect them to this app. The tooltips of the buttons name the commands they run, a right-click on a row copies them.
-             The note says what the last click did. -->
-        <StackPanel x:Name="Agents" Grid.Row="2" Grid.Column="1" IsVisible="False">
-          <WrapPanel>
-            <StackPanel x:Name="ClaudeRow" Classes="row agent">
-              <Ellipse x:Name="ClaudeDot" Classes="agentDot" />
-              <TextBlock x:Name="ClaudeState" VerticalAlignment="Center" />
-              <Button x:Name="ClaudeAction" />
-            </StackPanel>
-            <StackPanel x:Name="CodexRow" Classes="row agent">
-              <Ellipse x:Name="CodexDot" Classes="agentDot" />
-              <TextBlock x:Name="CodexState" VerticalAlignment="Center" />
-              <Button x:Name="CodexAction" />
-            </StackPanel>
-            <!-- Only if Claude Desktop is installed. It gets an extension, not a command. -->
-            <StackPanel x:Name="DesktopRow" Classes="row agent">
-              <Ellipse x:Name="DesktopDot" Classes="agentDot" />
-              <TextBlock x:Name="DesktopState" VerticalAlignment="Center" />
-              <Button x:Name="DesktopAction" />
-            </StackPanel>
-          </WrapPanel>
-          <TextBlock x:Name="AgentNote" TextWrapping="Wrap" IsVisible="False" Margin="0,0,0,2" />
-        </StackPanel>
-        <TextBlock x:Name="Message" Grid.Row="3" Grid.ColumnSpan="2" TextWrapping="Wrap" Margin="0,2,0,2" />
-        <!-- Only while no .NET SDK is installed that can restore NuGet packages for scripts. -->
-        <WrapPanel x:Name="SdkNotice" Grid.Row="4" Grid.ColumnSpan="2" IsVisible="False" Margin="0,2,0,2">
-          <TextBlock x:Name="SdkText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
-          <Button x:Name="GetSdk" Content="Get the .NET SDK" />
-        </WrapPanel>
-        <!-- Only while a newer Caddis is available, or installed after a restart. -->
-        <Grid x:Name="UpdateNotice" Grid.Row="5" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" IsVisible="False" Background="Transparent" Margin="0,2,0,2">
-          <!-- A blue disc with an i, the same in light and dark themes. -->
-          <Grid Width="14" Height="14" VerticalAlignment="Top" Margin="0,1,6,0">
-            <Ellipse Fill="#0078D4" />
-            <Rectangle Fill="White" Width="2" Height="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,3,0,0" />
-            <Rectangle Fill="White" Width="2" Height="5" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3" />
-          </Grid>
-          <TextBlock x:Name="UpdateText" Grid.Column="1" TextWrapping="Wrap" />
-        </Grid>
-      </Grid>
-
-      <!-- Folded until the Settings button is checked. Below the settings, the version of Caddis and whether a newer one is available. -->
-      <Border x:Name="Settings" Grid.Row="1" IsVisible="{Binding #SettingsToggle.IsChecked}" Margin="0,0,0,4" Padding="8,2,0,2"
-              BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="1" CornerRadius="2">
-        <StackPanel>
-          <WrapPanel Classes="settings">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <TextBlock x:Name="ModeLabel" Text="Run scripts on:" VerticalAlignment="Center" />
-              <ComboBox x:Name="Mode" MinWidth="130">
-                <ComboBoxItem Content="UI thread" />
-                <ComboBoxItem Content="Background thread" />
-              </ComboBox>
-            </StackPanel>
-            <CheckBox x:Name="AutoStart" Content="Start with host" />
-            <CheckBox x:Name="Echo" Content="Echo output to the command line" />
-            <CheckBox x:Name="CancelWaiting" Content="Cancel commands in scripts that wait for input" />
-            <TextBlock x:Name="RuntimeInfo" Opacity="0.7" TextWrapping="Wrap" VerticalAlignment="Center" />
-          </WrapPanel>
-          <TextBlock x:Name="Version" TextWrapping="Wrap" Margin="0,2,8,4" />
-        </StackPanel>
-      </Border>
-
-      <!-- The host's errors, newest first. Folded until the Errors button is checked. -->
-      <Grid x:Name="ErrorsPane" Grid.Row="2" RowDefinitions="Auto,Auto" IsVisible="{Binding #ErrorsToggle.IsChecked}" Margin="0,0,0,4">
-        <TextBox x:Name="ErrorList" Theme="{StaticResource Caddis.OutputTextBox}" MaxHeight="200" />
-        <Button x:Name="ClearErrors" Grid.Row="1" Content="Clear errors" HorizontalAlignment="Left" Margin="0,4,0,0" />
-      </Grid>
-
-      <!-- The recent runs, newest first. The columns share their widths with the header. -->
-      <Border Grid.Row="3" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
-        <Grid RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
-          <Border BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="0,0,0,1" Padding="0,3">
-            <Grid Classes="runColumns">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" SharedSizeGroup="Run" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="Status" />
-                <ColumnDefinition Width="Auto" SharedSizeGroup="Time" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="Run" />
-              <TextBlock Grid.Column="1" Text="Status" />
-              <TextBlock Grid.Column="2" Text="Time" HorizontalAlignment="Right" />
-              <TextBlock Grid.Column="3" Text="Code" />
-            </Grid>
+      <StackPanel Spacing="4" Margin="0,0,0,6">
+        <!-- The status: a row each for the server, the F# session and the agents, with a dot for the state and the row's buttons at the right. -->
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+            <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" MinHeight="26" />
+            <RowDefinition Height="Auto" MinHeight="26" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <!-- Hidden in narrow panels, e.g. AutoCAD's palette, so that the status keeps the width. See PanelView.fs. -->
+          <Border x:Name="Logo" Grid.RowSpan="2" VerticalAlignment="Top" Background="Transparent" Cursor="Hand" Margin="0,1,8,0">
+            <Image x:Name="LogoImage" Width="28" Height="28" />
           </Border>
-          <ListBox x:Name="Runs" Grid.Row="1" Background="Transparent">
+
+          <TextBlock Grid.Column="1" Classes="label" Text="Server" />
+          <!-- While the server listens, its URL, which a click copies. -->
+          <DockPanel Grid.Column="2" LastChildFill="False" VerticalAlignment="Center">
+            <Ellipse x:Name="ServerDot" Classes="dot" />
+            <Button x:Name="CopyUrl" Theme="{StaticResource Caddis.FlatButton}" Margin="-4,0,0,0" IsVisible="False">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock x:Name="ServerUrl" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <Panel Grid.Column="1" Width="14" Height="14" Margin="5,0,0,0" VerticalAlignment="Center">
+                  <!-- Two pages, the front one framed. A check for a moment after copying. -->
+                  <Path x:Name="CopyIcon" Opacity="0.6" Stroke="{DynamicResource Caddis.Text}" StrokeThickness="1.2" StrokeLineCap="Round"
+                        Data="M 5.9,4.6 L 10.9,4.6 A 1.3,1.3 0 0 1 12.2,5.9 L 12.2,10.9 A 1.3,1.3 0 0 1 10.9,12.2 L 5.9,12.2 A 1.3,1.3 0 0 1 4.6,10.9 L 4.6,5.9 A 1.3,1.3 0 0 1 5.9,4.6 Z M 9.6,2.4 L 3.2,2.4 A 1.4,1.4 0 0 0 1.8,3.8 L 1.8,9.8" />
+                  <Path x:Name="CopiedIcon" IsVisible="False" Stroke="#3FA34D" StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M 2.6,7.4 L 5.6,10.3 L 11.4,3.9" />
+                </Panel>
+              </Grid>
+            </Button>
+            <TextBlock x:Name="CopiedNote" Classes="muted" IsVisible="False" Margin="4,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="ServerStopped" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+          </DockPanel>
+          <Button x:Name="StartStop" Grid.Column="3" Content="Start" MinWidth="52" HorizontalAlignment="Right" Margin="6,0,0,0" />
+
+          <TextBlock Grid.Row="1" Grid.Column="1" Classes="label" Text="F# session" />
+          <DockPanel Grid.Row="1" Grid.Column="2" VerticalAlignment="Center">
+            <Ellipse x:Name="FsiDot" Classes="dot" />
+            <TextBlock x:Name="FsiStatus" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          </DockPanel>
+          <!-- Cancel only while a run is in progress. -->
+          <StackPanel Grid.Row="1" Grid.Column="3" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" Margin="6,0,0,0">
+            <Button x:Name="Cancel" Content="Cancel" IsVisible="False" />
+            <Button x:Name="Reset" Content="Reset" />
+          </StackPanel>
+
+          <!-- While the server is running: whether Claude Code, Codex and Claude Desktop connect to this app, with a button to set them up
+               or to connect them to this app. The tooltips name their state and the commands of the buttons, a right-click on an agent copies them.
+               The note says what the last click did. -->
+          <TextBlock x:Name="AgentsLabel" Grid.Row="2" Grid.Column="1" Classes="label top" Text="Agents" IsVisible="False" Margin="0,5,8,0" />
+          <StackPanel x:Name="Agents" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" IsVisible="False">
+            <WrapPanel>
+              <StackPanel x:Name="ClaudeRow" Classes="agent">
+                <Ellipse x:Name="ClaudeDot" Classes="dot" />
+                <TextBlock x:Name="ClaudeState" VerticalAlignment="Center" />
+                <Button x:Name="ClaudeAction" Classes="small" Margin="6,0,0,0" />
+              </StackPanel>
+              <StackPanel x:Name="CodexRow" Classes="agent">
+                <Ellipse x:Name="CodexDot" Classes="dot" />
+                <TextBlock x:Name="CodexState" VerticalAlignment="Center" />
+                <Button x:Name="CodexAction" Classes="small" Margin="6,0,0,0" />
+              </StackPanel>
+              <!-- Only if Claude Desktop is installed. It gets an extension, not a command. -->
+              <StackPanel x:Name="DesktopRow" Classes="agent">
+                <Ellipse x:Name="DesktopDot" Classes="dot" />
+                <TextBlock x:Name="DesktopState" VerticalAlignment="Center" />
+                <Button x:Name="DesktopAction" Classes="small" Margin="6,0,0,0" />
+              </StackPanel>
+            </WrapPanel>
+            <TextBlock x:Name="AgentNote" Classes="muted" TextWrapping="Wrap" IsVisible="False" Margin="0,0,0,2" />
+          </StackPanel>
+        </Grid>
+
+        <!-- The Settings row unfolds the settings right below it. Folded, it shows the version of Caddis. -->
+        <ToggleButton x:Name="SettingsToggle" Theme="{StaticResource Caddis.RowToggle}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- A gear: eight teeth as the dashes of a thick circle, around a ring. The dashes are in units of the stroke's thickness. -->
+            <Panel Classes="icon" Width="16" Height="16" Opacity="0.8">
+              <Ellipse Width="13.8" Height="13.8" Stroke="{DynamicResource Caddis.Text}" StrokeThickness="2.6" StrokeDashArray="0.846,0.846" />
+              <Path Fill="{DynamicResource Caddis.Text}"
+                    Data="F0 M 3.5,8 A 4.5,4.5 0 1 1 12.5,8 A 4.5,4.5 0 1 1 3.5,8 Z M 6.1,8 A 1.9,1.9 0 1 1 9.9,8 A 1.9,1.9 0 1 1 6.1,8 Z" />
+            </Panel>
+            <TextBlock Grid.Column="1" Classes="label" Opacity="1" Text="Settings" />
+            <TextBlock x:Name="SettingsSummary" Grid.Column="2" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            <Path Grid.Column="3" Classes="chevron" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 8,0" StrokeThickness="1.2" />
+          </Grid>
+        </ToggleButton>
+
+        <!-- One setting per line, so that nothing moves when the panel is resized. Then the version of Caddis and of the runtime. -->
+        <Border x:Name="Settings" IsVisible="{Binding #SettingsToggle.IsChecked}" Padding="0,4,8,6" CornerRadius="2"
+                Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Divider}" BorderThickness="1">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="ModeLabel" Grid.Column="1" Classes="label" Text="Run on" />
+            <ComboBox x:Name="Mode" Grid.Column="2" MinWidth="150" HorizontalAlignment="Left">
+              <ComboBoxItem Content="UI thread" />
+              <ComboBoxItem Content="Background thread" />
+            </ComboBox>
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="label top" Text="Options" Margin="0,9,8,0" />
+            <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,6,0,0" Spacing="2">
+              <CheckBox x:Name="AutoStart" Content="Start with host" />
+              <CheckBox x:Name="Echo">
+                <TextBlock Text="Echo output to the command line" TextWrapping="Wrap" />
+              </CheckBox>
+              <CheckBox x:Name="CancelWaiting">
+                <TextBlock Text="Cancel commands in scripts that wait for input" TextWrapping="Wrap" />
+              </CheckBox>
+            </StackPanel>
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="label top" Text="Version" Margin="0,8,8,0" />
+            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,8,0,0" Spacing="2">
+              <TextBlock x:Name="Version" TextWrapping="Wrap" />
+              <TextBlock x:Name="RuntimeInfo" Classes="muted" TextWrapping="Wrap" />
+              <Button x:Name="GitHub" Theme="{StaticResource Caddis.FlatButton}" Content="Caddis on GitHub" HorizontalAlignment="Left"
+                      Margin="-4,0,0,0" Foreground="{DynamicResource Caddis.Accent}" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Only while a newer Caddis is available, or installed after a restart. -->
+        <Border x:Name="UpdateNotice" Classes="notice info" IsVisible="False">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- A blue disc with an i, the same in light and dark themes. -->
+            <Panel Classes="icon" Width="14" Height="14">
+              <Ellipse Fill="#0078D4" />
+              <Path Stroke="White" StrokeThickness="1.8" StrokeLineCap="Round" Data="M 7,6.4 L 7,10.3 M 7,3.95 L 7,4.05" />
+            </Panel>
+            <TextBlock x:Name="UpdateText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" />
+          </Grid>
+        </Border>
+
+        <!-- Only while no .NET SDK is installed that can restore NuGet packages for scripts. -->
+        <Border x:Name="SdkNotice" Classes="notice info" IsVisible="False">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Panel Classes="icon" Width="14" Height="14">
+              <Ellipse Fill="#0078D4" />
+              <Path Stroke="White" StrokeThickness="1.8" StrokeLineCap="Round" Data="M 7,6.4 L 7,10.3 M 7,3.95 L 7,4.05" />
+            </Panel>
+            <TextBlock x:Name="SdkText" Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button x:Name="GetSdk" Grid.Column="2" Classes="small" Content="Get the .NET SDK" Margin="8,0,0,0" />
+          </Grid>
+        </Border>
+
+        <!-- Only while Caddis has internal errors, bold while some are unseen. Show unfolds them newest first.
+             Amber, not red: red is for runs that failed, and agents go on after most of these errors. -->
+        <Border x:Name="ErrorsNotice" Classes="notice warning" IsVisible="False">
+          <Grid RowDefinitions="Auto,Auto">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" SharedSizeGroup="Icon" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <!-- An amber triangle with an exclamation mark, the same in light and dark themes. -->
+            <Panel Classes="icon" Width="14" Height="14">
+              <Path Fill="#D69A00" Stroke="#D69A00" StrokeThickness="1.2" StrokeJoin="Round" Data="M 7,1.3 L 13.2,12.3 L 0.8,12.3 Z" />
+              <Path Stroke="#1F1F1F" StrokeThickness="1.6" StrokeLineCap="Round" Data="M 7,5 L 7,8.4 M 7,10.3 L 7,10.4" />
+            </Panel>
+            <TextBlock x:Name="ErrorsText" Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+              <ToggleButton x:Name="ErrorsToggle" Classes="small" Content="Show" />
+              <Button x:Name="ClearErrors" Classes="small" Content="Clear" />
+            </StackPanel>
+            <Grid x:Name="ErrorsPane" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" IsVisible="{Binding #ErrorsToggle.IsChecked}" Margin="0,4,0,1">
+              <TextBox x:Name="ErrorList" Theme="{StaticResource Caddis.OutputTextBox}" MaxHeight="160" />
+            </Grid>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <!-- The recent runs, newest first. Export all saves the code of the successful F# runs in the list. -->
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,3">
+        <TextBlock Text="Runs" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <TextBlock x:Name="RunCount" Grid.Column="1" Classes="muted" Margin="6,0,0,0" VerticalAlignment="Center" />
+        <Button x:Name="ExportAll" Grid.Column="3" Classes="small" Content="Export all" IsEnabled="False" />
+      </Grid>
+
+      <!-- A row per run: the icon of its status, its id, the first line of its code and its duration. The columns share their widths. -->
+      <Border Grid.Row="2" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
+        <Panel Grid.IsSharedSizeScope="True">
+          <ListBox x:Name="Runs" Background="Transparent">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="local:RunRow">
-                <Grid Classes="runColumns">
+                <Grid Background="Transparent" ToolTip.Tip="{Binding Tip}">
                   <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" SharedSizeGroup="Run" />
-                    <ColumnDefinition Width="Auto" SharedSizeGroup="Status" />
-                    <ColumnDefinition Width="Auto" SharedSizeGroup="Time" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="RunId" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="RunTime" />
                   </Grid.ColumnDefinitions>
-                  <TextBlock Text="{Binding Id}" />
-                  <TextBlock Grid.Column="1" Text="{Binding Status}" />
-                  <TextBlock Grid.Column="2" Text="{Binding Time}" HorizontalAlignment="Right" />
-                  <TextBlock Grid.Column="3" Text="{Binding Code}" TextTrimming="CharacterEllipsis" />
+                  <Panel Width="14" Height="14" Margin="7,0,8,0" VerticalAlignment="Center">
+                    <Ellipse Fill="{Binding StatusFill}" />
+                    <Path Classes="glyph" Data="{Binding StatusGlyph}" />
+                  </Panel>
+                  <TextBlock Grid.Column="1" Classes="runId" Text="{Binding Id}" />
+                  <TextBlock Grid.Column="2" Text="{Binding Code}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Time}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,8,0" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-        </Grid>
+          <TextBlock x:Name="NoRuns" Classes="muted" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Margin="16" IsHitTestVisible="False" />
+        </Panel>
       </Border>
 
-      <GridSplitter Grid.Row="4" ResizeDirection="Rows" Cursor="SizeNorthSouth" />
+      <GridSplitter Grid.Row="3" ResizeDirection="Rows" Cursor="SizeNorthSouth" />
 
-      <TabControl Grid.Row="5">
-        <TabItem Header="Output">
-          <TextBox x:Name="Output" Theme="{StaticResource Caddis.OutputTextBox}" />
-        </TabItem>
-        <TabItem x:Name="CodeTab" Header="Code">
-          <!-- Read-only: the code of a run can be selected, copied and searched with Ctrl+F, not changed. -->
-          <ae:TextEditor x:Name="CodeView" Theme="{StaticResource Caddis.CodeEditor}" IsReadOnly="True" ShowLineNumbers="True"
-                         LineNumbersMargin="4,0,6,0" FontFamily="Consolas, Menlo, Courier New" />
-        </TabItem>
-      </TabControl>
-      <!-- At the right end of the tab headers, while the code is shown. A check box for how the code is shown, set apart from
-           the buttons that act on it. The buttons are enabled when there is code to run or export. -->
-      <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="4" IsVisible="{Binding #CodeTab.IsSelected}"
-                  HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,1,0,0">
-        <CheckBox x:Name="FormatCheck" Content="Formatted" IsChecked="True" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <Button x:Name="RunAgain" Content="Run again" IsEnabled="False" MinHeight="22" />
-        <Button x:Name="ExportCode" Content="Export" IsEnabled="False" MinHeight="22" />
-        <Button x:Name="ExportAll" Content="Export all" IsEnabled="False" MinHeight="22" />
-      </StackPanel>
+      <Grid Grid.Row="4" RowDefinitions="Auto,*">
+        <!-- The selected run: the icon of its status, its id, then its status, duration, start time and thread.
+             The tooltip names its script. Run again and Export are enabled for F# runs. -->
+        <Grid x:Name="RunHeader" ColumnDefinitions="Auto,Auto,*,Auto,Auto" MinHeight="26" Margin="0,0,0,2" Background="Transparent">
+          <Panel x:Name="RunIcon" Width="14" Height="14" Margin="0,0,6,0" VerticalAlignment="Center" IsVisible="False">
+            <Ellipse x:Name="RunIconDisc" />
+            <Path x:Name="RunIconGlyph" Classes="glyph" />
+          </Panel>
+          <TextBlock x:Name="RunId" Grid.Column="1" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBlock x:Name="RunSummary" Grid.Column="2" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <Button x:Name="RunAgain" Grid.Column="3" Classes="small" Content="Run again" IsEnabled="False" Margin="6,0,4,0" />
+          <Button x:Name="ExportCode" Grid.Column="4" Classes="small" Content="Export" IsEnabled="False" />
+        </Grid>
+        <TabControl Grid.Row="1">
+          <TabItem Header="Output">
+            <!-- Read-only, highlighted by Output.xshd: the section lines, compiler errors and exceptions. Ctrl+F searches. -->
+            <ae:TextEditor x:Name="Output" Theme="{StaticResource Caddis.CodeEditor}" IsReadOnly="True" FontFamily="Consolas, Menlo, Courier New" />
+          </TabItem>
+          <TabItem x:Name="CodeTab" Header="Code">
+            <!-- Read-only: the code of a run can be selected, copied and searched with Ctrl+F, not changed. -->
+            <ae:TextEditor x:Name="CodeView" Theme="{StaticResource Caddis.CodeEditor}" IsReadOnly="True" ShowLineNumbers="True"
+                           LineNumbersMargin="4,0,6,0" FontFamily="Consolas, Menlo, Courier New" />
+          </TabItem>
+        </TabControl>
+        <!-- At the right end of the tab headers, while the code is shown: how the code is shown. -->
+        <CheckBox x:Name="FormatCheck" Grid.Row="1" Content="Formatted" IsChecked="True" IsVisible="{Binding #CodeTab.IsSelected}"
+                  HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" />
+      </Grid>
+
+      <!-- Revit's latest log line, e.g. what a button did. Rhino and AutoCAD print it to their command line instead. -->
+      <TextBlock x:Name="Message" Grid.Row="5" Classes="muted" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
     </Grid>
   </ThemeVariantScope>
 </UserControl>
