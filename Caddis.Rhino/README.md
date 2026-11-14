@@ -82,8 +82,9 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
 - When a newer Caddis is on Yak, a blue notice says so: update it in Rhino's `PackageManager`.
   Once it is installed, the notice says that Rhino loads it when it restarts. Caddis checks Yak when Rhino starts.
 - Internal errors of Caddis show in an amber notice, with `Show` and `Clear`. Red is only for runs that failed.
-- The recent runs are listed newest first, with an icon of their status, their id, first line of code and duration:
+- The recent runs are listed newest first, with an icon of their status, their id, first line of code, start time and duration:
   `r` for F# code, `c` for Rhino commands, `x` for exports. Green is ok, red a compile or runtime error, amber a timeout, gray cancelled.
+  A run in progress shows `running ..` on yellow.
 - Above the tabs, the selected run's status, duration, start time and thread, with `Run again` and `Export`.
 - `Output` shows the value, stdout, the Rhino command line, F# Interactive's output, errors and files of the selected run,
   for a failed run the errors first. Errors are red, and Ctrl+F searches.

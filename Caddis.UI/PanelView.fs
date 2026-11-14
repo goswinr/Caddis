@@ -1,7 +1,6 @@
 namespace Caddis.UI
 
 open System
-open System.ComponentModel
 open System.IO
 open System.Runtime.CompilerServices
 open System.Threading
@@ -63,11 +62,8 @@ module internal StatusIcon =
         | Rejected -> dash.Force()
 
 /// A row in the list of runs. The list's item template binds to its properties.
-/// The time of a running run counts up, so it notifies its changes; the other properties don't change.
-type RunRow(id: string, status: RunStatus, time: string, code: string, tip: string) =
-    let mutable time = time
-    let propertyChanged = Event<PropertyChangedEventHandler, PropertyChangedEventArgs>()
-
+/// They don't change: the list is made again when the status of a run changes.
+type RunRow(id: string, status: RunStatus, started: string, time: string, code: string, tip: string) =
     member _.Id = id
     /// The status in words, e.g. "runtime error".
     member _.Status = RunDetails.statusWord status
@@ -79,18 +75,12 @@ type RunRow(id: string, status: RunStatus, time: string, code: string, tip: stri
     member _.Code = code
     /// The id, the status in words and the start time.
     member _.Tip = tip
-
-    /// The duration, e.g. "140 ms" or "12.2 s".
-    member this.Time
-        with get () = time
-        and set (value: string) =
-            if value <> time then
-                time <- value
-                propertyChanged.Trigger(this, PropertyChangedEventArgs "Time")
-
-    interface INotifyPropertyChanged with
-        [<CLIEvent>]
-        member _.PropertyChanged = propertyChanged.Publish
+    /// When the run started, to the minute, e.g. "14:52".
+    member _.Started = started
+    /// The duration, e.g. "140 ms" or "12.2 s", or "running .." while the run is in progress.
+    member _.Time = time
+    /// True while the run is in progress: its time is shown on yellow.
+    member _.IsRunning = (status = Running)
 
 /// The controls of an AI agent in the panel: a dot for its state, its name, and a button to set it up or to connect it to this app.
 type internal AgentRow = {
@@ -359,7 +349,8 @@ type PanelView(host: PanelHost) as this =
             |> ignore
 
     let runRow (r: Run) =
-        RunRow(r.Id, r.Status, RunDetails.duration r.Duration, firstCodeLine r.Code, $"{r.Id}: {RunDetails.statusWord r.Status}, started at {RunDetails.startTime r}")
+        let time = if r.Status = Running then RunDetails.runningTime else RunDetails.duration r.Duration
+        RunRow(r.Id, r.Status, RunDetails.startMinute r, time, firstCodeLine r.Code, $"{r.Id}: {RunDetails.statusWord r.Status}, started at {RunDetails.startTime r}")
 
     let refreshRuns (s: CaddisServer) =
         let all = s.Service.Runs.All |> Array.rev
@@ -377,12 +368,9 @@ type PanelView(host: PanelHost) as this =
             runs.SelectedItem <- rows |> Array.tryFind (fun row -> row.Id = selectedId) |> Option.map box |> Option.toObj
             showDetails ()
         else
-            // The same runs with the same states: only the time of a running run changed. It is updated in its row and in the run header,
-            // because a new list would select the row again and show its details again, every second.
-            match runs.ItemsSource with
-            | :? (RunRow[]) as rows ->
-                Array.iter2 (fun (row: RunRow) (r: Run) -> if r.Status = Running then row.Time <- RunDetails.duration r.Duration) rows all
-            | _ -> ()
+            // The same runs with the same states: only the duration of a running run changed. Its row shows "running ..",
+            // the run header counts up. Only the header is updated, because a new list would select the row again
+            // and show its details again, every second.
             match selectedRun () with
             | Some r when r.Status = Running -> runSummary.Text <- RunDetails.summary host.Name r
             | _ -> ()

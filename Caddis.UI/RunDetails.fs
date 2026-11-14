@@ -29,6 +29,12 @@ module RunDetails =
     /// When the run started, in local time, e.g. "14:52:07".
     let startTime (r: Run) = r.StartedAt.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)
 
+    /// When the run started, in local time to the minute, as the list of runs shows it, e.g. "14:52".
+    let startMinute (r: Run) = r.StartedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)
+
+    /// The time of a run in progress in the list of runs, in place of its duration.
+    let runningTime = "running .."
+
     /// The line of the run header after the id, e.g. "ok · 140 ms · 14:52:07 · background thread".
     let summary (appName: string) (r: Run) =
         let what =

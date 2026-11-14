@@ -374,11 +374,12 @@ let ``Run again runs the code of the selected F# run as a new run and selects it
 }
 
 [<AvaloniaFact>]
-let ``the time of a running run counts up in its row, which stays selected`` () = task {
+let ``a running run shows its start time and running .. on yellow in its row, which stays selected while the header counts up`` () = task {
     use engineHost = new HeadlessHost(ignore)
     let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
     use server = new CaddisServer(engineHost, store)
-    server.Service.Runs.Add(finished "r1" FSharpCode Succeeded "let a = 1")
+    let first = finished "r1" FSharpCode Succeeded "let a = 1"
+    server.Service.Runs.Add first
     let running = runWithId "r2" FSharpCode "let b = 2"
     server.Service.Runs.Add running
     let view = PanelView({ host "Rhino" with Server = (fun () -> Some server) })
@@ -390,21 +391,36 @@ let ``the time of a running run counts up in its row, which stays selected`` () 
         runs.SelectedIndex <- 0 // newest first: the running run
         window.UpdateLayout()
         let row = runs.SelectedItem :?> RunRow
-        let shownTime () =
-            runs.ContainerFromIndex(0).GetVisualDescendants()
-            |> Seq.choose (function :? TextBlock as t when not (isNull t.Text) && t.Text.EndsWith " ms" -> Some t.Text | _ -> None)
-            |> Seq.exactlyOne
-        let before = shownTime ()
+        let shown (index: int) =
+            runs.ContainerFromIndex(index).GetVisualDescendants()
+            |> Seq.choose (function :? TextBlock as t when not (isNull t.Text) -> Some t.Text | _ -> None)
+            |> List.ofSeq
+        let timeBox (index: int) =
+            runs.ContainerFromIndex(index).GetVisualDescendants() |> Seq.pick (function :? Border as b when b.Classes.Contains "runTime" -> Some b | _ -> None)
+        Assert.True row.IsRunning
+        Assert.Contains("running ..", shown 0)
+        Assert.Contains(RunDetails.startMinute running, shown 0)
+        Assert.True((timeBox 0).Classes.Contains "running")
+        Assert.NotNull((timeBox 0).Background)
+        // The finished run: its start time and duration, not on yellow.
+        Assert.Contains(RunDetails.startMinute first, shown 1)
+        Assert.Contains(shown 1, fun t -> t.EndsWith " ms")
+        Assert.False((timeBox 1).Classes.Contains "running")
+        Assert.Null((timeBox 1).Background)
+        let summary = view.FindControl<TextBlock> "RunSummary"
+        let before = summary.Text
         do! Task.Delay 50
         view.Refresh()
         Assert.Same(row, runs.SelectedItem)
-        Assert.NotEqual<string>(before, row.Time)
-        Assert.Equal(row.Time, shownTime ())
+        Assert.NotEqual<string>(before, summary.Text)
         // When its status changes, the list is made again, and the run stays selected.
         running.Complete(RunOutcome.ofStatus Succeeded) |> ignore
         view.Refresh()
         Assert.NotSame(row, runs.SelectedItem)
-        Assert.Equal("r2", (runs.SelectedItem :?> RunRow).Id)
+        let done' = runs.SelectedItem :?> RunRow
+        Assert.Equal("r2", done'.Id)
+        Assert.False done'.IsRunning
+        Assert.EndsWith(" ms", done'.Time)
     finally window.Close()
 }
 

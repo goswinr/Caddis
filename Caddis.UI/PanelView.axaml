@@ -106,6 +106,24 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,8,0" />
     </Style>
+    <!-- The duration of a run in the list, muted. While the run is in progress "running .." on yellow with dark text,
+         the same in light and dark themes and on the selected row. -->
+    <Style Selector="Border.runTime">
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.runTime > TextBlock">
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <Style Selector="Border.runTime.running">
+      <Setter Property="Background" Value="#FFD43B" />
+    </Style>
+    <Style Selector="Border.runTime.running > TextBlock">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Foreground" Value="#1F1F1F" />
+    </Style>
     <Style Selector="ae|TextArea">
       <Setter Property="SelectionBrush" Value="{DynamicResource Caddis.Selection}" />
       <Setter Property="SelectionForeground" Value="{DynamicResource Caddis.SelectionText}" />
@@ -337,7 +355,8 @@
         <Button x:Name="ExportAll" Grid.Column="3" Classes="small" Content="Export all" IsEnabled="False" />
       </Grid>
 
-      <!-- A row per run: the icon of its status, its id, the first line of its code and its duration. The columns share their widths. -->
+      <!-- A row per run: the icon of its status, its id, the first line of its code, its start time and its duration,
+           or "running .." on yellow while it is in progress. The columns share their widths. -->
       <Border Grid.Row="2" Background="{DynamicResource Caddis.Surface}" BorderBrush="{DynamicResource Caddis.Border}" BorderThickness="1">
         <Panel Grid.IsSharedSizeScope="True">
           <ListBox x:Name="Runs" Background="Transparent">
@@ -348,6 +367,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" SharedSizeGroup="RunId" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="RunStart" />
                     <ColumnDefinition Width="Auto" SharedSizeGroup="RunTime" />
                   </Grid.ColumnDefinitions>
                   <Panel Width="14" Height="14" Margin="7,0,8,0" VerticalAlignment="Center">
@@ -356,7 +376,10 @@
                   </Panel>
                   <TextBlock Grid.Column="1" Classes="runId" Text="{Binding Id}" />
                   <TextBlock Grid.Column="2" Text="{Binding Code}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Time}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,8,0" />
+                  <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Started}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                  <Border Grid.Column="4" Classes="runTime" Classes.running="{Binding IsRunning}" Margin="6,0,6,0">
+                    <TextBlock Text="{Binding Time}" />
+                  </Border>
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
