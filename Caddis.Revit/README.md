@@ -78,7 +78,7 @@ Caddis' own messages go to `%AppData%\Caddis\revit.log`, `Info` shows the latest
 ## Connect an AI agent
 Revit has its own settings file `%AppData%\Caddis\settings-revit.json`, the default port 7820 and the MCP name `caddis-revit`,
 so that Caddis in Rhino, Revit and AutoCAD can run and stay registered in the agents at the same time.
-The panel sets up Claude Code, Codex and Claude Desktop, see [Connect an AI agent](../README.md#connect-an-ai-agent).
+The panel sets up Claude Code, Codex and Claude Desktop, see [Connect an AI agent](../README.md#4-connect-an-ai-agent).
 Without the panel, `Info` on the ribbon shows the commands while the server runs, Ctrl+C copies the text of its dialog:
 ```
 claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/mcp

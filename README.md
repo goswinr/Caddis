@@ -12,25 +12,25 @@
 [![license](https://img.shields.io/github/license/goswinr/Caddis)](LICENSE)
 ![code size](https://img.shields.io/github/languages/code-size/goswinr/Caddis.svg)
 
-An MCP server that hosts a persistent F# Interactive session inside [Rhino](https://www.rhino3d.com/), [Revit](https://www.autodesk.com/products/revit/overview) or [AutoCAD](https://www.autodesk.com/products/autocad/overview).
-AI agents run F# code that uses RhinoCommon, the Revit API or the AutoCAD .NET API in the app you are working in.
+Caddis lets an AI agent like Claude or Codex work in the [Rhino](https://www.rhino3d.com/), [Revit](https://www.autodesk.com/products/revit/overview) or [AutoCAD](https://www.autodesk.com/products/autocad/overview) you have open.
+You describe what you want in plain words. The agent writes a short F# script that uses the app's API, Caddis runs it inside the app and sends back the result,
+and the agent checks it, e.g. with a capture of the view, and corrects its script if needed.
 
-**Individual methods of the host APIs are not registered as MCP tools.** Agents discover Caddis's tools through MCP,
-then use `caddis_describe` to explore the API loaded in the running app: search names, list the types in a namespace,
-inspect a type's members, or look up a method's overloads. It returns signatures in F# syntax from reflection,
-with documentation from XML files when available, so agents can check the installed API version before using it.
-They then write F# code that calls those methods, check it with `caddis_check`, and execute it with `caddis_eval`.
+You get the code it ran too: read it to learn the API, run it again, or make a permanent plugin from it.
+This makes Caddis useful for automating your work and for trying out ideas quickly in Rhino, Revit and AutoCAD.
 
-
-Caddis runs F# scripts directly from inside the Rhino, Revit or AutoCAD process and is controlled via HTTP:
-AI agents like Claude or Codex generate the F# code and send it for evaluation and execution inside the host application via its [MCP](https://modelcontextprotocol.io) endpoint.
-
-
-Plus, you get the F# code it ran too, so you could make a permanent plugin from it.
-This makes it ideal for AI-driven automation and rapid prototyping within Rhino, Revit and AutoCAD.
+Technically, Caddis is an [MCP](https://modelcontextprotocol.io) server that hosts a persistent F# Interactive session inside the app,
+where scripts use RhinoCommon, the Revit API or the AutoCAD .NET API.
 
 > Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0 and AutoCAD 2025 on Windows, not yet on Mac.
 
+![Claude Desktop with the prompt, the agent's runs in Rhino with its two captures of the Top view, and Caddis for Rhino among the connectors](Caddis.Rhino/Docs/Screen-Claude.png)
+
+An agent in Claude Desktop draws in Rhino, and checks its result with captures of the Top view. See the [example in Rhino](Caddis.Rhino/README.md#example-in-claude-desktop).
+
+## Getting started
+
+### 1. Install Caddis in your app
 
 | App | Runs in | Install | Read more |
 |---|---|---|---|
@@ -41,31 +41,43 @@ This makes it ideal for AI-driven automation and rapid prototyping within Rhino,
 Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
 It works for every version of Rhino, Revit and AutoCAD. Caddis runs without it, only NuGet packages need it, see [NuGet packages](#nuget-packages).
 
-## What it does
-- Hosts one persistent F# Interactive session inside the app.
-  Values, functions and types defined in one run stay available in the next.
-- Serves an MCP endpoint at `/mcp`, so AI agents can run F# in the app, and plain REST endpoints for curl and scripts.
-- Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, notes of the app, e.g. Revit's warnings, and files.
-  Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
-- Runs scripts either on the app's UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
-- Wraps every run in one undo step, captures viewports as PNG, and exports to the file formats of the app.
-- Looks up the signatures and docs of the loaded APIs, e.g. RhinoCommon, the Revit API or the AutoCAD .NET API, so agents don't have to guess API names and overloads.
-- Shows the server state, the recent runs, and the output and code of the selected run in a panel docked in the app, in the app's light or dark theme.
-- In Rhino and AutoCAD it runs commands like typed at the command line. In Revit and AutoCAD it lists blocking dialogs and presses their buttons.
+### 2. Install an AI agent
 
-What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md), [Caddis for Revit](Caddis.Revit/README.md) and [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
+The Caddis panel sets up these agents for you:
+- [Claude Desktop](https://claude.ai/download), the Claude app. You don't need a terminal for it.
+- [Claude Code](https://claude.com/claude-code), Claude in the terminal or in VS Code.
+- [Codex](https://github.com/openai/codex), OpenAI's agent in the terminal.
 
-## Connect an AI agent
-Start the server in the app and open the Caddis panel. While the server runs, it shows for Claude Code, Codex and Claude Desktop whether they connect to Caddis in this app, by the color of the dot beside each agent. Its tooltip names the state:
+Other agents that can connect to an MCP server over HTTP work too. In Rhino its address is `http://127.0.0.1:7810/mcp`, see [the ports of the other apps](#4-connect-an-ai-agent).
 
+### 3. Start Caddis and open its panel
+
+| App | Open the panel | Start the server |
+|---|---|---|
+| Rhino | Run the command `Caddis` and choose `Panel` | `Start` in the panel |
+| Revit | `Caddis Details Panel` on the `Caddis` ribbon tab | `Start listening` on the ribbon tab, or `Start` in the panel |
+| AutoCAD | `Caddis Details Panel` on the `Caddis` ribbon tab | `Start listening` on the ribbon tab, or `Start` in the panel |
+
+To start the server whenever the app starts, check `Start with Rhino`, `Start with Revit` or `Start with AutoCAD` in the panel's settings.
+
+### 4. Connect an AI agent
+
+While the server runs, the panel shows whether Claude Code, Codex and Claude Desktop connect to Caddis in this app. Click `Set up` beside your agent:
+
+![The top of the Caddis panel in Rhino: the server listens, Claude Code and Claude Desktop connect to it, Codex is not set up yet and has a Set up button](Caddis.Rhino/Docs/connect.png)
+
+The color of the dot shows the state of the agent, its tooltip names it:
 - **active** (green): the agent connects to this app.
 - **not set up** (gray): `Set up` adds Caddis to the agent for all your projects, with the agent's own program, e.g. `claude mcp add ...`. For Claude Desktop it opens the extension `caddis-rhino.mcpb`, `caddis-revit.mcpb` or `caddis-autocad.mcpb`, and Claude Desktop asks to install it.
 - **inactive** (amber): the agent connects to another port, e.g. that of a second Revit with Caddis. `Activate` asks the app on that port to hand it over once it is idle, with no run in progress, and waits for that. Then this app listens on that port, and agents connected to it go on with this app. If the port can't be taken, e.g. another program uses it, `Activate` sets the agent up for this app instead.
 
+If the agent was open already, restart it, or start a new session in it: sessions that were open before it was set up see Caddis only after a restart.
 The tooltips of the buttons show the commands they run, a right-click on an agent copies them.
-Sessions of an agent that were open before it was set up see Caddis after a restart.
 
-Without the panel, run the commands yourself in a terminal. Rhino prints them to its command line when the server starts,
+<details>
+<summary>Without the panel: the commands for Claude Code and Codex</summary>
+
+Run the commands yourself in a terminal. Rhino prints them to its command line when the server starts,
 Revit and AutoCAD show them in the `Info` dialog of the `Caddis` ribbon tab, where Ctrl+C copies its text. For Claude Code:
 ```
 claude mcp add --transport http --scope user caddis-rhino http://127.0.0.1:7810/mcp
@@ -78,20 +90,12 @@ For Codex:
 codex mcp add caddis-rhino --url http://127.0.0.1:7810/mcp
 ```
 
-### Claude Desktop
-Claude Desktop can't use the URL of Caddis directly: it runs local MCP servers as programs only, and reaches the URLs of connectors
-from Anthropic's servers, which can't reach your computer. So Caddis comes as a Claude Desktop extension, a `.mcpb` file,
-whose small relay passes Claude Desktop's messages to Caddis on this computer. Claude Desktop brings the Node.js that runs it.
+</details>
 
-The panel's `Set up` makes the extension for the running app, with its port and its tools. Each [release](https://github.com/goswinr/Caddis/releases)
-also has `caddis-rhino.mcpb`, `caddis-revit.mcpb` and `caddis-autocad.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
-On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
-`More apps` > `Look for another app on this PC` and `%LOCALAPPDATA%\AnthropicClaude\claude.exe`, with `Always`.
-Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Extensions.
-Its setting `Port of Caddis in Rhino`, `Port of Caddis in Revit` or `Port of Caddis in AutoCAD` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
-While the app isn't running, the extension still lists its tools, and their results say to start the app.
+<details>
+<summary>The ports and names of the apps</summary>
 
-Each app has its own port and MCP name, so that they can run and stay registered in the agents at the same time. The MCP server titles and extension display names match the app guides and installers:
+Each app has its own port and MCP name, so that they can run and stay registered in the agents at the same time:
 
 | App | Display name | Default port | MCP name | Claude Desktop file |
 |---|---|---|---|---|
@@ -101,7 +105,96 @@ Each app has its own port and MCP name, so that they can run and stay registered
 
 If the port is taken, the next free one is used, and the panel shows the agents set up for the port as inactive.
 
-## MCP tools
+</details>
+
+<details>
+<summary>Claude Desktop: its extension and port</summary>
+
+The extension that `Set up` opens is a `.mcpb` file with the port and the tools of the running app.
+Each [release](https://github.com/goswinr/Caddis/releases) also has `caddis-rhino.mcpb`, `caddis-revit.mcpb` and `caddis-autocad.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
+
+Its setting `Port of Caddis in Rhino`, `Port of Caddis in Revit` or `Port of Caddis in AutoCAD` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
+While the app isn't running, the extension still lists its tools, and their results say to start the app.
+
+On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
+`More apps` > `Look for another app on this PC` and `%LOCALAPPDATA%\AnthropicClaude\claude.exe`, with `Always`.
+Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Extensions.
+
+Claude Desktop can't use the URL of Caddis directly: it runs local MCP servers as programs only, and reaches the URLs of connectors
+from Anthropic's servers, which can't reach your computer. That is why Caddis comes as a Claude Desktop extension,
+whose small relay passes Claude Desktop's messages to Caddis on this computer. Claude Desktop brings the Node.js that runs it.
+
+</details>
+
+### 5. Ask for something
+
+Name Caddis in your request, e.g.:
+- In Rhino: "Use Caddis to draw a triangle, find its incircle center, divide it into 3 triangles and recurse 10 times, fade out the color".
+- In Revit: "Use Caddis to list the walls in the active view with their types and lengths".
+- In AutoCAD: "Use Caddis to draw a 1000 by 600 rectangle with a circle of radius 50 in each corner".
+
+The panel lists each run of the agent with its code and output. `Run again` runs the code again, `Export` saves it to an `.fsx` file.
+On the UI thread, the default, the app is busy until a run ends.
+
+## How it works
+
+<details>
+<summary>Words used in this README</summary>
+
+- **AI agent**: an AI assistant that can use tools on your computer, e.g. Claude Desktop, Claude Code or Codex.
+- **MCP**, the [Model Context Protocol](https://modelcontextprotocol.io): the standard way for AI agents to use tools. Caddis is an MCP server: the agent connects to it and gets its tools, e.g. `caddis_eval`.
+- **F#**: the .NET programming language of the scripts. You don't need to know it to start: the agent writes the code, and you can read it to learn.
+- **F# Interactive**: runs F# code without building a project first. Caddis keeps one F# Interactive session in each app: what one run defines, the next can use.
+- **Run**: one script, command or export that Caddis ran for the agent, with an id like `r1`. The panel lists them.
+- **API**: the programming interface of the app, e.g. RhinoCommon in Rhino. Scripts call it to read and change the document.
+- **.NET SDK**: Microsoft's tools to build .NET programs. Caddis needs it only for scripts that use NuGet packages.
+- **NuGet package**: a library from [nuget.org](https://www.nuget.org), which a script loads with `#r "nuget: Name"`.
+- **Server, port**: Caddis listens for agents at an address like `http://127.0.0.1:7810`. `127.0.0.1` is this computer, `7810` the port, a number that each app gets its own of.
+- **REST**: plain HTTP requests, e.g. with `curl`, for your own scripts instead of an agent.
+
+</details>
+
+Caddis doesn't turn every method of the app's API into an MCP tool. It gives the agent a few tools to explore and use the API that is loaded in the running app:
+
+1. `caddis_describe` looks up the API: it searches names, lists the types of a namespace, the members of a type and the overloads of a method, with their docs.
+   So the agent uses the API of the app version you have installed, instead of guessing names.
+2. `caddis_check` type-checks the F# code that the agent wrote, without running it.
+3. `caddis_eval` runs the code in the app, and returns its result, its output and its errors.
+4. `caddis_capture_viewport` captures a view as an image, so that the agent sees what its code did.
+
+Every run is one undo step in the app, so you can undo what the agent did.
+
+<details>
+<summary>Everything Caddis does</summary>
+
+- Hosts one persistent F# Interactive session inside the app.
+  Values, functions and types defined in one run stay available in the next.
+- Serves an MCP endpoint at `/mcp`, so AI agents can run F# in the app, and plain REST endpoints for curl and scripts.
+- Returns results: status, the value of the last expression, stdout, stderr, compiler diagnostics, exceptions with the script line, notes of the app, e.g. Revit's warnings, and files.
+  Via MCP as compact text for the model with images inline, long output shortened and saved to a file. Via REST as JSON.
+- Runs scripts either on the app's UI thread (safest, the default) or on a background thread (cancellable, with timeouts).
+- Wraps every run in one undo step, captures viewports as PNG, and exports to the file formats of the app.
+- Looks up the signatures and docs of the loaded APIs, e.g. RhinoCommon, the Revit API or the AutoCAD .NET API, so agents don't have to guess API names and overloads.
+- Shows the server state, the recent runs, and the output and code of the selected run in a panel docked in the app, in the app's light or dark theme.
+- In Rhino and AutoCAD it runs commands like typed at the command line. In Revit and AutoCAD it lists blocking dialogs and presses their buttons.
+
+</details>
+
+What is specific to each app, its installation, commands, panel and API, is in [Caddis for Rhino](Caddis.Rhino/README.md), [Caddis for Revit](Caddis.Revit/README.md) and [Caddis for AutoCAD](Caddis.AutoCAD/README.md).
+
+## Security
+
+Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.
+That code can do more than change the document, e.g. change or delete files.
+- The server only listens on localhost, so other computers can't reach it.
+- Every program on this computer can reach it, also programs of other users signed in to it.
+- Requests from web pages, with an `Origin` header, are rejected.
+
+Stop the server when you don't use it, and read the code of the runs in the panel to see what the agent did.
+
+## Reference
+
+### MCP tools
 
 | Tool | |
 |---|---|
@@ -118,6 +211,9 @@ If the port is taken, the next free one is used, and the panel shows the agents 
 | `caddis_export` | Export to a file |
 | `caddis_command` | Rhino and AutoCAD: run commands like typed at the command line, see [Rhino commands](Caddis.Rhino/README.md#rhino-commands) and [AutoCAD commands](Caddis.AutoCAD/README.md#autocad-commands) |
 | `caddis_dialog` | Revit and AutoCAD: list the app's open dialog or press one of its buttons, see [Differences to Rhino](Caddis.Revit/README.md#differences-to-rhino) and [AutoCAD commands](Caddis.AutoCAD/README.md#autocad-commands) |
+
+<details>
+<summary>More on the tools: waiting, cancelling, checking, describing and exporting</summary>
 
 `caddis_eval` returns after `waitMs` (default 50 s) with status `running` if the run has not finished, it keeps running and
 `caddis_get_run` waits for it. `timeoutMs` cancels a run, only in background mode.
@@ -141,9 +237,16 @@ Claude Code shows the model only the `structuredContent` of a result that has on
 
 Packages can ship guides for agents as MCP resources. Once an assembly of such a package is loaded with `#r "nuget: ..."`, `resources/list` lists its files, e.g. the guide of Rhino.Scripting, and `resources/read` returns them. They are documents to read, not tools.
 
+</details>
+
 ### NuGet packages
+
 Scripts can reference NuGet packages via `#r "nuget: Name"`. F# Interactive restores them with `dotnet msbuild`, so they need a .NET SDK of the app's .NET version or newer,
 e.g. the .NET SDK 8 in Rhino 8 or Revit 2025, and any SDK on .NET Framework. Everything else works without an SDK.
+
+<details>
+<summary>How Caddis finds the SDK, and what happens without it</summary>
+
 Caddis finds `dotnet` where F# Interactive does: `DOTNET_HOST_PATH`, next to the running .NET runtime, on `PATH`, then in `Program Files\dotnet`.
 Without a suitable SDK
 - `caddis_status` and `/status` report it under `nuget`, with the reason and the download page,
@@ -153,10 +256,17 @@ Without a suitable SDK
 
 An SDK installed while the app runs is found within 10 s.
 
-## REST
+</details>
+
+### REST
+
+For your own scripts, without an agent, Caddis has plain HTTP endpoints that return JSON, e.g.:
 ```
 curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
 ```
+
+<details>
+<summary>All REST endpoints</summary>
 
 | Endpoint | |
 |---|---|
@@ -177,7 +287,10 @@ curl http://127.0.0.1:7810/eval -d "{\"code\": \"1 + 1\"}"
 | `GET /help` | A short description of all endpoints |
 | `POST /mcp` | MCP endpoint |
 
-## In scripts
+</details>
+
+### In scripts
+
 Caddis adds to every session:
 ```fsharp
 Caddis.Script.OutDir   // a folder for files of this run, they are returned with the result
@@ -187,7 +300,8 @@ Caddis.Script.OnUi(fun () -> ...)  // run code on the app's UI thread, needed in
 Each app references its API in every session. For its APIs and helpers, see [scripts in Rhino](Caddis.Rhino/README.md#in-scripts),
 [scripts in Revit](Caddis.Revit/README.md#in-scripts) and [runs in AutoCAD](Caddis.AutoCAD/README.md#how-runs-work-in-autocad).
 
-Scripts can check these conditional compilation symbols with `#if`, e.g. to run in several apps or runtimes:
+<details>
+<summary>Symbols for <code>#if</code>, to run a script in several apps or runtimes</summary>
 
 | Symbol | Defined |
 |---|---|
@@ -199,8 +313,14 @@ Scripts can check these conditional compilation symbols with `#if`, e.g. to run 
 
 `extraFsiArgs` in the settings file of the app can add more, e.g. `"--define:MYSYMBOL"`.
 
-## Files
-Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis` on Mac:
+</details>
+
+### Files
+
+Caddis keeps its settings and logs in `%AppData%\Caddis` on Windows and in `~/.config/Caddis` on Mac.
+
+<details>
+<summary>The files in that folder</summary>
 
 | File | |
 |---|---|
@@ -214,17 +334,19 @@ Caddis keeps its files in `%AppData%\Caddis` on Windows and in `~/.config/Caddis
 | `autocad.log` | Caddis' own messages in AutoCAD |
 | `autocad-update.json` | The result of the latest update check in AutoCAD, which the panel and `Info` show |
 
-## Security
-Caddis has no authentication: anyone who can send requests to it can run any code on your computer, with your rights.
-- The server only listens on localhost, so other computers can't reach it.
-- Every program on this computer can reach it, also programs of other users signed in to it.
-- Requests from web pages, with an `Origin` header, are rejected.
+</details>
 
 ## Development
+
+To build Caddis yourself, you need Windows with the .NET 8 and .NET 10 SDKs:
 ```
 dotnet build Caddis.slnx
 dotnet test Caddis.slnx
 ```
+See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
+
+<details>
+<summary>The projects</summary>
 
 | Project | |
 |---|---|
@@ -242,12 +364,15 @@ dotnet test Caddis.slnx
 `Caddis.Core` and `Caddis.UI` target `net8.0;net10.0` with Avalonia 12, and `net48` for Rhino and Revit 2024 on .NET Framework, with Avalonia 11.
 Each app supplies the panel's actions, theme colors and docking wrapper: Eto in Rhino, WPF `HwndHost` in Revit and AutoCAD.
 What differs between them, the texts of the MCP tools, the id format of objects and whether there are commands, comes from `ICaddisHost.Info`.
-See [Architecture.md](Architecture.md) for the design, the API and what is not there yet.
+
+</details>
 
 ### Run a local build in Rhino, Revit or AutoCAD
+
 To start Rhino, Revit or AutoCAD with a local build instead of the installed Caddis, double-click e.g. `Dev\Rhino8.cmd`, `Dev\Revit2026.cmd` or `Dev\AutoCAD2025.cmd`, see [Dev/README.md](Dev/README.md).
 
 ### Releases
+
 The package version and assembly versions come from the latest versioned entry in [CHANGELOG.md](CHANGELOG.md),
 using `Ionide.KeepAChangelog.Tasks`, as in Fesh.Rhino. To publish a release:
 
@@ -258,4 +383,5 @@ The tag starts two release workflows, each needs a one-time setup:
 [Yak packages for Rhino](Caddis.Rhino/README.md#yak-releases) and [the Revit and AutoCAD installers](Caddis.Revit/README.md#releases).
 
 ## License
+
 [MIT](LICENSE)

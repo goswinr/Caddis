@@ -81,7 +81,7 @@ It follows Rhino's light, dark or custom theme as soon as it changes. All its bu
 | --- | --- |
 | ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings unfolded and the output of the third run](Docs/panel-light.png) |
 
-Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after the [exemplary run](#exemplary-run) below.
+Both screenshots were taken in Rhino 9.0 with Caddis 0.3.6, during and after the [exemplary run](#exemplary-run) below.
 
 <details>
 <summary>What the panel shows</summary>
@@ -90,7 +90,7 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
 - `F# session` shows its state and thread mode, or the run in progress. `Cancel` stops a run on the background thread while it is in progress, `Reset` starts a new F# session.
 - While the server runs, `Agents` shows whether Claude Code, Codex and Claude Desktop connect to this Rhino:
   a green dot if they do, amber if they connect to another app, gray if they aren't set up, with `Set up` or `Activate`,
-  see [Connect an AI agent](../README.md#connect-an-ai-agent).
+  see [Connect an AI agent](../README.md#4-connect-an-ai-agent).
 - The `Settings` row shows the version of Caddis and unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
   and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service, and whether this is the latest Caddis.
 - When a newer Caddis is on Yak, a blue notice says so: update it in Rhino's `PackageManager`.
