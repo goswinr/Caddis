@@ -188,7 +188,7 @@ Each build pairs an FSharp.Compiler.Service with the exact FSharp.Core it pins, 
 |---|---|---|---|---|---|
 | Rhino 8.19 and later, Windows and Mac | .NET 8 | Caddis.Rhino `net8.0` | 43.8.403 | 8.0.403 | 12.1.3 |
 | Rhino 8 on Windows started with `/netfx` | .NET Framework 4.8 | Caddis.Rhino `net48` | 43.12.401 | 10.1.401 | 11.3.22 |
-| Rhino 9 Beta | .NET 10 | Caddis.Rhino `net10.0` | 43.12.401 | 10.1.401 | 12.1.3 |
+| Rhino 9 | .NET 10 | Caddis.Rhino `net10.0` | 43.12.401 | 10.1.401 | 12.1.3 |
 | Revit 2024 | .NET Framework 4.8 | Caddis.Revit `net48` | 43.12.401 | 10.1.401 | 11.3.22 |
 | Revit 2025 and 2026 up to their .4 updates | .NET 8 | Caddis.Revit `net8.0-windows`, via the loader | 43.8.403 | 8.0.403 | 12.1.3 |
 | Revit 2025.5, 2026.5 and later, Revit 2027 | .NET 10 | Caddis.Revit `net10.0-windows`, via the loader | 43.12.401 | 10.1.401 | 12.1.3 |

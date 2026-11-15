@@ -4,32 +4,40 @@ Caddis for Rhino hosts a persistent F# Interactive session inside Rhino, control
 AI agents like Claude Code, and your own scripts, run F# code and Rhino commands in the Rhino you are working in.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
-> Tested in Rhino 8.35 and 9.0-beta on Windows, not yet on Mac.
+> Tested in Rhino 8.35 and 9.0 on Windows, not yet on Mac.
 
 ## Installation
 
-Install via Rhino's `PackageManager` command and search for `Caddis`, or download it from [food4rhino](https://www.food4rhino.com/en/app/caddis).
-The package supports Rhino 8.19 or later on Windows and Mac, running on .NET 8, and Rhino 9 Beta, which gets its own build for .NET 10.
-On Windows it also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`).
+In Rhino, run the command `PackageManager`, search for `Caddis` on the `Online` tab and click `Install`.
+With `Automatically update packages when Rhino starts` checked, Rhino updates Caddis when it starts.
+Caddis is also on [food4rhino](https://www.food4rhino.com/en/app/caddis).
+
+![Rhino's Package Manager: the Online tab, the search for caddis, the Install button and the option to update packages when Rhino starts](Docs/install.png)
+
+It runs in Rhino 8.19 or later on Windows and Mac, and in Rhino 9.
+
+Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`.
+Caddis runs without it, the panel shows when it is missing.
+
+<details>
+<summary>Builds for each .NET, and Fesh.Rhino</summary>
+
+Rhino 8 runs Caddis on .NET 8, Rhino 9 gets its own build for .NET 10.
+On Windows, Caddis also runs in Rhino 8 on .NET Framework (see the Rhino command `SetDotNetRuntime`, or start Rhino with `/netfx`).
 There the panel is drawn with Avalonia 11, since Avalonia 12 needs .NET 8.
 
-Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`:
-F# Interactive downloads them with the SDK. In Rhino 8 the .NET SDK 8 is enough. Caddis runs without it, the panel shows when it is missing.
+F# Interactive downloads NuGet packages with the .NET SDK. In Rhino 8 the .NET SDK 8 is enough.
 
 Caddis can be loaded together with [Fesh.Rhino](https://github.com/goswinr/Fesh.Rhino),
 both use the same versions of FSharp.Core and FSharp.Compiler.Service.
 Caddis doesn't start a run while Fesh.Rhino runs a script, and Fesh.Rhino 0.36.1 or later doesn't start a script while Caddis runs one.
 
-### Manual installation
+</details>
 
-To run a local build while Caddis is installed from Yak, see [Dev/README.md](../Dev/README.md).
-
-Without Caddis installed, build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
-then drag `Caddis.Rhino/bin/Debug/net8.0/Caddis.Rhino.rhp` into Rhino 8.
-Rhino on .NET Framework loads the build in `bin/Debug/net48` next to it, Rhino 9 Beta the one in `bin/Debug/net10.0`.
-The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like Fesh.Rhino for Rhino 9, and has the panel.
+To run a local build of Caddis, see [Development](#development).
 
 ## The Caddis command
+
 Run the command `Caddis`. Its options:
 - `Start` / `Stop` the HTTP server, by default on `http://127.0.0.1:7810`, or the next free port. On start it prints the commands to add Caddis to Claude Code and Codex.
 - `Panel` opens the [Caddis panel](#the-caddis-panel).
@@ -37,13 +45,21 @@ Run the command `Caddis`. Its options:
 - `Cancel` the current run, `Reset` the F# session.
 - `AutoStart` starts the server when Rhino starts.
 - `EchoOutput` also writes the output of runs to the Rhino command line.
-- `CancelWaitingCommands` (off by default, also a checkbox in the panel) cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`,
-  when they wait 3 s for input that the macro doesn't give. The script goes on, the result has a note with the prompt.
-  Without it such a command waits until someone gives the input in Rhino. In background mode only commands started via `Caddis.Script.OnUi` are watched,
-  so commands you type in Rhino while a script runs are never cancelled.
+- `CancelWaitingCommands` (off by default) cancels Rhino commands that an F# script starts, e.g. via `RhinoApp.RunScript`,
+  when they wait 3 s for input that the macro doesn't give.
 
 It is scriptable, e.g. `-Caddis Start`.
+
+<details>
+<summary>More on the options and the settings file</summary>
+
+`CancelWaitingCommands` is also a checkbox in the panel. When it cancels a command, the script goes on, and the result has a note with the prompt.
+Without it such a command waits until someone gives the input in Rhino. In background mode only commands started via `Caddis.Script.OnUi` are watched,
+so commands you type in Rhino while a script runs are never cancelled.
+
 The settings are saved in `%AppData%\Caddis\settings-rhino.json` on Windows and `~/.config/Caddis/settings-rhino.json` on Mac.
+
+</details>
 
 ## While a run is in progress
 
@@ -59,17 +75,16 @@ Captures with `caddis_capture_viewport`, `RhinoView.CaptureToBitmap` or `ViewCap
 ## The Caddis panel
 
 Open it with the command `Caddis` and the option `Panel`, then dock it like any Rhino panel.
-When Rhino closes, Caddis saves whether the panel is shown and where, in `panel-rhino8.json` or `panel-rhino9.json` in `%AppData%\Caddis`.
-At the next start it moves the panel back if Rhino shows it elsewhere, e.g. after an update of Caddis:
-docked, to the tabs of a panel it was docked with; floating, to its place on the screen, on Windows.
-Its content is the Avalonia panel shared with Revit and AutoCAD in `Caddis.UI`, hosted in Rhino's Eto docking container.
-Rhino supplies its theme colors and the additional command-line settings.
-
-Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after the [exemplary run](#exemplary-run) below.
+It follows Rhino's light, dark or custom theme as soon as it changes. All its buttons and options have tooltips.
 
 | Dark theme, during a run | Light theme, with the settings unfolded |
 | --- | --- |
 | ![The Caddis panel in Rhino's dark theme, with a run in progress and the code of the first run](Docs/panel-dark.png) | ![The Caddis panel in Rhino's light theme, with the settings unfolded and the output of the third run](Docs/panel-light.png) |
+
+Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after the [exemplary run](#exemplary-run) below.
+
+<details>
+<summary>What the panel shows</summary>
 
 - `Server` shows where the server listens. A click on the URL copies it, a right-click also offers the URL that agents connect to. `Start` / `Stop` the server.
 - `F# session` shows its state and thread mode, or the run in progress. `Cancel` stops a run on the background thread while it is in progress, `Reset` starts a new F# session.
@@ -78,7 +93,6 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
   see [Connect an AI agent](../README.md#connect-an-ai-agent).
 - The `Settings` row shows the version of Caddis and unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
   and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service, and whether this is the latest Caddis.
-  All buttons and options have tooltips.
 - When a newer Caddis is on Yak, a blue notice says so: update it in Rhino's `PackageManager`.
   Once it is installed, the notice says that Rhino loads it when it restarts. Caddis checks Yak when Rhino starts.
 - Internal errors of Caddis show in an amber notice, with `Show` and `Clear`. Red is only for runs that failed.
@@ -94,35 +108,57 @@ Both screenshots were taken in Rhino 8.35 with Caddis 0.3.0, during and after th
   `Export` saves the code of the run to an `.fsx` file, `Export all` above the runs saves all successful F# runs to one,
   oldest first, each after a comment with its id and time. Both save the code as it is shown, formatted or not.
 
-The panel follows Rhino's light, dark or custom theme as soon as it changes.
+</details>
+
+<details>
+<summary>Where the panel goes when Rhino starts, and how it is hosted</summary>
+
+When Rhino closes, Caddis saves whether the panel is shown and where, in `panel-rhino8.json` or `panel-rhino9.json` in `%AppData%\Caddis`.
+At the next start it moves the panel back if Rhino shows it elsewhere, e.g. after an update of Caddis:
+docked, to the tabs of a panel it was docked with; floating, to its place on the screen, on Windows.
+
+Its content is the Avalonia panel shared with Revit and AutoCAD in `Caddis.UI`, hosted in Rhino's Eto docking container.
+Rhino supplies its theme colors and the additional command-line settings.
+
+</details>
 
 ## Rhino commands
+
 `caddis_command` (REST: `POST /command`) runs Rhino command macros, as typed at the command line or in a button macro, e.g. `["-_Line 0,0,0 10,0,0", "_Zoom _All _Extents"]`,
 one after the other until one does not succeed. It always runs on the UI thread.
 It returns the result of each command, the ids of the objects they created, changed and deleted, the selection if it changed,
 and the text they printed to the command line, e.g. of `_What`, `_Length` or `_Area`.
-`select` selects objects by id before the first command. A command that waits for input that its macro doesn't give is cancelled
-after `inputTimeoutMs` (default 3 s), the result shows its prompt; 0 waits for the person in Rhino, e.g. for `_Pause`.
-A leading `!` is left out. Each command that changes the document is one undo step, `caddis_undo` undoes all of a call.
 A command that opens a dialog blocks Rhino until someone closes it, so use the scripted `-` version of a command.
-
-The results of F# runs also contain what was printed to the Rhino command line, e.g. by `RhinoApp.WriteLine` or by commands run via `RhinoApp.RunScript`.
 
 Every run is wrapped in one Rhino undo record.
 `caddis_capture_viewport` captures a viewport as PNG, `caddis_export` exports to any file format Rhino can write, except PDF.
 
+<details>
+<summary>More on commands: selection, input, undo and output</summary>
+
+`select` selects objects by id before the first command. A command that waits for input that its macro doesn't give is cancelled
+after `inputTimeoutMs` (default 3 s), the result shows its prompt; 0 waits for the person in Rhino, e.g. for `_Pause`.
+A leading `!` is left out. Each command that changes the document is one undo step, `caddis_undo` undoes all of a call.
+
+The results of F# runs also contain what was printed to the Rhino command line, e.g. by `RhinoApp.WriteLine` or by commands run via `RhinoApp.RunScript`.
+
+</details>
+
 ## In scripts
+
 RhinoCommon and System.Drawing.Common are referenced in every session.
 Other assemblies of Rhino can be referenced by file name, e.g. `#r "Eto.dll"` or `#r "Rhino.UI.dll"`,
 and NuGet packages via `#r "nuget: Name"`, which needs the .NET SDK 8 or newer, 10 in Rhino 9 (see [NuGet packages](../README.md#nuget-packages)).
 
-In background mode, calls to RhinoCommon that touch the document or the UI go in `Caddis.Script.OnUi(fun () -> ...)`, as in the example below.
+In background mode, calls to RhinoCommon that touch the document or the UI go in `Caddis.Script.OnUi(fun () -> ...)`, as in the [exemplary run](#exemplary-run).
 `RHINO` is defined for `#if`, and `NETFRAMEWORK` in Rhino on .NET Framework.
 
 ### Rhino.Scripting
+
 [Rhino.Scripting](https://github.com/goswinr/Rhino.Scripting) has the 900+ functions of rhinoscriptsyntax for F#, named and used as in Python,
 and [Rhino.Scripting.FSharp](https://github.com/goswinr/Rhino.Scripting.FSharp) adds curried versions for pipelines and extensions of RhinoCommon types.
-While NuGet packages can be used, the MCP instructions suggest them to the agent for common tasks, e.g. adding objects, layers, names, colors and user text:
+When the .NET SDK is installed, so that NuGet packages can be used, the MCP instructions suggest them to the agent for common tasks,
+e.g. adding objects, layers, names, colors and user text:
 
 ```fsharp
 #r "nuget: Rhino.Scripting.FSharp"
@@ -134,16 +170,22 @@ rs.AddPoint(1., 2., 3.) |>! rs.setLayer "Points"
 ```
 
 Once the package is loaded, `caddis_describe` shows its functions with their docs, e.g. `RhinoScriptSyntax.ObjectLayer`.
+
+<details>
+<summary>How Caddis works with Rhino.Scripting and Fesh.Rhino</summary>
+
 Rhino.Scripting looks for Rhino's UI thread in Fesh.Rhino. Caddis gives it the UI thread too, so that its functions that use the UI work in background mode without Fesh.Rhino.
 It also clears Rhino.Scripting's Esc state before each run, as Fesh.Rhino does: an Esc pressed in Rhino before, e.g. to deselect objects, doesn't make `rs.EscapeTest()` raise.
 With Fesh.Rhino loaded, `rs.Get*` functions hide the Fesh window, also in Caddis runs. With Fesh.Rhino 0.36.0 or older, `rs.Print` in Caddis runs also writes to Fesh's log.
+
+</details>
 
 ## Exemplary run
 
 An agent sent these, the panel lists them newest first:
 
 - `r1` adds three twisted towers of 80 floor slabs, via `caddis_eval`:
-  <details open><summary>F# code</summary>
+  <details><summary>F# code</summary>
 
   ```fsharp
   open System
@@ -194,11 +236,22 @@ The agent ran F# code in Rhino and captured the Top view to check its result. Af
 
 ![Claude Desktop with the prompt, the agent's runs with its two captures of the Top view, and Caddis for Rhino among the connectors](Docs/Screen-Claude.png)
 
-In Rhino 9 Beta: the subdivided triangle in the Top view, and the Caddis panel with the code of the first run, which you can run again or export.
+In Rhino 9: the subdivided triangle in the Top view, and the Caddis panel with the code of the first run, which you can run again or export.
 
 ![Rhino with the subdivided triangle in the Top view, and the Caddis panel showing the F# code of run r1](Docs/Screen-Rhino.png)
 
-## Yak releases
+## Development
+
+### Local builds
+
+To run a local build while Caddis is installed from Yak, see [Dev/README.md](../Dev/README.md).
+
+Without Caddis installed, build it with `dotnet build Caddis.Rhino/Caddis.Rhino.fsproj`,
+then drag `Caddis.Rhino/bin/Debug/net8.0/Caddis.Rhino.rhp` into Rhino 8.
+Rhino on .NET Framework loads the build in `bin/Debug/net48` next to it, Rhino 9 the one in `bin/Debug/net10.0`.
+The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.401, like Fesh.Rhino for Rhino 9.
+
+### Yak releases
 
 Build and release CI use the same [packaging action](../.github/actions/package-rhino/action.yml).
 It publishes the plugin and its dependencies into the repository's `bin/publish/rhino/rh8/net8.0`, `bin/publish/rhino/rh8/net48` and `bin/publish/rhino/rh9/net10.0`,

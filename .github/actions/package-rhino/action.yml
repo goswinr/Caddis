@@ -92,7 +92,7 @@ runs:
 
         # yak infers the distribution tag from the RhinoCommon the plugin references.
         # rh8_19: RhinoCommon 8.19, also for net48, it is built against RhinoCommon 8, not Rhino 7.
-        # rh9_0: RhinoCommon 9.0 Beta.
+        # rh9_0: RhinoCommon 9.0.
         $tags = [ordered]@{ rh8 = 'rh8_19'; rh9 = 'rh9_0' }
         foreach ($rh in $tags.Keys) {
           Push-Location $rh

@@ -29,12 +29,12 @@ AI agents like Claude or Codex generate the F# code and send it for evaluation a
 Plus, you get the F# code it ran too, so you could make a permanent plugin from it.
 This makes it ideal for AI-driven automation and rapid prototyping within Rhino, Revit and AutoCAD.
 
-> Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0-beta and AutoCAD 2025 on Windows, not yet on Mac.
+> Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0 and AutoCAD 2025 on Windows, not yet on Mac.
 
 
 | App | Runs in | Install | Read more |
 |---|---|---|---|
-| Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 Beta | In Rhino's `PackageManager`, search for `Caddis` or use [food4rhino](https://www.food4rhino.com/en/app/caddis) | [Caddis for Rhino](Caddis.Rhino/README.md) |
+| Rhino | Rhino 8.19 or later on Windows and Mac, Rhino 9 | In Rhino's `PackageManager`, search for `Caddis` or use [food4rhino](https://www.food4rhino.com/en/app/caddis) | [Caddis for Rhino](Caddis.Rhino/README.md) |
 | Revit | Revit 2024 to 2027 on Windows | Run `Caddis.Revit-win-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for Revit](Caddis.Revit/README.md) |
 | AutoCAD | AutoCAD 2025 and later on Windows | Run `Caddis.AutoCAD-autocad-Setup.exe` from the [latest release](https://github.com/goswinr/Caddis/releases/latest) | [Caddis for AutoCAD](Caddis.AutoCAD/README.md) |
 
