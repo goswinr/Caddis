@@ -4,7 +4,7 @@ Caddis for Rhino hosts a persistent F# Interactive session inside Rhino, control
 AI agents like Claude Code, and your own scripts, run F# code and Rhino commands in the Rhino you are working in.
 See the [main README](../README.md) for what Caddis does, connecting an agent, the MCP tools and the REST endpoints.
 
-> Tested in Rhino 8.35 and 9.0 on Windows, not yet on Mac.
+> Tested in Rhino 8.35 and 9.0 on Windows, I am looking for someone to test it on Mac.
 
 ## Installation
 
