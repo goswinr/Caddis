@@ -107,7 +107,8 @@ If the port is taken, the next free one is used, and the panel shows the agents 
 The extension that `Set up` opens is a `.mcpb` file with the port and the tools of the running app.
 Each [release](https://github.com/goswinr/Caddis/releases) also has `caddis-rhino.mcpb`, `caddis-revit.mcpb` and `caddis-autocad.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
 
-Its setting `Port of Caddis in Rhino`, `Port of Caddis in Revit` or `Port of Caddis in AutoCAD` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
+In Claude Desktop, the extension's setting `Port of Caddis in Rhino`, `Port of Caddis in Revit` or `Port of Caddis in AutoCAD` must match the port of the Caddis panel.
+Find it under Settings > Customize > Your connectors > `Caddis for Rhino`, `Caddis for Revit` or `Caddis for AutoCAD`, and confirm a changed port with `Save`.
 
 ![The settings of the extension Caddis for Rhino in Claude Desktop: the switch Enabled is on, and the port 7810 under Port of Caddis in Rhino is confirmed with Save](Docs/img/ClaudeDesktopSetupScreen.png)
 
@@ -115,7 +116,7 @@ While the app isn't running, the extension still lists its tools, and their resu
 
 On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
 `More apps` > `Look for another app on this PC` and `%LOCALAPPDATA%\AnthropicClaude\claude.exe`, with `Always`.
-Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Extensions.
+Claude Desktop from the Microsoft Store or an MSIX file isn't in that folder: drag the file into it, or choose it under Settings > Customize.
 
 Claude Desktop can't use the URL of Caddis directly: it runs local MCP servers as programs only, and reaches the URLs of connectors
 from Anthropic's servers, which can't reach your computer. That is why Caddis comes as a Claude Desktop extension,
