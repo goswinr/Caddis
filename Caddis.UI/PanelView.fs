@@ -105,6 +105,15 @@ type PanelView(host: PanelHost) as this =
     /// Tooltips don't wrap, so they are given line by line.
     static let tip (lines: string list) = String.concat "\n" lines
 
+    /// Writes to the app's log while the server runs.
+    let log (msg: string) = host.Server () |> Option.iter (fun s -> s.Service.Host.Log msg)
+
+    let checkDispatcher =
+        AvaloniaSetup.createDispatcherCheck log (fun msg ->
+            match host.Server () with
+            | Some server -> server.Service.Host.LogError msg
+            | None -> host.Errors.Add msg)
+
     let startTip =
         tip [
             $"Start the server, so that AI agents and scripts can run F# code in this {host.Name}."
@@ -329,8 +338,6 @@ type PanelView(host: PanelHost) as this =
             else
                 return r.Code
         }
-
-    let log (msg: string) = host.Server () |> Option.iter (fun s -> s.Service.Host.Log msg)
 
     /// Asks the host where to save, then saves the text. It is made after the dialog, so that Fantomas has time to format.
     let export (title: string) (fileName: string) (text: unit -> Task<string>) (saved: string -> string) =
@@ -834,7 +841,9 @@ type PanelView(host: PanelHost) as this =
                     $"Caddis: saved the code of {ScriptExport.count all.Length} to '{path}'."))
 
     /// Updates the panel from the server's state. Called every second while the panel is shown.
-    member _.Refresh() = refresh ()
+    member _.Refresh() =
+        checkDispatcher ()
+        refresh ()
 
     override _.OnAttachedToVisualTree(e) =
         base.OnAttachedToVisualTree e

@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- On Windows, the Caddis panel recovers within a few seconds if it misses a wake-up from its UI dispatcher and stops repainting while the app still responds, as seen in Revit after the upgrade of an old model was cancelled. While the server runs, Caddis notes this in the app's log.
+
 ## [0.3.6] - 2026-11-14
 
 ### Added

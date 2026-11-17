@@ -135,6 +135,7 @@ Name Caddis in your request, e.g.:
 
 The panel lists each run of the agent with its code and output. `Run again` runs the code again, `Export` saves it to an `.fsx` file.
 On the UI thread, the default, the app is busy until a run ends.
+On Windows, the panel also recovers automatically if it misses a wake-up and stays frozen after the app responds again.
 
 ## How it works
 

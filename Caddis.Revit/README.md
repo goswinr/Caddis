@@ -96,6 +96,7 @@ state with its URL, which a click copies, whether Claude Code, Codex and Claude 
 It docks next to the Project Browser, can be moved like any Revit pane,
 and Revit remembers where it is and whether it is shown.
 Its buttons show their messages in the pane instead of in dialogs.
+If the panel stops repainting while Revit still responds, e.g. after the upgrade of an old model was cancelled, its refresh timer wakes it again within a few seconds. While the server runs, this is noted in `revit.log`.
 
 Rhino, Revit and AutoCAD use the same Avalonia view, styles and code viewer from `Caddis.UI`.
 Revit supplies its actions and light or dark theme colors, and embeds the view in
