@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The README guides people new to coding in five steps from installing Caddis to the first request, with screenshots of the panel's `Set up` buttons and of the extension's port in Claude Desktop. A new Feedback section asks for screenshots and logs in issues and says where each app writes its log.
+
 ### Fixed
 - On Windows, the Caddis panel recovers within a few seconds if it misses a wake-up from its UI dispatcher and stops repainting while the app still responds, as seen in Revit after the upgrade of an old model was cancelled. While the server runs, Caddis notes this in the app's log.
 

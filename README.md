@@ -22,12 +22,6 @@ This makes Caddis useful for automating your work and for trying out ideas quick
 Technically, Caddis is an [MCP](https://modelcontextprotocol.io) server that hosts a persistent F# Interactive session inside the app,
 where scripts use RhinoCommon, the Revit API or the AutoCAD .NET API.
 
-> Early development. Tested in Revit 2024 and 2026.5, Rhino 8.35 and 9.0 and AutoCAD 2025 on Windows, not yet on Mac.
-
-![Claude Desktop with the prompt, the agent's runs in Rhino with its two captures of the Top view, and Caddis for Rhino among the connectors](Caddis.Rhino/Docs/Screen-Claude.png)
-
-An agent in Claude Desktop draws in Rhino, and checks its result with captures of the Top view. See the [example in Rhino](Caddis.Rhino/README.md#example-in-claude-desktop).
-
 ## Getting started
 
 ### 1. Install Caddis in your app
@@ -64,7 +58,7 @@ To start the server whenever the app starts, check `Start with Rhino`, `Start wi
 
 While the server runs, the panel shows whether Claude Code, Codex and Claude Desktop connect to Caddis in this app. Click `Set up` beside your agent:
 
-![The top of the Caddis panel in Rhino: the server listens, Claude Code and Claude Desktop connect to it, Codex is not set up yet and has a Set up button](Caddis.Rhino/Docs/connect.png)
+![The top of the Caddis panel in Revit: the server listens on port 7820, and Claude Code, Codex and Claude Desktop are not set up yet, each with a Set up button beside it](Docs/img/AgentSetupScreen.png)
 
 The color of the dot shows the state of the agent, its tooltip names it:
 - **active** (green): the agent connects to this app.
@@ -114,6 +108,9 @@ The extension that `Set up` opens is a `.mcpb` file with the port and the tools 
 Each [release](https://github.com/goswinr/Caddis/releases) also has `caddis-rhino.mcpb`, `caddis-revit.mcpb` and `caddis-autocad.mcpb` for the default ports: drag one into the window of Claude Desktop, or open it.
 
 Its setting `Port of Caddis in Rhino`, `Port of Caddis in Revit` or `Port of Caddis in AutoCAD` in Claude Desktop under Settings > Extensions must match the port of the Caddis panel.
+
+![The settings of the extension Caddis for Rhino in Claude Desktop: the switch Enabled is on, and the port 7810 under Port of Caddis in Rhino is confirmed with Save](Docs/img/ClaudeDesktopSetupScreen.png)
+
 While the app isn't running, the extension still lists its tools, and their results say to start the app.
 
 On Windows, Claude Desktop isn't the app for `.mcpb` files after it is installed. If Windows asks which app to open it with, choose
@@ -336,6 +333,20 @@ Caddis keeps its settings and logs in `%AppData%\Caddis` on Windows and in `~/.c
 | `autocad-update.json` | The result of the latest update check in AutoCAD, which the panel and `Info` show |
 
 </details>
+
+## Feedback
+
+If something doesn't work in your Rhino, Revit or AutoCAD, or you miss a feature, please [open an issue](https://github.com/goswinr/Caddis/issues).
+Name the app and its version, and the version of Caddis, which the panel shows beside `Settings`. Add what shows the problem:
+- Screenshots of the panel, of the app and of the agent, e.g. of an error message.
+- The code and output of the run that failed, from the panel. `Export` saves its code to an `.fsx` file.
+- The log of Caddis:
+  - Rhino writes Caddis' messages to its command line. Copy them from the command history: run the command `CommandHistory`, or press F2 on Windows.
+  - Revit writes them to `%AppData%\Caddis\revit.log`, together with the messages of the installer and of updates.
+  - AutoCAD writes them to its command line and to `%AppData%\Caddis\autocad.log`.
+
+To open that folder, type `%AppData%\Caddis` into the address bar of the File Explorer.
+Issues are public, so check that your screenshots and logs show nothing you want to keep private.
 
 ## Development
 
