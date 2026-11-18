@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The Yak packages for Rhino 8 and Rhino 9 are code-signed with Azure Trusted Signing, like the Revit and AutoCAD installers: Caddis.Rhino.rhp and every DLL in them that its publisher did not sign, so that Windows, antivirus programs and IT policies can tell who published them and that they were not changed.
+
 ## [0.3.7] - 2026-11-17
 
 ### Changed

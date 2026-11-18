@@ -114,7 +114,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 - Revit: a `Caddis` ribbon tab with vector icons drawn for the theme and screen scale, native checkboxes, and an `Info` dialog that turns red on unseen errors.
 
 **Deployment**
-- Rhino: two Yak packages per version, `rh8_19` (net8.0 and net48 builds) and `rh9_0` (net10.0).
+- Rhino: two Yak packages per version, `rh8_19` (net8.0 and net48 builds) and `rh9_0` (net10.0), with the plugin and its DLLs signed.
 - Revit: one signed Velopack installer for Revit 2024 to 2027 that registers every installed Revit, checks for updates when Revit starts and installs them after the last Revit has closed. A loader picks the build for the .NET that Revit runs on.
 
 ---
@@ -979,11 +979,14 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, the four packaging actions |
-| [release-rhino.yml](.github/workflows/release-rhino.yml) | tag `x.y.z` | build, test, package, check tag against CHANGELOG.md, then push `rh8` and `rh9` to Yak in separate jobs with `YAK_TOKEN` |
+| [build.yml](.github/workflows/build.yml) | push and pull request to `main` | on windows-latest with .NET 8 and 10: build, test, the five packaging actions, with unsigned Yak packages |
+| [release-rhino.yml](.github/workflows/release-rhino.yml) | tag `x.y.z` | in environment `releaseRhino`: build, test, publish for Rhino, check tag against CHANGELOG.md, Azure login with OIDC, sign with Azure Trusted Signing, build the Yak packages, then push `rh8` and `rh9` to Yak in separate jobs with `YAK_TOKEN` |
 | [release-revit.yml](.github/workflows/release-revit.yml) | tag `x.y.z` | in environment `releaseRevit`: build, test, package for Revit and AutoCAD, check tag, Azure login with OIDC, `vpk pack` signed with Azure Trusted Signing and `vpk upload` to the GitHub release, for Revit and then for AutoCAD, then attach the three Claude Desktop extensions to it |
 
-- [package-rhino](.github/actions/package-rhino/action.yml) publishes the three Rhino builds, adds manifest, logo and license, downloads `yak.exe` 0.19.1 with a SHA256 check, and builds `caddis-<v>-rh8_19-any.yak` (net8.0 and net48) and `caddis-<v>-rh9_0-any.yak` (net10.0).
+- [package-rhino](.github/actions/package-rhino/action.yml) publishes the three Rhino builds into `bin/publish/rhino/rh8` (net8.0 and net48) and `bin/publish/rhino/rh9` (net10.0), and adds manifest, logo and license to both.
+- Between the two Rhino actions, release-rhino.yml signs every `.rhp`, `.dll` and `.exe` in them without a valid signature yet, as `vpk pack` does for Revit and AutoCAD: Caddis and the unsigned dependencies, e.g. Avalonia, AvaloniaEdit and Fantomas. Microsoft's files, e.g. FSharp.Core, keep their signature.
+  It uses `signtool.exe` of the runner's Windows SDK with the dlib of the NuGet package `Microsoft.ArtifactSigning.Client` 1.0.151, downloaded with a SHA256 check, and the account in [signing-metadata.json](.github/signing-metadata.json) with the correlation id `HGR-GH-Caddis.Rhino-<v>`. The dlib needs the .NET 10 runtime and signs with the Azure CLI session of `azure/login`.
+- [build-yak](.github/actions/build-yak/action.yml) downloads `yak.exe` 0.19.1 with a SHA256 check and builds `caddis-<v>-rh8_19-any.yak` and `caddis-<v>-rh9_0-any.yak` from the folders of package-rhino.
 - [package-revit](.github/actions/package-revit/action.yml) publishes the three Revit builds, the loader and the bootstrapper into `bin/publish/revit`, the folder Velopack packs.
 - [package-autocad](.github/actions/package-autocad/action.yml) publishes the two AutoCAD builds, the loader and the bootstrapper into `bin/publish/autocad`.
   Velopack packs it in the channel `autocad`, into the same GitHub release as Revit's with `vpk upload --merge`: in the default channel the files that list a channel's releases, e.g. `releases.win.json`, would replace Revit's.

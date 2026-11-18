@@ -255,11 +255,21 @@ The net10.0 build uses FSharp.Compiler.Service 43.12.401 and FSharp.Core 10.1.40
 
 Build and release CI use the same [packaging action](../.github/actions/package-rhino/action.yml).
 It publishes the plugin and its dependencies into the repository's `bin/publish/rhino/rh8/net8.0`, `bin/publish/rhino/rh8/net48` and `bin/publish/rhino/rh9/net10.0`,
-adds the Yak manifest, logo and license to `rh8` and `rh9`, then builds two distributions of the same version:
+and adds the Yak manifest, logo and license to `rh8` and `rh9`.
+Then [build-yak](../.github/actions/build-yak/action.yml) builds two distributions of the same version from them:
 `bin/publish/rhino/caddis-<version>-rh8_19-any.yak` for Rhino 8 and `bin/publish/rhino/caddis-<version>-rh9_0-any.yak` for Rhino 9.
 The package manager gives each Rhino version only its own distribution.
 
 The [Rhino release workflow](../.github/workflows/release-rhino.yml) runs for a version tag, see [Releases](../README.md#releases).
-It builds, tests, packages, checks the tag against the changelog, and pushes both packages to Yak.
-Build CI also creates them on every push and pull request to `main`.
+It builds, tests, publishes, checks the tag against the changelog, signs, builds both packages and pushes them to Yak.
+Build CI also creates them on every push and pull request to `main`, unsigned.
 It needs a Yak CI token: generate one with `yak.exe login --ci` and save it as the repository Actions secret `YAK_TOKEN`.
+
+Before it builds the packages, the workflow signs `Caddis.Rhino.rhp` and every other `.rhp`, `.dll` and `.exe` in them that has no valid signature yet,
+with Azure Trusted Signing and the account in [signing-metadata.json](../.github/signing-metadata.json), as the [Revit installer](../Caddis.Revit/README.md#releases) does.
+This includes dependencies that their publishers don't sign, e.g. Avalonia. FSharp.Core, FSharp.Compiler.Service and the other files of Microsoft keep Microsoft's signature. Signing needs:
+
+1. A GitHub environment `releaseRhino` in the repository settings.
+2. A federated credential for the subject `repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino` on the Azure app registration of the Revit release,
+   which has the role 'Artifact Signing Certificate Profile Signer', formerly 'Trusted Signing Certificate Profile Signer'.
+3. Its ids as the Actions secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` of the environment `releaseRhino`, or of the repository.

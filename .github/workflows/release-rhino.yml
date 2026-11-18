@@ -14,11 +14,23 @@ concurrency:
 
 jobs:
   build:
+    # Windows: signtool.exe signs with Azure Trusted Signing.
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    # Run in a GitHub Environment so that the `sub` claim of the OIDC token is the same for every tag:
+    # repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino, see release-revit.yml.
+    # Add required reviewers or branch limits to this environment in the repository settings to gate releases.
+    environment:
+      name: releaseRhino
+    permissions:
+      contents: read
+      # OIDC: azure/login exchanges a short-lived token from GitHub for an Azure access token, no client secret is stored.
+      # Azure trusts it only if its `sub` claim matches the federated credential of the app registration:
+      #   repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino
+      id-token: write
     outputs:
-      rh8-package-path: ${{ steps.package.outputs.rh8-package-path }}
-      rh9-package-path: ${{ steps.package.outputs.rh9-package-path }}
+      rh8-package-path: ${{ steps.yak.outputs.rh8-package-path }}
+      rh9-package-path: ${{ steps.yak.outputs.rh9-package-path }}
 
     steps:
       - name: Checkout repository
@@ -39,7 +51,7 @@ jobs:
       - name: Test
         run: dotnet test Caddis.slnx --configuration Release --no-build
 
-      - name: Publish and build Yak package
+      - name: Publish for every Rhino
         id: package
         uses: ./.github/actions/package-rhino
 
@@ -53,6 +65,97 @@ jobs:
             throw "Version mismatch: git tag ($env:TAG_NAME) and CHANGELOG.md ($env:CHANGELOG_VERSION) must match."
           }
 
+      - name: Azure login
+        # This step opens a session that can sign with the Trusted Signing certificate, so it is pinned to a commit.
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          # Configure a federated credential on the Azure app registration with:
+          #   Issuer:   https://token.actions.githubusercontent.com
+          #   Subject:  repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino
+          #   Audience: api://AzureADTokenExchange
+          # and grant the app the role "Artifact Signing Certificate Profile Signer", formerly "Trusted Signing Certificate Profile Signer".
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # The dlib signs with the credential of the Azure CLI session, it needs no Az PowerShell session.
+
+      - name: Sign with Azure Trusted Signing
+        # Signs every .rhp, .dll and .exe in both package folders that has no valid signature yet, as vpk pack does for the Revit and AutoCAD installers:
+        # Caddis itself and the dependencies that their publishers don't sign, e.g. Avalonia. FSharp.Core and FSharp.Compiler.Service keep Microsoft's signature.
+        # With signtool.exe and the dlib of Azure Trusted Signing, now named Azure Artifact Signing, the same pair that vpk uses.
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          PACK_DIR: ${{ steps.package.outputs.pack-dir }}
+          # Pinned with the SHA256 of its .nupkg on nuget.org, it runs in the signing session. Update both values together.
+          # It needs the .NET 10 runtime, which the SDK above brings.
+          DLIB_VERSION: '1.0.151'
+          DLIB_SHA256: '35375A4BC4E1102DA729FC3D8D9925F774C3BAAE6B8B7FF6398D948CA9AB0D8A'
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $nupkg = Join-Path $env:RUNNER_TEMP 'artifactsigning-client.zip'
+          Invoke-WebRequest `
+            -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$env:DLIB_VERSION/microsoft.artifactsigning.client.$env:DLIB_VERSION.nupkg" `
+            -OutFile $nupkg
+          $hash = (Get-FileHash -LiteralPath $nupkg -Algorithm SHA256).Hash
+          if ($hash -ne $env:DLIB_SHA256) {
+            throw "Downloaded Microsoft.ArtifactSigning.Client $env:DLIB_VERSION has an unexpected SHA256 hash: $hash"
+          }
+          $dlibDir = Join-Path $env:RUNNER_TEMP 'artifactsigning-client'
+          Expand-Archive -LiteralPath $nupkg -DestinationPath $dlibDir -Force
+          $dlib = Join-Path $dlibDir 'bin/x64/Azure.CodeSigning.Dlib.dll'
+
+          # The x64 signtool.exe of the newest Windows SDK on the runner, for the x64 dlib. The dlib needs 10.0.22621.755 or later.
+          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/signtool.exe" |
+            Where-Object { $_.Directory.Parent.Name -match '^\d+(\.\d+){3}$' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (-not $signtool) {
+            throw 'Found no signtool.exe of a Windows SDK on the runner.'
+          }
+          Write-Host "Signing with $($signtool.FullName)"
+
+          # The account of signing-metadata.json, which vpk uses for Revit and AutoCAD, with a correlation id for Rhino in Azure's logs.
+          $metadata = Get-Content -LiteralPath '.github/signing-metadata.json' -Raw | ConvertFrom-Json
+          $metadata.CorrelationId = "HGR-GH-Caddis.Rhino-$env:VERSION"
+          $metadataPath = Join-Path $env:RUNNER_TEMP 'signing-metadata-rhino.json'
+          $metadata | ConvertTo-Json | Set-Content -LiteralPath $metadataPath
+
+          function Get-Unsigned {
+            Get-ChildItem -LiteralPath $env:PACK_DIR -Recurse -File |
+              Where-Object { $_.Extension -in '.rhp', '.dll', '.exe' } |
+              Where-Object { (Get-AuthenticodeSignature -LiteralPath $_.FullName).Status -ne 'Valid' }
+          }
+
+          $files = @(Get-Unsigned)
+          if ($files.Count -eq 0) {
+            throw "Found no file to sign in $env:PACK_DIR."
+          }
+          Write-Host "Signing $($files.Count) files"
+          # 20 files per call keep the command line short.
+          for ($i = 0; $i -lt $files.Count; $i += 20) {
+            $batch = $files[$i..([Math]::Min($i + 19, $files.Count - 1))].FullName
+            & $signtool.FullName sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /d 'Caddis for Rhino' /dlib $dlib /dmdf $metadataPath $batch
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool sign failed with exit code $LASTEXITCODE"
+            }
+          }
+
+          $unsigned = @(Get-Unsigned)
+          if ($unsigned.Count -gt 0) {
+            $unsigned | ForEach-Object { Write-Host "$($_.FullName): $((Get-AuthenticodeSignature -LiteralPath $_.FullName).StatusMessage)" }
+            throw "$($unsigned.Count) files have no valid signature after signing."
+          }
+          Write-Host "Signed $($files.Count) files"
+
+      - name: Build Yak packages
+        id: yak
+        uses: ./.github/actions/build-yak
+        with:
+          version: ${{ steps.package.outputs.version }}
+          pack-dir: ${{ steps.package.outputs.pack-dir }}
+
       - name: Upload Yak packages
         # The push jobs below take yak.exe and both packages from here, so each can be re-run on its own.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -60,8 +163,8 @@ jobs:
           name: yak-packages
           path: |
             bin/yak.exe
-            ${{ steps.package.outputs.rh8-package-path }}
-            ${{ steps.package.outputs.rh9-package-path }}
+            ${{ steps.yak.outputs.rh8-package-path }}
+            ${{ steps.yak.outputs.rh9-package-path }}
           if-no-files-found: error
 
   push:
