@@ -1075,6 +1075,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 | AutoCAD 2024 and older, AutoCAD LT, AutoCAD for Mac | Not supported: AutoCAD 2024 runs on .NET Framework, LT and Mac have no .NET API. |
 | Setting up other agents in the panel, e.g. Cursor or Gemini CLI, or Claude Code for one project only | Only Claude Code and Codex, for all projects of the user, and Claude Desktop. Others are set up by hand with the URL. |
 | Caddis in Anthropic's directory | Not listed. The directory takes no `.mcpb` files anymore, and the local MCP servers of a listed plugin run in Claude Code and Cowork, not in the chat of Claude Desktop. |
+| A signed `.mcpb` of the Claude Desktop extension | Not signed: Claude Desktop can't check MCPB signatures yet, see [16](#16-known-limitations-and-risks). |
 | A NuGet package of Caddis.Core | Not published. |
 
 ### Testing and docs
@@ -1089,6 +1090,7 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
 
 - `AutoStartCommand` in [Addin.fs](Caddis.Revit/Addin.fs) is defined but no ribbon button uses it; the ribbon's checkbox replaced it.
 - Failures of the app, e.g. `F# Interactive is not ready` or `There is no active Rhino document.`, are 400 like argument errors, because every `failwith` maps to 400.
+- `firstSentence` in [DesktopExtension.fs](Caddis.Core/DesktopExtension.fs) cuts a tool's description at the first `". "`. So in the manifest of the extension that the panel writes, which Claude Desktop shows before installing, the descriptions of `caddis_describe` and `caddis_status` end at "e.g.".
 
 ---
 
@@ -1115,6 +1117,14 @@ What someone might expect from an MCP server or a scripting host, and what Caddi
   `caddis_cancel` of a command that is busy without a prompt, e.g. one that shows its progress, queues `^C^C` too. If the command ends without taking it, AutoCAD runs it at the next prompt, which can be one of a later macro.
 - **The agents' config files**: the panel reads `~/.claude.json` and `~/.codex/config.toml` as Claude Code and Codex write them today. If they change where or how they keep MCP servers, the panel shows the wrong state; `Set up` still works, it uses their programs. The same holds for the files of Claude Desktop, where the key `userConfig` of an extension's settings is taken from what Claude Desktop wrote for another extension, not from documentation.
 - **Claude Desktop**: the extension is validated and packed with the MCPB CLI and its relay is tested with Node, but installing it in Claude Desktop is tested by hand only.
+  Its manifest has `manifest_version` 0.3. Version 0.4, the latest on 2026-11-19, only adds the server type `uv` for Python.
+- **Signing the Claude Desktop extensions**: the `.mcpb` files are not signed, on purpose. This was checked on 2026-11-19 with `@anthropic-ai/mcpb` 2.1.2, the latest release, and the open issues and PRs of [modelcontextprotocol/mcpb](https://github.com/modelcontextprotocol/mcpb). Review it when a new MCPB CLI or Claude Desktop changes how signatures are checked; signing is worth it once a released check verifies signatures, accepts timestamps, and Claude Desktop uses it.
+  - Claude Desktop checks a signature with `verifyMcpbFile` of the MCPB repository. Its PKCS#7 check calls node-forge's `verify`, which is an unimplemented stub, so every signed bundle reads as `unsigned` (issues #260, #276, #277; #305 found this in the code of Claude Desktop 4.4212.0). A signature changes nothing that users see.
+  - `mcpb sign` 2.1.2 appends the signature after the zip's end record without declaring it as the zip comment, and Claude Desktop then refuses to install the file with "Invalid comment length" (#278). `main` fixes that, but patches the end record after signing, so the signed bytes differ from the delivered ones.
+  - Azure Trusted Signing never hands out its key, so `mcpb sign --key` can't use it. Microsoft signs its Azure MCP Server bundles in other steps, `eng/scripts/Stage-McpbForSigning.ps1` and `Apply-McpbSignatures.ps1` in [microsoft/mcp](https://github.com/microsoft/mcp), which PR #222 proposes for the CLI: set the comment length of the end record to 16384 before signing, make a detached PKCS#7 signature of the whole file, then append `MCPB_SIG_V1`, the 4-byte length, the signature padded with zeros to 16384 bytes, and `MCPB_SIG_END`.
+  - With Trusted Signing, the detached signature could come from `signtool sign /dlib Azure.CodeSigning.Dlib.dll /dmdf .github/signing-metadata.json /fd SHA256 /p7 <dir> /p7ce DetachedSignedData /p7co 1.2.840.113549.1.7.1`, not tested: whether the dlib supports `/p7` is unknown. Or from .NET's `SignedCms` with an `RSA` of the package `Azure.Developer.TrustedSigning.CryptoProvider`. In release-revit.yml the step would come after `mcpb pack`, in the Azure login session.
+  - Trusted Signing's certificates are valid for 3 days. The MCPB check, and the open PRs that implement it (#195, #255, #286), check the certificate chain at the current time and ignore RFC 3161 timestamps. So even once the check works, such a signature would read as untrusted 3 days after the release.
+  - Only the three extensions attached to a release could be signed. `Set up` in the panel writes its `.mcpb` on the user's computer, with that server's port and tools, and there is no key there.
 - **Not tested yet**: Mac, Windows on ARM64, AutoCAD 2026, the net8.0 build of Caddis.AutoCAD, zooming with the mouse in AutoCAD before caddis_undo, the port-change warning in Rhino, several Revit ribbon buttons, the Revit pane's Start/Stop and Cancel. Handing the port over is tested with two servers in one process, not yet with two Revits, nor with open sessions of Claude Code and Codex.
 
 ---
