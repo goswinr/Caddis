@@ -15,7 +15,7 @@ It should not require admin rights to run. The installer is created with [Velopa
 
 It installs Caddis in `%LocalAppData%\Caddis.Revit` and registers it with every installed Revit from 2024 on,
 with a `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\<year>`. For a Revit installed later, start `%LocalAppData%\Caddis.Revit\current\Caddis.Revit.Bootstrapper.exe` again.
-When Revit starts, Caddis checks for a newer release and offers to download it. It is installed when the last Revit has closed.
+When Revit starts, Caddis checks for a newer release and offers to download it. Installation wil start when all Revit windows are closed.
 
 Also install the [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) or newer, so that scripts can use NuGet packages via `#r "nuget: Name"`:
 F# Interactive downloads them with the SDK. It works for every Revit version. Caddis runs without it, the panel shows when it is missing.

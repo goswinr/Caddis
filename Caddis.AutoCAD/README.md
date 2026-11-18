@@ -15,7 +15,7 @@ and registers it with the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.b
 also the products based on AutoCAD, e.g. Civil 3D. An AutoCAD that is running loads it right away.
 If AutoCAD asks whether to load `Caddis.AutoCAD.Loader.dll`, choose 'Always Load'.
 
-When AutoCAD starts, Caddis checks for a newer release on GitHub and offers to download it. A downloaded release is installed when the last AutoCAD has closed.
+When AutoCAD starts, Caddis checks for a newer release on GitHub and offers to download it. A downloaded release will be installed when all AutoCAD windows are closed.
 To uninstall, use 'Installed apps' in Windows' settings, it removes the bundle too.
 
 Without the installer, build Caddis and load `Caddis.AutoCAD.dll` with AutoCAD's command `NETLOAD`,

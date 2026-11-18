@@ -53,7 +53,7 @@ module private PanelServices =
         Update = Updates.notice
         VersionTip = String.concat "\n" [
             "When AutoCAD starts, Caddis checks its releases on GitHub and asks whether to download a newer one."
-            "A downloaded release is installed when the last AutoCAD has closed."
+            "A downloaded release will be installed when all AutoCAD windows are closed."
         ]
         Palette = PanelTheme.palette
         SubscribeTheme = PanelTheme.subscribe

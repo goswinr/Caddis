@@ -115,7 +115,7 @@ An app plugs in by implementing one interface, `ICaddisHost`, and supplying its 
 
 **Deployment**
 - Rhino: two Yak packages per version, `rh8_19` (net8.0 and net48 builds) and `rh9_0` (net10.0), with the plugin and its DLLs signed.
-- Revit: one signed Velopack installer for Revit 2024 to 2027 that registers every installed Revit, checks for updates when Revit starts and installs them after the last Revit has closed. A loader picks the build for the .NET that Revit runs on.
+- Revit: one signed Velopack installer for Revit 2024 to 2027 that registers every installed Revit, checks for updates when Revit starts and installs them after the last Revit Window was closed. A loader picks the build for the .NET that Revit runs on.
 
 ---
 

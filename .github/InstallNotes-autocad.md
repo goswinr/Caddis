@@ -19,7 +19,7 @@ and registered with the bundle `%AppData%\Autodesk\ApplicationPlugins\Caddis.bun
 An AutoCAD that is running while you install loads Caddis right away. If AutoCAD asks whether to load `Caddis.AutoCAD.Loader.dll`, choose 'Always Load'.
 
 When AutoCAD starts, Caddis checks for a newer version and offers to download it.
-It is installed when the last AutoCAD has closed.
+Installation wil start when all AutoCAD windows are closed.
 
 The installer is code-signed via Azure Trusted Signing.
 

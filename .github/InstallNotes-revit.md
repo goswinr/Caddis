@@ -22,7 +22,7 @@ and registered with a `Caddis.addin` in `%AppData%\Autodesk\Revit\Addins\{year}`
 For a Revit that you install later, start `Caddis.Revit.Bootstrapper.exe` in that folder again.
 
 When Revit starts, Caddis checks for a newer version and offers to download it.
-It is installed when the last Revit has closed.
+Installation wil start when all Revit windows are closed.
 
 The installer is code-signed via Azure Trusted Signing.
 

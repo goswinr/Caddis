@@ -73,12 +73,12 @@ module Updates =
                         if isNull pending || pending.Version <> v then
                             writeStatus (Some(string v)) None None
                             let question =
-                                $"Caddis {v} is available, this is {um.CurrentVersion}.{Environment.NewLine}{Environment.NewLine}Download it now? It is installed when the last Revit has closed."
+                                $"Caddis {v} is available, this is {um.CurrentVersion}.{Environment.NewLine}{Environment.NewLine}Download it now? Installation wil start when all Revit windows are closed."
                             if Dialog.ask question then
                                 um.DownloadUpdates info
                                 writeStatus (Some(string v)) (Some(string v)) None
-                                log $"downloaded Caddis {v}, it is installed when the last Revit has closed."
-                                Dialog.info $"Caddis {v} is downloaded. It is installed when the last Revit has closed."
+                                log $"downloaded Caddis {v}, Installation wil start when all Revit windows are closed."
+                                Dialog.info $"Caddis {v} is downloaded. Installation wil start when all Revit windows are closed."
                             else
                                 log $"the update to Caddis {v} was skipped."
                         else

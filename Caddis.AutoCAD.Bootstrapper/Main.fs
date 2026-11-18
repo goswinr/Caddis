@@ -11,7 +11,7 @@ open System.Windows.Threading
 open Velopack
 
 /// The app that Velopack installs, updates and uninstalls. It registers Caddis with AutoCAD and shows what it did.
-/// Caddis itself runs in AutoCAD. It starts this app to check for updates and to install them when the last AutoCAD has closed.
+/// Caddis itself runs in AutoCAD. It starts this app to check for updates and to install them when all AutoCAD windows are closed.
 /// A copy of Caddis.Revit.Bootstrapper/Main.fs for AutoCAD.
 module Main =
 

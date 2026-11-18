@@ -11,7 +11,7 @@ open System.Windows.Threading
 open Velopack
 
 /// The app that Velopack installs, updates and uninstalls. It registers Caddis with Revit and shows what it did.
-/// Caddis itself runs in Revit. It starts this app to check for updates and to install them when the last Revit has closed.
+/// Caddis itself runs in Revit. It starts this app to check for updates and to install them when all Revit windows are closed.
 module Main =
 
     let private version = Assembly.GetExecutingAssembly().GetName().Version.ToString 3

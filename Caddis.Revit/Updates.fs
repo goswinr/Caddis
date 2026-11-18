@@ -84,7 +84,7 @@ module internal Updates =
         else
             match readCheck () with
             | Some { Downloaded = Some d } when ReleaseVersion.isNewer d version ->
-                Some $"Caddis {d} is downloaded, it is installed when the last Revit has closed. You're using {version}."
+                Some $"Caddis {d} is downloaded, Installation wil start when all Revit windows are closed. You're using {version}."
             | Some { Latest = Some l } when ReleaseVersion.isNewer l version ->
                 Some $"Caddis {l} is available, you're using {version}. Caddis offers to download it when Revit starts."
             | _ -> None
