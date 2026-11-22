@@ -141,7 +141,7 @@ Dev/                           a .cmd per app, e.g. Rhino8.cmd, and Start-Dev.ps
 Tests/Caddis.Core.Tests/       xUnit tests of the core with a headless host
 Tests/Caddis.UI.Tests/         xUnit v3 tests of the panel with Avalonia's headless platform
 Docs/img/                      logo, favicon and makeAllSizes.ps1, which renders them from logo.png
-.github/                       workflows, packaging actions, signing metadata, release notes of the Revit and AutoCAD installers
+.github/                       workflows, packaging actions, Dependabot config, signing metadata, release notes of the Revit and AutoCAD installers
 ```
 
 | Project | Language | Target frameworks | Output | References |
@@ -996,6 +996,10 @@ In background mode it asks the main thread, and rejects the run if it doesn't an
 - [package-autocad](.github/actions/package-autocad/action.yml) publishes the two AutoCAD builds, the loader and the bootstrapper into `bin/publish/autocad`.
   Velopack packs it in the channel `autocad`, into the same GitHub release as Revit's with `vpk upload --merge`: in the default channel the files that list a channel's releases, e.g. `releases.win.json`, would replace Revit's.
 - [package-claude-desktop](.github/actions/package-claude-desktop/action.yml) writes the extensions `caddis-rhino` (Windows and Mac), `caddis-revit` and `caddis-autocad` with [bundles.fsx](.github/actions/package-claude-desktop/bundles.fsx), which uses the Release build of Caddis.Core like the panel does, but without instructions and tools, then validates and packs them into `bin/publish/claude-desktop/<name>.mcpb` with the MCPB CLI 2.1.2 from npm. The Anthropic directory takes no `.mcpb` files anymore, so the GitHub release is where they are published.
+- **Dependabot** ([dependabot.yml](.github/dependabot.yml)) opens a pull request each week for newer NuGet packages and each month for newer GitHub Actions; build.yml checks them. Avalonia's packages come in one pull request, the test packages in another, and the actions in a third.
+  Dependabot can't give a package a different version per target framework ([dependabot-core#2733](https://github.com/dependabot/dependabot-core/issues/2733)), and doesn't know the constraints of [section 4](#4-runtimes-and-versions). So these are updated by hand:
+  FSharp.Compiler.Service and FSharp.Core, whose pairs follow Fesh; RhinoCommon, System.Drawing.Common, Revit_All_Main_Versions_API_x64 and AutoCAD.NET, the oldest version of each app; Velopack, the same version as `vpk` in release-revit.yml; System.Text.Json beyond patches, and Avalonia and AvaloniaEdit beyond their major versions 11 and 12.
+  Dependabot only changes a `PackageReference` whose version equals the one it updates from, so with major updates ignored it doesn't move the Avalonia 11 of net48 to Avalonia 12. These rules ignore security updates of those packages too.
 - **To release**: add a versioned entry to CHANGELOG.md, commit, push a tag with the same version without `v`.
 
 ---

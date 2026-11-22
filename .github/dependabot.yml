@@ -1,0 +1,45 @@
+# Dependabot opens pull requests for newer NuGet packages and GitHub Actions. build.yml runs on each of them.
+# Dependabot can't give a package a different version per target framework (dependabot-core#2733),
+# so packages whose version is chosen per framework, or by another constraint, are ignored and updated by hand.
+# See section 13 of Architecture.md.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: / # Caddis.slnx lists every project
+    schedule:
+      interval: weekly
+    groups:
+      avalonia:
+        patterns:
+          - Avalonia* # with AvaloniaEdit and Avalonia.Headless.XUnit, so that all keep the same version
+      tests:
+        patterns:
+          - Microsoft.NET.Test.Sdk
+          - xunit*
+    ignore:
+      # FSharp.Compiler.Service pins the exact version of FSharp.Core. Each pair is the same as in Fesh for that framework,
+      # and net8.0 stays on FCS 43.8.403. Change a pair by hand in all projects at once.
+      - dependency-name: FSharp.Core
+      - dependency-name: FSharp.Compiler.Service
+      # Only on net48, at least the version that FCS depends on. Patch updates bring security fixes.
+      - dependency-name: System.Text.Json
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # Compile against the oldest version of each app that Caddis runs in. System.Drawing.Common is a dependency of RhinoCommon.
+      - dependency-name: RhinoCommon
+      - dependency-name: System.Drawing.Common
+      - dependency-name: Revit_All_Main_Versions_API_x64
+      - dependency-name: AutoCAD.NET*
+      # net48 stays on Avalonia 11 and AvaloniaEdit 11, the other builds on 12. A new major version is a port by hand.
+      - dependency-name: Avalonia*
+        update-types: ["version-update:semver-major"]
+      # The same version as vpk in release-revit.yml, which Dependabot doesn't update.
+      - dependency-name: Velopack
+
+  - package-ecosystem: github-actions
+    directory: / # .github/workflows; the actions in .github/actions use no other actions
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"

@@ -21,7 +21,7 @@
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
-    <!-- Like Fesh 0.34.0-net472. System.Text.Json is in-box only on .NET Core, this version matches the 10.0.2 dependencies of FCS. -->
+    <!-- Like Fesh 0.34.0-net472. System.Text.Json is in-box only on .NET Core. At least 10.0.2, the version that FCS depends on; Dependabot proposes only patch updates. -->
     <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
     <PackageReference Include="System.Text.Json" Version="10.0.2" />

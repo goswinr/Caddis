@@ -66,6 +66,7 @@ So changes to `RhinoHost`, `RevitHost`, `AutoCADHost`, the panel's hosting or an
 Rhino and Revit load one copy of each assembly into their process, shared with every other plugin, e.g. Fesh. That causes these rules:
 - Each project references FSharp.Core explicitly per target framework (`DisableImplicitFSharpCoreReference`). It must be the exact version that FSharp.Compiler.Service pins for that framework, the same pair as in Fesh. See the table in section 4 of Architecture.md. Change a pair in all projects at once, or not at all.
 - net8.0 stays on FCS 43.8.403. Newer FCS versions need System.Diagnostics.DiagnosticSource 9 or later, which doesn't load in Rhino 8.
+- [.github/dependabot.yml](.github/dependabot.yml) ignores the packages that these rules pin, e.g. FCS, FSharp.Core and the APIs of the apps. When a rule changes, change its ignore list too.
 - Avoid new packages. Don't use ASP.NET Core or Kestrel, which Rhino doesn't load, the MCP C# SDK or Newtonsoft.Json. Write JSON with the in-box `System.Text.Json` `JsonNode`, via [Json.fs](Caddis.Core/Json.fs).
 - net48 builds use Avalonia 11, the other builds Avalonia 12. Panel code and XAML must work with both.
 - Revit builds compile against the oldest Revit they run in: 2024 for net48, 2025 for net8.0 and net10.0.
