@@ -22,7 +22,7 @@ type private McpTool = {
 /// The MCP endpoint: JSON-RPC over Streamable HTTP, answering every request with a single JSON response, no SSE.
 /// Tools are offered, and the skill files of loaded NuGet packages as resources, see AgentSkills. No prompts.
 /// A session id is handed out on initialize, it is only used to tell apart the request ids of different clients,
-/// and to tell agents whose session another Caddis started that this is another one.
+/// to tell agents whose session another Caddis started that this is another one, and to note the latest request of each client.
 /// see https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http
 type McpEndpoint(svc: CaddisService) =
 
@@ -296,6 +296,38 @@ type McpEndpoint(svc: CaddisService) =
     /// The session ids handed out by this server.
     let issuedSessions = ConcurrentDictionary<string, bool>()
 
+    /// The sessions by id, "" for the requests without one, with their client and latest request. At most maxSessions.
+    let sessions = ConcurrentDictionary<string, McpSession>()
+
+    /// Each session of Claude Code and Codex is one, and they are never ended, so the oldest ones are forgotten.
+    static let maxSessions = 100
+
+    /// Notes a message in its session: the client from the clientInfo of an initialize, and the time and what the message is.
+    let noteMessage (req: Request) (session: string) (msg: JsonNode) =
+        let method = Json.tryString "method" msg |> Option.defaultValue ""
+        let p = Json.prop "params" msg |> Option.toObj
+        let latest =
+            match method with
+            | "tools/call" -> Json.tryString "name" p |> Option.defaultValue method
+            | "" -> "a response"
+            | m -> m
+        let client =
+            if method = "initialize" then
+                Json.prop "clientInfo" p |> Option.bind (Json.tryString "name") |> Option.defaultValue ""
+            else
+                ""
+        let userAgent = req.headers["User-Agent"] |> Option.ofObj |> Option.defaultValue ""
+        let now = DateTime.UtcNow
+        sessions.AddOrUpdate(
+            session,
+            (fun id -> { id = id; client = client; userAgent = userAgent; latest = latest; time = now }),
+            (fun _ s -> { s with client = (if client = "" then s.client else client); userAgent = userAgent; latest = latest; time = now })
+        )
+        |> ignore
+        if sessions.Count > maxSessions then
+            let oldest = sessions.Values |> Seq.minBy _.time
+            sessions.TryRemove oldest.id |> ignore
+
     /// The first tool result in a session that another Caddis started tells the agent: another instance of the app took over the port,
     /// see CaddisServer.TakeOverPort, or the app was restarted. Caddis doesn't reject such sessions, so that agents just go on.
     let withSessionNote (req: Request) (result: JsonNode) : JsonNode =
@@ -509,11 +541,15 @@ type McpEndpoint(svc: CaddisService) =
     /// The instructions as initialize sends them.
     member _.Instructions: string = instructionsOf info (DotnetSdk.current ())
 
+    /// The sessions of the clients, with the latest request of each, newest first. At most the latest 100.
+    member _.Sessions: McpSession list = sessions.Values |> Seq.sortByDescending _.time |> List.ofSeq
+
     member _.Handle(req: Request) : Task<Response> =
         task {
             match req.method with
             | "POST" ->
                 let version = req.headers["MCP-Protocol-Version"]
+                let session = req.headers["Mcp-Session-Id"] |> Option.ofObj |> Option.defaultValue ""
                 if not (isNull version) && not (Array.contains version supportedVersions) then
                     let supported = String.concat ", " supportedVersions
                     return JsonResponse(400, errorResponse null -32600 $"Unsupported MCP-Protocol-Version '{version}', supported are {supported}.")
@@ -527,14 +563,17 @@ type McpEndpoint(svc: CaddisService) =
                     | Ok(:? JsonArray as batch) -> // batches were removed in protocol version 2025-06-18, but are cheap to support
                         let responses = ResizeArray<JsonNode>()
                         for m in batch do
+                            noteMessage req session m
                             let! r = handleMessage req m
                             r |> Option.iter responses.Add
                         if responses.Count = 0 then return EmptyResponse 202
                         else return JsonResponse(200, Json.arr responses)
                     | Ok msg ->
+                        let isInitialize = Json.tryString "method" msg = Some "initialize"
+                        let session = if isInitialize then newSessionId () else session
+                        noteMessage req session msg
                         match! handleMessage req msg with
-                        | Some r when Json.tryString "method" msg = Some "initialize" ->
-                            let session = newSessionId ()
+                        | Some r when isInitialize ->
                             issuedSessions[session] <- true
                             return WithHeaders(JsonResponse(200, r), [ "Mcp-Session-Id", session ])
                         | Some r -> return JsonResponse(200, r)

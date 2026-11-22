@@ -15,15 +15,17 @@ type McpAgent =
     /// Gets Caddis as an extension, see ClaudeDesktop, not with a command line program.
     | ClaudeDesktop
 
-/// Whether an agent reaches this Caddis server.
+/// Where the agent's MCP server for this app points, from the agent's config file.
+/// It says nothing about whether the agent runs: MCP over HTTP has no connection, each request is a POST of its own.
+/// The requests that came are in McpSession.
 [<RequireQualifiedAccess>]
 type AgentState =
     /// The agent has no MCP server with the name of this app's Caddis, e.g. 'caddis-revit'.
     | NotSetUp
-    /// The agent connects to this server.
-    | Active
-    /// The agent connects to another URL: another instance of the app listens there, or nothing.
-    | Inactive of url: string
+    /// The agent's URL has the port of this server.
+    | SetUpHere
+    /// The agent's URL is another one: another instance of the app listens there, or nothing.
+    | SetUpElsewhere of url: string
 
 module McpAgent =
 
@@ -150,8 +152,62 @@ module McpAgent =
     let state (registered: string option) (ownPort: int) : AgentState =
         match registered with
         | None -> AgentState.NotSetUp
-        | Some url when localPort url = Some ownPort -> AgentState.Active
-        | Some url -> AgentState.Inactive url
+        | Some url when localPort url = Some ownPort -> AgentState.SetUpHere
+        | Some url -> AgentState.SetUpElsewhere url
+
+    /// The agent that an MCP client is, by the name in clientInfo of its initialize, or else by its User-Agent header:
+    /// "claude-code" is Claude Code, a name with "codex" Codex, e.g. "codex-mcp-client", and "claude-ai" Claude Desktop,
+    /// which calls through the relay of its extension. None for other clients, e.g. Cursor.
+    let ofClient (client: string) (userAgent: string) : McpAgent option =
+        let byName (name: string) =
+            let n = name.ToLowerInvariant()
+            if n.Contains "claude-code" then Some ClaudeCode
+            elif n.Contains "codex" then Some Codex
+            elif n.Contains "claude-ai" then Some ClaudeDesktop
+            else None
+        if String.IsNullOrEmpty client then byName (if isNull userAgent then "" else userAgent) else byName client
+
+
+/// An MCP session with this server: the client that started it, and its latest request. See McpEndpoint.Sessions.
+type McpSession = {
+    /// The Mcp-Session-Id, "" for the requests without one.
+    id: string
+    /// The name in clientInfo of the session's initialize, e.g. "claude-code", "codex-mcp-client", or "claude-ai" of Claude Desktop.
+    /// "" if this server didn't answer its initialize: another Caddis did, before it handed over the port, or the app was restarted.
+    client: string
+    /// The User-Agent header of the latest request, "" without one.
+    userAgent: string
+    /// The latest request: the tool of a tools/call, e.g. "caddis_eval", or else the method, e.g. "tools/list".
+    latest: string
+    /// When the latest request came, in UTC.
+    time: DateTime
+    }
+
+module McpSession =
+
+    /// The agent that started the session, see McpAgent.ofClient.
+    let agent (s: McpSession) : McpAgent option = McpAgent.ofClient s.client s.userAgent
+
+    /// The name of the session's client for people: the agent's name, or else the name in clientInfo or the User-Agent,
+    /// e.g. "Claude Code" or "cursor-vscode". "an unknown client" if neither is known.
+    let clientName (s: McpSession) : string =
+        match agent s with
+        | Some a -> McpAgent.name a
+        | None when s.client <> "" -> s.client
+        | None when s.userAgent <> "" -> s.userAgent
+        | None -> "an unknown client"
+
+    /// How long before now the time was, in words: "just now" within 6 s, then with one decimal, e.g. "2.5 min ago", "3.1 h ago", "1.2 days ago".
+    let ago (now: DateTime) (time: DateTime) : string =
+        let d = now - time
+        if d.TotalMinutes < 0.1 then "just now"
+        elif d.TotalHours < 1.0 then $"%0.1f{d.TotalMinutes} min ago"
+        elif d.TotalDays < 1.0 then $"%0.1f{ d.TotalHours} h ago"
+        else $"%0.1f{d.TotalDays} days ago"
+
+    /// The latest session of each client, newest first, from sessions newest first.
+    let latestPerClient (sessions: McpSession list) : McpSession list =
+        sessions |> List.distinctBy clientName
 
 
 /// Reads the URLs of the MCP servers in the agents' config files. Again only when a file changed:

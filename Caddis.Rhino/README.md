@@ -86,11 +86,11 @@ Both screenshots were taken in Rhino 9.0 with Caddis 0.3.6, during and after the
 <details>
 <summary>What the panel shows</summary>
 
-- `Server` shows where the server listens. A click on the URL copies it, a right-click also offers the URL that agents connect to. `Start` / `Stop` the server.
+- `Server` shows where the server listens. A click on the URL copies it, a right-click also offers the URL that agents call. Its tooltip lists the latest request of each MCP client. `Start` / `Stop` the server.
 - `F# session` shows its state and thread mode, or the run in progress. `Cancel` stops a run on the background thread while it is in progress, `Reset` starts a new F# session.
-- While the server runs, `Agents` shows whether Claude Code, Codex and Claude Desktop connect to this Rhino:
-  a green dot if they do, amber if they connect to another app, gray if they aren't set up, with `Set up` or `Activate`,
-  see [Connect an AI agent](../README.md#4-connect-an-ai-agent).
+- While the server runs, `Agents` shows whether Claude Code, Codex and Claude Desktop are set up for this Rhino:
+  a green dot if they are, amber if they are set up for another app, gray if they aren't set up, with `Set up` or `Switch here`,
+  and how long ago their latest request came, see [Connect an AI agent](../README.md#4-connect-an-ai-agent).
 - The `Settings` row shows the version of Caddis and unfolds the thread mode and the options `Start with Rhino`, `Echo output to the command line`
   and `Cancel commands in scripts that wait for input`, and shows the versions of .NET, FSharp.Core and FSharp.Compiler.Service, and whether this is the latest Caddis.
 - When a newer Caddis is on Yak, a blue notice says so: update it in Rhino's `PackageManager`.

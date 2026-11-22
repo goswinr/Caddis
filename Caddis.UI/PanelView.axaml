@@ -38,8 +38,8 @@
       <Setter Property="MinHeight" Value="20" />
       <Setter Property="Padding" Value="6,0" />
     </Style>
-    <!-- The state of the server, the F# session and the agents: green while listening, ready or connected to this app,
-         blue while a run is in progress, amber while an agent connects to another app or the session failed, gray otherwise. -->
+    <!-- The state of the server, the F# session and the agents: green while listening, ready or set up for this app,
+         blue while a run is in progress, amber while an agent is set up for another app or the session failed, gray otherwise. -->
     <Style Selector="Ellipse.dot">
       <Setter Property="Width" Value="8" />
       <Setter Property="Height" Value="8" />
@@ -56,7 +56,8 @@
     <Style Selector="Ellipse.dot.run">
       <Setter Property="Fill" Value="#2B88D8" />
     </Style>
-    <!-- An AI agent: its dot, its name, and a button to set it up or to connect it to this app, only when there is something to do. -->
+    <!-- An AI agent: its dot, its name, how long ago its latest request came, muted, and a button to set it up or to switch it
+         to this app, only when there is something to do. -->
     <Style Selector="StackPanel.agent">
       <Setter Property="Orientation" Value="Horizontal" />
       <Setter Property="Height" Value="26" />
@@ -202,26 +203,29 @@
             <Button x:Name="Reset" Content="Reset" />
           </StackPanel>
 
-          <!-- While the server is running: whether Claude Code, Codex and Claude Desktop connect to this app, with a button to set them up
-               or to connect them to this app. The tooltips name their state and the commands of the buttons, a right-click on an agent copies them.
-               The note says what the last click did. -->
+          <!-- While the server is running: whether Claude Code, Codex and Claude Desktop are set up for this app, how long ago their latest
+               request came, and a button to set them up or to switch them to this app. The tooltips name their state, their latest request
+               and the commands of the buttons, a right-click on an agent copies them. The note says what the last click did. -->
           <TextBlock x:Name="AgentsLabel" Grid.Row="2" Grid.Column="1" Classes="label top" Text="Agents" IsVisible="False" Margin="0,5,8,0" />
           <StackPanel x:Name="Agents" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" IsVisible="False">
             <WrapPanel>
               <StackPanel x:Name="ClaudeRow" Classes="agent">
                 <Ellipse x:Name="ClaudeDot" Classes="dot" />
                 <TextBlock x:Name="ClaudeState" VerticalAlignment="Center" />
+                <TextBlock x:Name="ClaudeLatest" Classes="muted" VerticalAlignment="Center" Margin="5,0,0,0" IsVisible="False" />
                 <Button x:Name="ClaudeAction" Classes="small" Margin="6,0,0,0" />
               </StackPanel>
               <StackPanel x:Name="CodexRow" Classes="agent">
                 <Ellipse x:Name="CodexDot" Classes="dot" />
                 <TextBlock x:Name="CodexState" VerticalAlignment="Center" />
+                <TextBlock x:Name="CodexLatest" Classes="muted" VerticalAlignment="Center" Margin="5,0,0,0" IsVisible="False" />
                 <Button x:Name="CodexAction" Classes="small" Margin="6,0,0,0" />
               </StackPanel>
               <!-- Only if Claude Desktop is installed. It gets an extension, not a command. -->
               <StackPanel x:Name="DesktopRow" Classes="agent">
                 <Ellipse x:Name="DesktopDot" Classes="dot" />
                 <TextBlock x:Name="DesktopState" VerticalAlignment="Center" />
+                <TextBlock x:Name="DesktopLatest" Classes="muted" VerticalAlignment="Center" Margin="5,0,0,0" IsVisible="False" />
                 <Button x:Name="DesktopAction" Classes="small" Margin="6,0,0,0" />
               </StackPanel>
             </WrapPanel>

@@ -56,17 +56,25 @@ To start the server whenever the app starts, check `Start with Rhino`, `Start wi
 
 ### 4. Connect an AI agent
 
-While the server runs, the panel shows whether Claude Code, Codex and Claude Desktop connect to Caddis in this app. Click `Set up` beside your agent:
+While the server runs, the panel shows whether Claude Code, Codex and Claude Desktop are set up for Caddis in this app. Click `Set up` beside your agent:
 
 ![The top of the Caddis panel in Revit: the server listens on port 7820, and Claude Code, Codex and Claude Desktop are not set up yet, each with a Set up button beside it](Docs/img/AgentSetupScreen.png)
 
-The color of the dot shows the state of the agent, its tooltip names it:
-- **active** (green): the agent connects to this app.
+The color of the dot shows where the agent's config points, its tooltip names it:
+- **set up** (green): the agent is set up for this app.
 - **not set up** (gray): `Set up` adds Caddis to the agent for all your projects, with the agent's own program, e.g. `claude mcp add ...`. For Claude Desktop it opens the extension `caddis-rhino.mcpb`, `caddis-revit.mcpb` or `caddis-autocad.mcpb`, and Claude Desktop asks to install it.
-- **inactive** (amber): the agent connects to another port, e.g. that of a second Revit with Caddis. `Activate` asks the app on that port to hand it over once it is idle, with no run in progress, and waits for that. Then this app listens on that port, and agents connected to it go on with this app. If the port can't be taken, e.g. another program uses it, `Activate` sets the agent up for this app instead.
+- **set up elsewhere** (amber): the agent is set up for another port, e.g. that of a second Revit with Caddis. `Switch here` asks the app on that port to hand it over once it is idle, with no run in progress, and waits for that. Then this app listens on that port, and the agents set up for it call this app. If the port can't be taken, e.g. another program uses it, `Switch here` sets the agent up for this app instead.
+
+The dot says nothing about whether the agent runs: MCP over HTTP has no lasting connection, each request is on its own.
+So beside the agent's name the panel shows how long ago its latest request to this app came, e.g. `just now` or `2.5 min ago`, and the tooltip names the request, e.g. `caddis_eval`.
+The tooltip of the server's URL lists the latest request of every MCP client, also of those that the panel doesn't set up, e.g. Cursor.
 
 If the agent was open already, restart it, or start a new session in it: sessions that were open before it was set up see Caddis only after a restart.
-The tooltips of the buttons show the commands they run, a right-click on an agent copies them.
+
+The tooltips of the buttons say step by step what they do, so nothing happens behind your back:
+- `Set up` for Claude Code and Codex: the program it runs and where it found it, the exact commands, and the file the agent writes them to, `~/.claude.json` or `~/.codex/config.toml`. Caddis itself only reads these files. A right-click on the agent copies the commands, to run them in a terminal yourself.
+- `Set up` for Claude Desktop: where it writes the extension and what is in it, how it opens it in Claude Desktop, and that Claude Desktop then runs its relay with its own Node, which passes each message on to Caddis.
+- `Switch here`: the request to the app on the other port to hand it over, what happens while that app is busy, that no config file changes, and the `Set up` it runs if the port can't be taken.
 
 <details>
 <summary>Without the panel: the commands for Claude Code and Codex</summary>
@@ -97,7 +105,7 @@ Each app has its own port and MCP name, so that they can run and stay registered
 | Revit | Caddis for Revit | 7820 | `caddis-revit` | `caddis-revit.mcpb` |
 | AutoCAD | Caddis for AutoCAD | 7830 | `caddis-autocad` | `caddis-autocad.mcpb` |
 
-If the port is taken, the next free one is used, and the panel shows the agents set up for the port as inactive.
+If the port is taken, the next free one is used, and the panel shows the agents set up for the port as set up elsewhere.
 
 </details>
 

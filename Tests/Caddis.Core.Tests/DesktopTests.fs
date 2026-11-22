@@ -78,8 +78,8 @@ let ``the installed extension relays to the port of its setting, or to the defau
     Assert.Equal(None, DesktopExtension.installedUrl (installed None) "caddis-revit")
     let configs = AgentConfigs(fun _ -> changed)
     Assert.True(configs.IsInstalled ClaudeDesktop)
-    Assert.Equal(AgentState.Active, configs.State(ClaudeDesktop, "caddis-rhino", 7815))
-    Assert.Equal(AgentState.Inactive "http://127.0.0.1:7815/mcp", configs.State(ClaudeDesktop, "caddis-rhino", 7816))
+    Assert.Equal(AgentState.SetUpHere, configs.State(ClaudeDesktop, "caddis-rhino", 7815))
+    Assert.Equal(AgentState.SetUpElsewhere "http://127.0.0.1:7815/mcp", configs.State(ClaudeDesktop, "caddis-rhino", 7816))
     Assert.False(AgentConfigs(fun _ -> Path.Combine(newTempDir (), "Claude", "extensions-installations.json")).IsInstalled ClaudeDesktop)
 
 [<Fact>]

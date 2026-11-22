@@ -82,12 +82,14 @@ type RunRow(id: string, status: RunStatus, started: string, time: string, code: 
     /// True while the run is in progress: its time is shown on yellow.
     member _.IsRunning = (status = Running)
 
-/// The controls of an AI agent in the panel: a dot for its state, its name, and a button to set it up or to connect it to this app.
+/// The controls of an AI agent in the panel: a dot for its state, its name, how long ago its latest request came,
+/// and a button to set it up or to switch it to this app.
 type internal AgentRow = {
     Agent: McpAgent
     Row: StackPanel
     Dot: Shapes.Ellipse
     State: TextBlock
+    Latest: TextBlock
     Action: Button
     }
 
@@ -120,7 +122,7 @@ type PanelView(host: PanelHost) as this =
             "It listens on localhost only."
         ]
 
-    let stopTip = tip [ $"Stop the server. Connected AI agents can't reach {host.Name} until it is started again." ]
+    let stopTip = tip [ $"Stop the server. AI agents can't reach {host.Name} until it is started again." ]
     let modeTip = host.ModeTip
 
     do
@@ -157,6 +159,7 @@ type PanelView(host: PanelHost) as this =
             Row = find (prefix + "Row")
             Dot = find (prefix + "Dot")
             State = find (prefix + "State")
+            Latest = find (prefix + "Latest")
             Action = find (prefix + "Action")
         })
     let settingsToggle: Primitives.ToggleButton = find "SettingsToggle"
@@ -195,7 +198,7 @@ type PanelView(host: PanelHost) as this =
     let formatCheck: CheckBox = find "FormatCheck"
     let message: TextBlock = find "Message"
 
-    /// The context menu of the server's URL: copy it, or the URL that AI agents connect to.
+    /// The context menu of the server's URL: copy it, or the URL that AI agents call.
     let copyServerUrl = MenuItem()
     let copyMcpUrl = MenuItem()
 
@@ -211,8 +214,8 @@ type PanelView(host: PanelHost) as this =
     /// While attached: the subscription to changes of the host's theme.
     let mutable themeChanges: IDisposable option = None
 
-    /// The agent whose button is at work, with the way to cancel it while an activation waits for the other app.
-    /// Only one at a time: both agents may connect to the same port.
+    /// The agent whose button is at work, with the way to cancel it while a switch waits for the other app.
+    /// Only one at a time: the agents may be set up for the same port.
     let mutable agentWork: (McpAgent * CancellationTokenSource option) option = None
 
     /// What the last click on an agent's button did, shown below the agents until the time.
@@ -406,61 +409,60 @@ type PanelView(host: PanelHost) as this =
                 if errorList.Text <> text then errorList.Text <- text
             errorsText.FontWeight <- if host.Errors.Unseen > 0 then FontWeight.Bold else FontWeight.Normal
 
-    /// The commands that set the agent up for this server: Claude Code's 'mcp add' fails if the name exists, so it is removed first.
-    /// None for Claude Desktop, which gets an extension.
-    let agentCommands (s: CaddisServer) (agent: McpAgent) =
-        [
-            if agent = ClaudeCode && s.AgentState agent <> AgentState.NotSetUp then
-                McpAgent.commandLine agent (McpAgent.removeArgs agent s.Service.Host.Info.mcpServerName)
-            if (McpAgent.program agent).IsSome then
-                s.AgentCommand agent
-        ]
-
-    /// The state of each agent in its dot and its tooltip, and its button: Set up, Activate, or Cancel while an activation waits.
+    /// The state of each agent in its dot and its tooltip, how long ago its latest request came beside its name,
+    /// and its button: Set up, Switch here, or Cancel while a switch waits.
+    /// The tooltips of the buttons say step by step what they do, from CaddisServer.SetUpSteps and SwitchSteps.
     let refreshAgents (s: CaddisServer) =
         agents.IsVisible <- s.IsRunning
         agentsLabel.IsVisible <- s.IsRunning
         if s.IsRunning then
             let app = host.Name
             let serverName = s.Service.Host.Info.mcpServerName
+            let now = DateTime.UtcNow
             for row in agentRows do
                 row.Row.IsVisible <- s.AgentConfigs.IsInstalled row.Agent
                 let name = McpAgent.name row.Agent
                 let state = s.AgentState row.Agent
-                let commands = agentCommands s row.Agent
-                let isExtension = commands.IsEmpty
-                // What Set up does: the commands it runs, or the extension it opens.
-                let setUp =
-                    if isExtension then
-                        [ $"It opens the extension {serverName}.mcpb, Claude Desktop asks to install it."; $"It relays to {s.McpUrl}." ]
-                    else
-                        [ "It runs:"; yield! commands; "Right-click to copy the command, e.g. to run it in a terminal yourself." ]
+                let isExtension = (McpAgent.program row.Agent).IsNone
+                // The right-click on the row copies the commands, Claude Desktop has none.
+                let copyHint = if isExtension then [] else [ "Right-click to copy the commands, e.g. to run them in a terminal yourself." ]
+                // Where the agent's config points, not whether it runs: each MCP request is a POST of its own.
+                let points = if isExtension then $"Its extension '{serverName}' relays to" else $"Its MCP server '{serverName}' has the URL"
                 let label, stateTip =
                     match state with
-                    | AgentState.Active ->
-                        "active",
-                        if isExtension then
-                            [ $"The extension of {name} relays to Caddis in this {app}, at {s.McpUrl}." ]
-                        else
-                            [
-                                $"{name} connects to Caddis in this {app}, at {s.McpUrl}."
+                    | AgentState.SetUpHere ->
+                        "set up",
+                        [
+                            $"{points} {s.McpUrl}, where this {app} listens."
+                            if not isExtension then
                                 $"Sessions of {name} that were open before it was set up see Caddis after a restart."
-                            ]
+                        ]
                     | AgentState.NotSetUp when isExtension -> "not set up", [ $"{name} has no extension '{serverName}' turned on." ]
                     | AgentState.NotSetUp -> "not set up", [ $"{name} has no MCP server '{serverName}' for all your projects." ]
-                    | AgentState.Inactive url ->
+                    | AgentState.SetUpElsewhere url ->
                         let where =
                             match McpAgent.localPort url |> Option.bind s.InstanceOnPort with
                             | Some(other, "") -> [ $"where Caddis in {other} listens." ]
                             | Some(other, title) -> [ $"where Caddis in {other} listens:"; title ]
                             | None -> [ $"where no other Caddis listens." ]
-                        "inactive", $"{name} connects to {url}," :: where
+                        "set up elsewhere", $"{points} {url}," :: where
+                // The requests that came, from the client name of their MCP session, whatever the config says.
+                let latest = s.LatestSession row.Agent
+                let activity =
+                    match latest with
+                    | Some l ->
+                        let at = l.time.ToLocalTime().ToString "HH:mm:ss"
+                        $"Latest request to this {app}: {l.latest} at {at}, {McpSession.ago now l.time}."
+                    | None -> $"No request from {name} to this {app} yet."
                 // The state is in the color of the dot and in the tooltip. The button shows only when there is something to do.
                 row.State.Text <- name
-                let stateTip = tip ($"{name}: {label}" :: stateTip)
+                row.Latest.Text <- latest |> Option.map (fun l -> McpSession.ago now l.time) |> Option.defaultValue ""
+                row.Latest.IsVisible <- latest.IsSome
+                let stateTip = tip ($"{name}: {label}" :: stateTip @ [ activity ])
                 ToolTip.SetTip(row.State, stateTip)
+                ToolTip.SetTip(row.Latest, stateTip)
                 ToolTip.SetTip(row.Dot, stateTip)
-                setDot row.Dot (match state with AgentState.Active -> "ok" | AgentState.Inactive _ -> "warn" | AgentState.NotSetUp -> "")
+                setDot row.Dot (match state with AgentState.SetUpHere -> "ok" | AgentState.SetUpElsewhere _ -> "warn" | AgentState.NotSetUp -> "")
                 match agentWork with
                 | Some(agent, cts) when agent = row.Agent ->
                     row.Action.IsVisible <- true
@@ -468,24 +470,18 @@ type PanelView(host: PanelHost) as this =
                     row.Action.Content <- if cts.IsSome then "Cancel" else "Setting up..."
                     ToolTip.SetTip(row.Action, $"Stop waiting for the other {app}, it keeps the port.")
                 | _ ->
-                    row.Action.IsVisible <- state <> AgentState.Active
+                    row.Action.IsVisible <- state <> AgentState.SetUpHere
                     row.Action.IsEnabled <- agentWork.IsNone
                     match state with
-                    | AgentState.Active -> ()
+                    | AgentState.SetUpHere -> ()
                     | AgentState.NotSetUp ->
                         row.Action.Content <- "Set up"
-                        ToolTip.SetTip(row.Action, tip [ $"Add Caddis in this {app} to {name}, for all your projects."; yield! setUp ])
-                    | AgentState.Inactive url ->
-                        row.Action.Content <- "Activate"
-                        let how =
-                            match McpAgent.localPort url with
-                            | Some p -> [
-                                $"Connect {name} to this {app}: the {app} on port {p} hands it over to this one once it is idle,"
-                                "with no run in progress. All agents connected to that port follow."
-                                $"If the port can't be taken, e.g. another program uses it, {name} is set up for this {app}:"
-                              ]
-                            | None -> [ $"Connect {name} to this {app}." ]
-                        ToolTip.SetTip(row.Action, tip [ yield! how; yield! setUp ])
+                        let steps = s.SetUpSteps row.Agent
+                        ToolTip.SetTip(row.Action, tip [ $"Set up: add Caddis in this {app} to {name}, for all your projects."; yield! steps; yield! copyHint ])
+                    | AgentState.SetUpElsewhere _ ->
+                        row.Action.Content <- "Switch here"
+                        let steps = s.SwitchSteps row.Agent
+                        ToolTip.SetTip(row.Action, tip [ $"Switch here: have {name} call this {app}."; yield! steps; yield! copyHint ])
             match agentNoteText with
             | Some(note, until) when DateTime.UtcNow < until ->
                 agentNote.Text <- note
@@ -504,6 +500,7 @@ type PanelView(host: PanelHost) as this =
             ToolTip.SetTip(getSdk, $"Open {NuGetSupport.downloadUrl nuget}")
 
     /// The server's dot, its URL while it listens, and the button to start or stop it.
+    /// The URL's tooltip has the latest MCP request of each client, also of those that aren't listed as agents, e.g. Cursor.
     let refreshServer (s: CaddisServer) =
         setDot serverDot (if s.IsRunning then "ok" else "")
         copyUrl.IsVisible <- s.IsRunning
@@ -513,10 +510,21 @@ type PanelView(host: PanelHost) as this =
             serverUrl.Text <- s.Url
             copyServerUrl.Header <- $"Copy {s.Url}"
             copyMcpUrl.Header <- $"Copy {s.McpUrl}"
-            ToolTip.SetTip(
-                copyUrl,
-                tip [ $"Caddis listens on {s.Url}, AI agents connect to {s.McpUrl}."; $"Click to copy {s.Url}, right-click to copy the URL for agents." ]
-            )
+        let now = DateTime.UtcNow
+        let requests =
+            match McpSession.latestPerClient s.Sessions with
+            | [] -> [ "No MCP requests yet." ]
+            | latest ->
+                "Latest MCP requests:"
+                :: [ for l in List.truncate 6 latest -> $"  {McpSession.clientName l}: {l.latest}, {McpSession.ago now l.time}" ]
+        ToolTip.SetTip(
+            copyUrl,
+            tip [
+                $"Caddis listens on {s.Url}, AI agents call {s.McpUrl}."
+                $"Click to copy {s.Url}, right-click to copy the URL for agents."
+                yield! requests
+            ]
+        )
         startStop.Content <- if s.IsRunning then "Stop" else "Start"
         ToolTip.SetTip(startStop, (if s.IsRunning then stopTip else startTip))
 
@@ -620,9 +628,9 @@ type PanelView(host: PanelHost) as this =
     let noteAgent (seconds: float) (text: string) =
         agentNoteText <- Some(text, (if Double.IsInfinity seconds then DateTime.MaxValue else DateTime.UtcNow.AddSeconds seconds))
 
-    /// Sets the agent up for this server, or connects it to this server, on the thread pool:
-    /// the agent's program runs for a second or two, and an activation waits until the other app is idle.
-    /// While an activation waits, the button cancels it.
+    /// Sets the agent up for this server, or switches it to this server, on the thread pool:
+    /// the agent's program runs for a second or two, and a switch waits until the other app is idle.
+    /// While a switch waits, the button cancels it.
     let agentClicked (s: CaddisServer) (row: AgentRow) =
         let name = McpAgent.name row.Agent
         match agentWork with
@@ -631,16 +639,16 @@ type PanelView(host: PanelHost) as this =
         | None ->
             let work =
                 match s.AgentState row.Agent with
-                | AgentState.Active -> None
+                | AgentState.SetUpHere -> None
                 | AgentState.NotSetUp -> Some((fun () -> s.SetUpAgent row.Agent), None, $"Setting up {name}...")
-                | AgentState.Inactive _ ->
+                | AgentState.SetUpElsewhere _ ->
                     let cts = new CancellationTokenSource()
                     let waiting reason =
                         Dispatcher.UIThread.Post(fun () ->
                             if not cts.IsCancellationRequested then
-                                noteAgent infinity $"Activating this {host.Name} for {name}, waiting: {reason}"
+                                noteAgent infinity $"Switching {name} to this {host.Name}, waiting: {reason}"
                                 refresh ())
-                    Some((fun () -> s.ActivateAgent(row.Agent, waiting, cts.Token)), Some cts, $"Activating this {host.Name} for {name}...")
+                    Some((fun () -> s.SwitchAgentHere(row.Agent, waiting, cts.Token)), Some cts, $"Switching {name} to this {host.Name}...")
             match work with
             | None -> ()
             | Some(start, cts, starting) ->
@@ -658,7 +666,7 @@ type PanelView(host: PanelHost) as this =
                                     | Ok msg -> noteAgent 20.0 msg
                                     | Error msg -> noteAgent 60.0 msg
                                 elif t.IsCanceled || (t.Exception.InnerException :? OperationCanceledException) then
-                                    noteAgent 20.0 $"Cancelled, {name} connects to the other {host.Name}."
+                                    noteAgent 20.0 $"Cancelled, {name} stays set up for the other {host.Name}."
                                 else
                                     noteAgent 60.0 $"{name}: {t.Exception.InnerException.Message}"
                                 refresh ()))
@@ -668,7 +676,7 @@ type PanelView(host: PanelHost) as this =
 
     /// Puts the commands of the agent's button on the clipboard.
     let copyAgentCommands (s: CaddisServer) (row: AgentRow) =
-        let commands = agentCommands s row.Agent
+        let commands = s.SetUpCommands row.Agent
         let what = if commands.Length = 1 then "the command that sets" else "the commands that set"
         if host.SetClipboard(String.concat Environment.NewLine commands) then
             noteAgent 20.0 $"Copied {what} up {McpAgent.name row.Agent} for this {host.Name}, paste it in a terminal."

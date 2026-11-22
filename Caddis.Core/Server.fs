@@ -54,6 +54,21 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
 
     let url () = $"http://127.0.0.1:{port}"
 
+    /// Where Set up writes the extension of Claude Desktop: in the run folder of this process.
+    let bundlePath () = Path.Combine(runs.RootDir, $"{host.Info.mcpServerName}.mcpb")
+
+    /// Lookups in the file system and the registry for the panel's tooltips, which it sets every second: each kept for 10 s.
+    let lookups = Collections.Generic.Dictionary<string, DateTime * string option>()
+
+    let lookup (key: string) (find: unit -> string option) : string option =
+        lock lookups (fun () ->
+            match lookups.TryGetValue key with
+            | true, (time, value) when DateTime.UtcNow - time < TimeSpan.FromSeconds 10.0 -> value
+            | _ ->
+                let value = find ()
+                lookups[key] <- (DateTime.UtcNow, value)
+                value)
+
     let serverInfo () : (string * JsonNode) list = [
         "server",
         Json.obj [
@@ -238,7 +253,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     acceptLoop l
                     writeDiscoveryFile ()
                     host.Log
-                        $"Caddis: {by} took over port {handedOver}, where AI agents connect. This {host.Info.appName} listens on port {p} now, click 'Activate' in the Caddis panel to connect the agents to it again."
+                        $"Caddis: {by} took over port {handedOver}, which the AI agents are set up for. This {host.Info.appName} listens on port {p} now, click 'Switch here' in the Caddis panel to take the port back."
                 | Error msg ->
                     close old
                     listener <- None
@@ -395,9 +410,17 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
     /// The command line to add this server to Codex, for all projects of the current user.
     member this.CodexMcpCommand = this.AgentCommand Codex
 
-    /// Whether the agent connects to this server. Never active while it is stopped.
+    /// Where the agent's MCP server for this app points, from its config file. Never SetUpHere while the server is stopped.
     member this.AgentState(agent: McpAgent) : AgentState =
         this.AgentConfigs.State(agent, host.Info.mcpServerName, (if this.IsRunning then port else 0))
+
+    /// The MCP sessions of the clients with their latest request, newest first. Kept while the server is stopped.
+    member _.Sessions: McpSession list = mcp.Sessions
+
+    /// The agent's latest MCP session with this server, None if the agent sent no request yet,
+    /// or only in sessions that another Caddis started, unless its User-Agent names it.
+    member _.LatestSession(agent: McpAgent) : McpSession option =
+        mcp.Sessions |> List.tryFind (fun s -> McpSession.agent s = Some agent)
 
     /// The other running Caddis that listens on the port, from the discovery files: e.g. "Revit (process 12345)",
     /// and the title of its main window, which names the open document in Rhino and Revit on Windows. None if there is none.
@@ -437,8 +460,75 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
         tools = mcp.Tools
     }
 
+    /// The commands that SetUpAgent runs, as typed in a terminal: for Claude Code first 'claude mcp remove ...' if it has
+    /// a server of the name, since its 'mcp add' fails then. Empty for Claude Desktop, which gets an extension.
+    member this.SetUpCommands(agent: McpAgent) : string list =
+        let serverName = host.Info.mcpServerName
+        [
+            if agent = ClaudeCode && this.AgentConfigs.RegisteredUrl(agent, serverName).IsSome then
+                McpAgent.commandLine agent (McpAgent.removeArgs agent serverName)
+            if (McpAgent.program agent).IsSome then
+                this.AgentCommand agent
+        ]
+
+    /// What SetUpAgent does, line by line, for people, e.g. in the tooltip of the panel's Set up: the program it runs and
+    /// where it was found, its commands, and the file the agent writes; for Claude Desktop the extension, how it is opened
+    /// and what it does then. Programs are looked up again after 10 s.
+    member this.SetUpSteps(agent: McpAgent) : string list =
+        let name = McpAgent.name agent
+        let serverName = host.Info.mcpServerName
+        let config = this.AgentConfigs.PathOf agent
+        match McpAgent.program agent with
+        | Some program -> [
+            match lookup $"program {program}" (fun () -> AgentCli.find program) with
+            | Some exe -> $"It runs {exe}, without a window:"
+            | None -> $"It runs '{program}', which isn't on PATH now. Install {name}, or run the commands in a terminal yourself:"
+            yield! this.SetUpCommands agent |> List.map (fun c -> "  " + c)
+            match agent with
+            | ClaudeCode ->
+                if (this.SetUpCommands agent).Length > 1 then
+                    $"The first one removes the server '{serverName}' that {name} has, since 'claude mcp add' fails if it exists."
+                $"{name} writes the server to \"mcpServers\" in {config}, for all your projects."
+            | _ -> $"{name} writes the server to [mcp_servers.{serverName}] in {config}, for all your projects, replacing one of the same name."
+            $"Caddis itself only reads that file, to show the state. Sessions of {name} that are open see the server after a restart."
+          ]
+        | None -> [
+            let opener =
+                DesktopExtension.opener
+                    (lookup "desktop program" DesktopExtension.program)
+                    (lookup "desktop package" DesktopExtension.packagedAppId)
+            $"It writes the extension {bundlePath ()}:"
+            "  a zip of manifest.json, server/relay.js, server/caddis.json with the tools of Caddis, and icon.png."
+            $"It opens it {opener}, and {name} asks to install it."
+            $"Once installed, {name} runs relay.js with its own Node. The relay passes each message on to {this.McpUrl}:"
+            $"  the port is a setting of the extension, {port} by default."
+            $"Caddis itself only reads {name}'s list of extensions, to show the state: {config}"
+          ]
+
+    /// What SwitchAgentHere does, line by line, for people, e.g. in the tooltip of the panel's Switch here.
+    /// Empty unless the agent is set up elsewhere.
+    member this.SwitchSteps(agent: McpAgent) : string list =
+        let app = host.Info.appName
+        let setUp () = this.SetUpSteps agent |> List.map (fun l -> "  " + l)
+        match this.AgentState agent with
+        | AgentState.SetUpElsewhere url ->
+            match McpAgent.localPort url with
+            | Some p -> [
+                $"It asks the Caddis on port {p} to hand the port over: POST http://127.0.0.1:{p}/release."
+                $"While that {app} has a run or another request in progress, it answers 409, and this one asks again every second."
+                "Meanwhile this button turns into Cancel."
+                $"Then that {app} moves to the next free port, and this one listens on port {p} instead of {port}."
+                $"No config file changes: every agent set up for port {p} calls this {app} from then on."
+                $"If nothing listens on port {p}, this one takes it right away."
+                $"If the port can't be taken, e.g. another program or Caddis for another app uses it, it runs Set up instead:"
+                yield! setUp ()
+              ]
+            | None -> [ $"{url} is not Caddis on this computer, so it runs Set up:"; yield! setUp () ]
+        | AgentState.SetUpHere
+        | AgentState.NotSetUp -> []
+
     /// Adds this server to the agent for all projects of the user with the agent's program, e.g. 'claude mcp add ...'.
-    /// Replaces the agent's server of the same name.
+    /// Replaces the agent's server of the same name. SetUpSteps describes it.
     /// For Claude Desktop it writes the extension and opens it, Claude Desktop asks the person to install it.
     member this.SetUpAgent(agent: McpAgent) : Task<Result<string, string>> =
         task {
@@ -450,7 +540,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                 match McpAgent.program agent with
                 | None ->
                     try
-                        let path = Path.Combine(runs.RootDir, $"{serverName}.mcpb")
+                        let path = bundlePath ()
                         DesktopExtension.writeBundle (this.DesktopBundle()) path
                         this.OpenFile path
                         return
@@ -475,7 +565,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                             if code = 0 then
                                 return
                                     Ok
-                                        $"{name} connects to this {host.Info.appName} now, at {url}. Sessions of {name} that were open before see it after a restart."
+                                        $"{name} is set up for this {host.Info.appName} now, at {url}. Sessions of {name} that were open before see it after a restart."
                             else
                                 return Error $"'{McpAgent.commandLine agent args}' failed: {output}"
                         with e ->
@@ -514,15 +604,16 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     return Ok $"Caddis listens on port {target} now{handedOver}. AI agents set up for this port reach this {host.Info.appName}."
         }
 
-    /// Makes the agent connect to this server. If the agent has the URL of a Caddis on this computer, this server takes over its port,
-    /// from the other instance of the app once it is idle, see TakeOverPort, and the agent keeps its URL.
-    /// Otherwise, or if the port can't be taken, the agent is set up with the URL of this server.
-    member this.ActivateAgent(agent: McpAgent, onWaiting: string -> unit, ct: CancellationToken) : Task<Result<string, string>> =
+    /// The panel's 'Switch here': the agent's requests come to this server from now on. If the agent has the URL of a Caddis
+    /// on this computer, this server takes over its port, from the other instance of the app once it is idle, see TakeOverPort,
+    /// and the agent keeps its URL. Otherwise, or if the port can't be taken, the agent is set up with the URL of this server.
+    /// SwitchSteps describes it.
+    member this.SwitchAgentHere(agent: McpAgent, onWaiting: string -> unit, ct: CancellationToken) : Task<Result<string, string>> =
         task {
             match this.AgentState agent with
-            | AgentState.Active -> return Ok $"{McpAgent.name agent} connects to this {host.Info.appName} already."
+            | AgentState.SetUpHere -> return Ok $"{McpAgent.name agent} is set up for this {host.Info.appName} already."
             | AgentState.NotSetUp -> return! this.SetUpAgent agent
-            | AgentState.Inactive registered ->
+            | AgentState.SetUpElsewhere registered ->
                 match McpAgent.localPort registered with
                 | None -> return! this.SetUpAgent agent
                 | Some p ->
@@ -552,7 +643,7 @@ type CaddisServer(host: ICaddisHost, store: SettingsStore) =
                     if p <> s.port then
                         // MCP clients are configured with a fixed URL, they would silently fail to connect
                         host.Log
-                            $"Caddis: port {s.port} is in use, so Caddis listens on port {p}. AI agents set up for port {s.port} don't reach this {host.Info.appName}, click 'Activate' in the Caddis panel to connect them to it."
+                            $"Caddis: port {s.port} is in use, so Caddis listens on port {p}. AI agents set up for port {s.port} don't reach this {host.Info.appName}, click 'Switch here' in the Caddis panel to have them call it."
                     svc.Fsi.Initialize() |> ignore
                     Ok(url ()))
 

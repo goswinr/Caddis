@@ -204,6 +204,14 @@ module DesktopExtension =
         | None, Some appId -> activate appId $"\"{path}\""
         | None, None -> Process.Start(ProcessStartInfo(path, UseShellExecute = true)) |> ignore
 
+    /// How openBundle opens a bundle, for people, from the program and the packaged app id that it would use:
+    /// e.g. "with C:\Users\me\AppData\Local\AnthropicClaude\claude.exe".
+    let opener (program: string option) (packagedAppId: string option) =
+        match program, packagedAppId with
+        | Some exe, _ -> $"with {exe}"
+        | None, Some appId -> $"in Claude Desktop from the Microsoft Store, {appId}"
+        | None, None -> "with the app for .mcpb files"
+
     /// The folder of Claude Desktop's settings on Windows, in these folders of the user's local and roaming app data: Claude in the roaming one.
     /// Claude Desktop from its MSIX package has it in its package's folder instead, where Windows redirects its roaming app data,
     /// unless Claude Desktop from the installer is there too.

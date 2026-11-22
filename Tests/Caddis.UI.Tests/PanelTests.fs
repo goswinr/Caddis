@@ -178,7 +178,7 @@ let ``theme is scoped and subscriptions survive detaching and reopening`` () =
     Assert.Equal(0, subscriptions)
 
 [<AvaloniaFact>]
-let ``while the server runs, its URL copies on a click and the agents show whether they connect to it`` () = task {
+let ``while the server runs, its URL copies on a click and the agents show where they are set up and their latest request`` () = task {
     use engineHost = new HeadlessHost(ignore)
     let store = SettingsStore(Path.Combine(Path.GetTempPath(), "CaddisPanelTests", Guid.NewGuid().ToString "N"))
     store.Save { CaddisSettings.defaults with port = 27910 }
@@ -223,13 +223,31 @@ let ``while the server runs, its URL copies on a click and the agents show wheth
         Assert.Equal("Claude Code", state "Claude")
         Assert.Contains("ok", dotOf "Claude")
         Assert.False((action "Claude").IsVisible)
-        Assert.Contains("Claude Code: active", tipOf (view.FindControl<TextBlock> "ClaudeState"))
+        Assert.Contains("Claude Code: set up", tipOf (view.FindControl<TextBlock> "ClaudeState"))
         Assert.Contains(server.McpUrl, tipOf (view.FindControl<TextBlock> "ClaudeState"))
+        // no request yet: nothing beside the name
+        let latest = view.FindControl<TextBlock> "ClaudeLatest"
+        Assert.False latest.IsVisible
+        Assert.Contains("No request from Claude Code to this Revit yet.", tipOf (view.FindControl<TextBlock> "ClaudeState"))
+        Assert.Contains("No MCP requests yet.", tipOf copyUrl)
+        // Claude Code starts a session: how long ago beside its name, the request in the tooltips
+        use client = new System.Net.Http.HttpClient()
+        let initialize = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"claude-code","version":"2.0.0"}}}"""
+        use content = new System.Net.Http.StringContent(initialize, System.Text.Encoding.UTF8, "application/json")
+        let! resp = client.PostAsync(server.McpUrl, content)
+        resp.EnsureSuccessStatusCode() |> ignore
+        view.Refresh()
+        Assert.True latest.IsVisible
+        Assert.Equal("just now", latest.Text)
+        Assert.Contains("Latest request to this Revit: initialize at", tipOf (view.FindControl<TextBlock> "ClaudeState"))
+        Assert.Contains("Claude Code: initialize, just now", tipOf copyUrl)
+        Assert.False((view.FindControl<TextBlock> "CodexLatest").IsVisible)
         Assert.Contains("warn", dotOf "Codex")
-        Assert.Contains("Codex: inactive", tipOf (view.FindControl<TextBlock> "CodexState"))
-        Assert.Equal("Activate", string (action "Codex").Content)
+        Assert.Contains("Codex: set up elsewhere", tipOf (view.FindControl<TextBlock> "CodexState"))
+        Assert.Equal("Switch here", string (action "Codex").Content)
         Assert.Contains("http://127.0.0.1:27919/mcp", tipOf (view.FindControl<TextBlock> "CodexState"))
-        Assert.Contains("on port 27919", tipOf (action "Codex"))
+        // the tooltip of Switch here says how the port is taken over, and what Set up does if it can't be
+        Assert.Contains("It asks the Caddis on port 27919 to hand the port over: POST http://127.0.0.1:27919/release.", tipOf (action "Codex"))
         Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
         File.Delete(path Codex)
         view.Refresh()
@@ -237,7 +255,10 @@ let ``while the server runs, its URL copies on a click and the agents show wheth
         Assert.DoesNotContain("warn", dotOf "Codex")
         Assert.Contains("Codex: not set up", tipOf (view.FindControl<TextBlock> "CodexState"))
         Assert.Equal("Set up", string (action "Codex").Content)
-        Assert.Contains(server.CodexMcpCommand, tipOf (action "Codex"))
+        // the tooltip of Set up says which commands it runs and which file Codex writes
+        Assert.Contains("  " + server.CodexMcpCommand, tipOf (action "Codex"))
+        Assert.Contains($"[mcp_servers.caddis] in {path Codex}", tipOf (action "Codex"))
+        Assert.Contains("Right-click to copy the commands", tipOf (action "Codex"))
         // a right-click on the row copies the command
         let menu = view.FindControl<StackPanel>("CodexRow").ContextMenu
         let copy = menu.ItemsSource |> Seq.cast<MenuItem> |> Seq.head
@@ -250,7 +271,9 @@ let ``while the server runs, its URL copies on a click and the agents show wheth
         view.Refresh()
         Assert.True(view.FindControl<StackPanel>("DesktopRow").IsVisible)
         Assert.Contains("Claude Desktop: not set up", tipOf (view.FindControl<TextBlock> "DesktopState"))
-        Assert.Contains("opens the extension caddis.mcpb", tipOf (action "Desktop"))
+        Assert.Contains("caddis.mcpb:", tipOf (action "Desktop"))
+        Assert.Contains("runs relay.js with its own Node", tipOf (action "Desktop"))
+        Assert.DoesNotContain("Right-click", tipOf (action "Desktop"))
         Assert.Null(view.FindControl<StackPanel>("DesktopRow").ContextMenu)
         let extension = Json.obj [ "id", Json.ofString "x"; "manifest", DesktopExtension.manifest (server.DesktopBundle()) ]
         File.WriteAllText(path ClaudeDesktop, Json.toText (Json.obj [ "extensions", Json.obj [ "x", extension ] ]))

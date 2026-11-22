@@ -80,13 +80,13 @@ let ``Codex's config has the URL in the table of the server`` () =
     Assert.Equal(None, McpAgent.codexUrl toml "caddis")
 
 [<Fact>]
-let ``an agent is active if its URL has the port of the server`` () =
+let ``an agent is set up here if its URL has the port of the server`` () =
     Assert.Equal(AgentState.NotSetUp, McpAgent.state None 7820)
-    Assert.Equal(AgentState.Active, McpAgent.state (Some "http://127.0.0.1:7820/mcp") 7820)
-    Assert.Equal(AgentState.Active, McpAgent.state (Some "http://localhost:7820/mcp/") 7820)
-    Assert.Equal(AgentState.Inactive "http://127.0.0.1:7821/mcp", McpAgent.state (Some "http://127.0.0.1:7821/mcp") 7820)
-    Assert.Equal(AgentState.Inactive "http://example.com:7820/mcp", McpAgent.state (Some "http://example.com:7820/mcp") 7820)
-    Assert.Equal(AgentState.Inactive "", McpAgent.state (Some "") 7820)
+    Assert.Equal(AgentState.SetUpHere, McpAgent.state (Some "http://127.0.0.1:7820/mcp") 7820)
+    Assert.Equal(AgentState.SetUpHere, McpAgent.state (Some "http://localhost:7820/mcp/") 7820)
+    Assert.Equal(AgentState.SetUpElsewhere "http://127.0.0.1:7821/mcp", McpAgent.state (Some "http://127.0.0.1:7821/mcp") 7820)
+    Assert.Equal(AgentState.SetUpElsewhere "http://example.com:7820/mcp", McpAgent.state (Some "http://example.com:7820/mcp") 7820)
+    Assert.Equal(AgentState.SetUpElsewhere "", McpAgent.state (Some "") 7820)
     Assert.Equal(None, McpAgent.localPort "http://127.0.0.1:7820/status")
 
 [<Fact>]
@@ -125,33 +125,35 @@ let ``another instance takes over the port once the first is idle, and the agent
     Assert.Equal(home + 1, b.Port)
     let homeUrl = a.Url
     File.WriteAllText(path ClaudeCode, """{"mcpServers":{"caddis":{"type":"http","url":""" + "\"" + a.McpUrl + "\"}}}")
-    Assert.Equal(AgentState.Active, a.AgentState ClaudeCode)
-    Assert.Equal(AgentState.Inactive a.McpUrl, b.AgentState ClaudeCode)
+    Assert.Equal(AgentState.SetUpHere, a.AgentState ClaudeCode)
+    Assert.Equal(AgentState.SetUpElsewhere a.McpUrl, b.AgentState ClaudeCode)
     Assert.Equal(AgentState.NotSetUp, b.AgentState Codex)
-    // an agent connected to the port
-    let resp, _ = post homeUrl "/mcp" None """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}"""
+    // an agent set up for the port starts a session
+    let initialize = """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":"claude-code","version":"2.0.0"}}}"""
+    let resp, _ = post homeUrl "/mcp" None initialize
     let session = resp.Headers.GetValues "Mcp-Session-Id" |> Seq.head
+    Assert.Equal(Some "initialize", a.LatestSession ClaudeCode |> Option.map _.latest)
     assertOk (eval a.Service "1") // the F# session is ready
     let run = a.Service.StartEval(evalArgs "System.Threading.Thread.Sleep 4000").Result
 
     // cancelled while A runs, A keeps the port
     use cts = new CancellationTokenSource(1500)
-    let cancelled = b.ActivateAgent(ClaudeCode, ignore, cts.Token)
+    let cancelled = b.SwitchAgentHere(ClaudeCode, ignore, cts.Token)
     Assert.ThrowsAny<OperationCanceledException>(fun () -> cancelled.GetAwaiter().GetResult() |> ignore) |> ignore
     Assert.Equal(home, a.Port)
     Assert.False run.IsFinished
 
     // waits until the run is done
     let waits = Collections.Concurrent.ConcurrentQueue<string>()
-    let activated = b.ActivateAgent(ClaudeCode, waits.Enqueue, CancellationToken.None).Result
-    Assert.True(isOk activated, $"%A{activated}")
+    let switched = b.SwitchAgentHere(ClaudeCode, waits.Enqueue, CancellationToken.None).Result
+    Assert.True(isOk switched, $"%A{switched}")
     Assert.True run.IsFinished
     Assert.Contains($"run '{run.Id}' is in progress", Seq.head waits)
     Assert.Equal(home, b.Port)
     Assert.True a.IsRunning
     Assert.NotEqual(home, a.Port)
-    Assert.Equal(AgentState.Active, b.AgentState ClaudeCode)
-    Assert.Equal(AgentState.Inactive b.McpUrl, a.AgentState ClaudeCode)
+    Assert.Equal(AgentState.SetUpHere, b.AgentState ClaudeCode)
+    Assert.Equal(AgentState.SetUpElsewhere b.McpUrl, a.AgentState ClaudeCode)
     let status, _ = post a.Url "/cancel" None "{}"
     Assert.Equal(HttpStatusCode.Conflict, status.StatusCode) // no run to cancel, but A answers on its new port
 
@@ -162,6 +164,70 @@ let ``another instance takes over the port once the first is idle, and the agent
     Assert.Contains("Note: this MCP session was started with another Caddis server", call ())
     Assert.DoesNotContain("Note: this MCP session", call ())
     Assert.Empty(b.Service.Runs.All)
+    // B didn't see the session's initialize, so it doesn't know the client; A keeps its latest request
+    Assert.Equal(None, b.LatestSession ClaudeCode)
+    let moved = b.Sessions |> List.exactlyOne
+    Assert.Equal((session, "", "caddis_status"), (moved.id, moved.client, moved.latest))
+    Assert.Equal("an unknown client", McpSession.clientName moved)
+    Assert.Equal(Some "initialize", a.LatestSession ClaudeCode |> Option.map _.latest)
+
+[<Fact>]
+let ``the agent of an MCP client is known by its client name, or else by its user agent`` () =
+    Assert.Equal(Some ClaudeCode, McpAgent.ofClient "claude-code" "")
+    Assert.Equal(Some Codex, McpAgent.ofClient "codex-mcp-client" "")
+    Assert.Equal(Some ClaudeDesktop, McpAgent.ofClient "claude-ai" "node")
+    Assert.Equal(None, McpAgent.ofClient "cursor-vscode" "claude-code/2.0.0")
+    Assert.Equal(Some ClaudeCode, McpAgent.ofClient "" "claude-code/2.0.0 (cli)")
+    Assert.Equal(Some Codex, McpAgent.ofClient "" "codex_cli_rs/0.50.0")
+    Assert.Equal(None, McpAgent.ofClient "" null)
+
+[<Fact>]
+let ``how long ago a request came is said in minutes, hours and days, with one decimal`` () =
+    let now = DateTime(2026, 11, 22, 12, 0, 0, DateTimeKind.Utc)
+    let ago (span: TimeSpan) = McpSession.ago now (now - span)
+    Assert.Equal("just now", ago (TimeSpan.FromSeconds 5.0))
+    Assert.Equal("0.5 min ago", ago (TimeSpan.FromSeconds 30.0))
+    Assert.Equal("1.5 min ago", ago (TimeSpan.FromSeconds 90.0))
+    Assert.Equal("3.5 h ago", ago (TimeSpan.FromHours 3.5))
+    Assert.Equal("1.5 days ago", ago (TimeSpan.FromHours 36.0))
+    Assert.Equal("4.5 days ago", ago (TimeSpan.FromDays 4.5))
+
+[<Fact>]
+let ``the server notes the latest request of each MCP session, with the client that started it`` () =
+    use s = newServer (port 40)
+    start s
+    let send (session: string option) (userAgent: string) (json: string) =
+        use c = new HttpClient(BaseAddress = Uri s.Url)
+        use req = new HttpRequestMessage(HttpMethod.Post, "/mcp", Content = new StringContent(json, Encoding.UTF8, "application/json"))
+        session |> Option.iter (fun id -> req.Headers.Add("Mcp-Session-Id", id))
+        if userAgent <> "" then req.Headers.TryAddWithoutValidation("User-Agent", userAgent) |> ignore
+        let resp = c.Send req
+        match resp.Headers.TryGetValues "Mcp-Session-Id" with
+        | true, ids -> Some(Seq.head ids)
+        | _ -> session
+    let initialize (client: string) =
+        send None "" ("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","clientInfo":{"name":""" + "\"" + client + "\"}}}")
+    Assert.Empty s.Sessions
+    Assert.Equal(None, s.LatestSession ClaudeCode)
+    let claude = initialize "claude-code"
+    let codex = initialize "codex-mcp-client"
+    send claude "" """{"jsonrpc":"2.0","method":"notifications/initialized"}""" |> ignore
+    send codex "" """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""" |> ignore
+    send claude "" """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"caddis_status","arguments":{}}}""" |> ignore
+    Assert.Equal(Some "caddis_status", s.LatestSession ClaudeCode |> Option.map _.latest)
+    Assert.Equal(Some "tools/list", s.LatestSession Codex |> Option.map _.latest)
+    Assert.Equal(None, s.LatestSession ClaudeDesktop)
+    Assert.Equal(claude, s.LatestSession ClaudeCode |> Option.map _.id)
+    let t = (s.LatestSession ClaudeCode).Value.time
+    Assert.True(DateTime.UtcNow - t < TimeSpan.FromMinutes 1.0, $"{t}")
+    // a second session of Claude Code, and a client without session id, e.g. a script, which is named by its user agent
+    initialize "claude-code" |> ignore
+    send None "my-script/1.0" """{"jsonrpc":"2.0","id":4,"method":"ping"}""" |> ignore
+    Assert.Equal(4, s.Sessions.Length)
+    let names = s.Sessions |> McpSession.latestPerClient |> List.map McpSession.clientName
+    Assert.Equal<string list>([ "Claude Code"; "Codex"; "my-script/1.0" ], List.sort names)
+    // newest first
+    Assert.Equal<DateTime list>(s.Sessions |> List.map _.time |> List.sortDescending, s.Sessions |> List.map _.time)
 
 [<Fact>]
 let ``the port of another app's Caddis is not taken, a free one is`` () =
@@ -179,6 +245,30 @@ let ``the port of another app's Caddis is not taken, a free one is`` () =
     Assert.True(isOk (s.TakeOverPort(port 18, ignore, CancellationToken.None).Result))
     Assert.Equal(port 18, s.Port)
     Assert.Equal($"http://127.0.0.1:{port 18}", s.Url)
+
+[<Fact>]
+let ``Set up and Switch here say step by step what they do`` () =
+    use s = newServer (port 41)
+    let configs, path = tempConfigs ()
+    s.AgentConfigs <- configs
+    start s
+    let claude = s.SetUpSteps ClaudeCode
+    Assert.Contains("  " + s.ClaudeMcpCommand, claude)
+    Assert.Contains(claude, fun l -> l.Contains(path ClaudeCode) && l.Contains "\"mcpServers\"")
+    Assert.DoesNotContain(claude, fun l -> l.Contains "mcp remove")
+    Assert.Contains(s.SetUpSteps Codex, fun l -> l.Contains(path Codex) && l.Contains "[mcp_servers.caddis]")
+    let desktop = s.SetUpSteps ClaudeDesktop
+    Assert.Contains(desktop, fun l -> l.EndsWith "caddis.mcpb:")
+    Assert.Contains(desktop, fun l -> l.Contains "relay.js" && l.Contains s.McpUrl)
+    Assert.Empty(s.SetUpCommands ClaudeDesktop)
+    Assert.Empty(s.SwitchSteps ClaudeCode)
+    // Claude Code has the name for port 1: Set up removes it first, Switch here asks port 1 for the port, then sets up
+    File.WriteAllText(path ClaudeCode, """{"mcpServers":{"caddis":{"url":"http://127.0.0.1:1/mcp"}}}""")
+    Assert.Equal<string list>([ "claude mcp remove --scope user caddis"; s.ClaudeMcpCommand ], s.SetUpCommands ClaudeCode)
+    Assert.Contains("  claude mcp remove --scope user caddis", s.SetUpSteps ClaudeCode)
+    let switch = s.SwitchSteps ClaudeCode
+    Assert.Equal("It asks the Caddis on port 1 to hand the port over: POST http://127.0.0.1:1/release.", switch.Head)
+    Assert.Contains("    " + s.ClaudeMcpCommand, switch)
 
 /// Runs the programs of the agents that are installed, with their config in a temporary folder.
 /// Passes without checking anything where none is installed, e.g. on CI.
@@ -198,11 +288,11 @@ let ``Set up adds the server with the agent's program, also again`` () =
                 Assert.Equal(AgentState.NotSetUp, s.AgentState agent)
                 let first = s.SetUpAgent(agent).Result
                 Assert.True(isOk first, $"%A{first}")
-                Assert.Equal(AgentState.Active, s.AgentState agent)
+                Assert.Equal(AgentState.SetUpHere, s.AgentState agent)
                 // e.g. after the port changed: Claude Code's 'mcp add' fails if the name exists
                 let again = s.SetUpAgent(agent).Result
                 Assert.True(isOk again, $"%A{again}")
-                Assert.Equal(AgentState.Active, s.AgentState agent)
+                Assert.Equal(AgentState.SetUpHere, s.AgentState agent)
     finally
         for name, value in before do
             Environment.SetEnvironmentVariable(name, value)

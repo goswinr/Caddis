@@ -85,8 +85,8 @@ claude mcp add --transport http --scope user caddis-revit http://127.0.0.1:7820/
 codex mcp add caddis-revit --url http://127.0.0.1:7820/mcp
 ```
 
-With two Revits, only one listens on port 7820, where the agents connect, the other one on 7821.
-Its panel shows the agents as inactive, and its `Activate` takes over port 7820 once the first Revit is idle.
+With two Revits, only one listens on port 7820, which the agents are set up for, the other one on 7821.
+Its panel shows the agents as set up elsewhere, and its `Switch here` takes over port 7820 once the first Revit is idle.
 The first Revit then listens on another port and logs that.
 
 ## Dockable panel
