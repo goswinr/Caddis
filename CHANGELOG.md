@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-11-22
+
 ### Added
 - Beside each agent's name the panel shows how long ago its latest request to this app came, e.g. `just now` or `2.5 min ago`, and its tooltip names the request, e.g. `caddis_eval`. Caddis tells the agent by the client name that it sends when it starts an MCP session. The tooltip of the server's URL lists the latest request of every MCP client, also of those the panel doesn't set up, e.g. Cursor.
 - The tooltips of the panel's `Set up` and `Switch here` buttons say step by step what they do: the program they run and where it was found, the exact commands, the config file the agent writes, the extension file for Claude Desktop and how it is opened, and how `Switch here` asks the other app for its port.
