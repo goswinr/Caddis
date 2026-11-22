@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
-    <!-- the same version as vpk in .github/workflows/release-revit.yml -->
+    <!-- the same version as vpk in .github/workflows/release-revit-autocad.yml -->
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
@@ -31,7 +31,7 @@
     <Compile Include="Main.fs" />
   </ItemGroup>
 
-  <!-- for the check of the git tag in .github/workflows/release-revit.yml -->
+  <!-- for the check of the git tag in .github/workflows/release-revit-autocad.yml -->
   <Target Name="WriteChangelogVersion" AfterTargets="AfterBuild" DependsOnTargets="SetVersionFromChangelog">
     <Error Condition="'@(CurrentReleaseChangelog)' == ''" Text="CHANGELOG.md must contain a versioned release for the Revit installer." />
     <WriteLinesToFile File="$(MSBuildProjectDirectory)/bin/ChangelogVersion.txt" Lines="@(CurrentReleaseChangelog)" Overwrite="true" />

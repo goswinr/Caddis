@@ -4,7 +4,7 @@
 
 [![build](https://github.com/goswinr/Caddis/actions/workflows/build.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/build.yml)
 [![release rhino](https://github.com/goswinr/Caddis/actions/workflows/release-rhino.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-rhino.yml)
-[![release revit](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-revit.yml)
+[![release revit autocad](https://github.com/goswinr/Caddis/actions/workflows/release-revit-autocad.yml/badge.svg?event=push)](https://github.com/goswinr/Caddis/actions/workflows/release-revit-autocad.yml)
 
 ![latest tag](https://img.shields.io/github/v/tag/goswinr/Caddis?label=Latest%20Tag)
 ![yak version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fyak.rhino3d.com%2Fpackages%2Fcaddis&query=%24.version&logo=rhinoceros&label=Yak%20Package%20Manager&color=%23a3d6ff)

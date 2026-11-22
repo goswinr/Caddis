@@ -177,7 +177,7 @@ whose `WindowsBase.dll` is an empty stub that takes precedence over the real one
 
 ## Releases
 
-A version tag starts the [Revit release workflow](../.github/workflows/release-revit.yml), see [Releases](../README.md#releases).
+A version tag starts the [release workflow for Revit and AutoCAD](../.github/workflows/release-revit-autocad.yml), see [Releases](../README.md#releases).
 Its [packaging action](../.github/actions/package-revit/action.yml), which build CI runs too, publishes into the repository's `bin/publish/revit`
 the app of the installer `Caddis.Revit.Bootstrapper.exe` for .NET Framework 4.8, and the folders `net48`, `net8.0`, `net10.0` and `loader`.
 [Velopack](https://velopack.io/) packs, signs and uploads them as `Caddis.Revit-win-Setup.exe` to the GitHub release of the tag,

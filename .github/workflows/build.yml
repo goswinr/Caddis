@@ -41,7 +41,7 @@ jobs:
       - name: Test
         run: dotnet test Caddis.slnx --configuration Release --no-build
 
-      # Exercise the same packaging paths as release-rhino.yml and release-revit.yml, for Revit and AutoCAD, on every push and pull request.
+      # Exercise the same packaging paths as release-rhino.yml and release-revit-autocad.yml, for Revit and AutoCAD, on every push and pull request.
       - name: Publish for every Rhino
         id: package-rhino
         uses: ./.github/actions/package-rhino

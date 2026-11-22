@@ -1,7 +1,7 @@
 name: Package for Revit
 description: Publish Caddis for every Revit runtime, with the loader and the bootstrapper, into the folder that Velopack packs.
 
-# Used by build.yml and release-revit.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for net48.
+# Used by build.yml and release-revit-autocad.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for net48.
 # bin/publish/revit becomes the folder %LocalAppData%\Caddis.Revit\current of the installation:
 #   Caddis.Revit.Bootstrapper.exe  the Velopack app, net48: registers Caddis with every installed Revit from 2024 on
 #   net48/    Caddis.Revit for Revit 2024 on .NET Framework 4.8, the panel with Avalonia 11

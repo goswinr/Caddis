@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     # Run in a GitHub Environment so that the `sub` claim of the OIDC token is the same for every tag:
-    # repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino, see release-revit.yml.
+    # repo:goswinr@884885/Caddis@1405302261:environment:releaseRhino, see release-revit-autocad.yml.
     # Add required reviewers or branch limits to this environment in the repository settings to gate releases.
     environment:
       name: releaseRhino

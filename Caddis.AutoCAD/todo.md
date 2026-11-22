@@ -17,7 +17,7 @@ Steps 1 to 4 are done. Tested by hand in AutoCAD 2025 with its update 25.0.189, 
 - `caddis_dialog`: the dialog of OPTIONS run with `caddis_command`, listed with its buttons, and closed with `Cancel`, over REST; the tool over MCP.
 - Step 4, the loader: loaded with NETLOAD from `loader\` with `CADDIS_AUTOCAD_DEV`, and from a folder like the bundle's `Contents` with `install-folder.txt`;
   AutoCAD registers the commands of the build it loads and calls its `Initialize`. The packaging steps publish locally; `PackageContents.xml` parses.
-- Step 4, the installer, on 2026-11-07, with no other AutoCAD running: `Caddis.AutoCAD-autocad-Setup.exe` packed locally with `vpk pack` as in release-revit.yml, unsigned.
+- Step 4, the installer, on 2026-11-07, with no other AutoCAD running: `Caddis.AutoCAD-autocad-Setup.exe` packed locally with `vpk pack` as in release-revit-autocad.yml, unsigned.
   The setup installed to `%LocalAppData%\Caddis.AutoCAD`, wrote the bundle and showed the bootstrapper's window. AutoCAD started normally (`/product ACAD`) loaded the loader from the bundle
   and Caddis from `current\net10.0`, with no drawing open; Caddis listened about 9 s after the start, the update check found no release in the channel and no error.
   AutoCAD showed the panel again at its start, from its saved state. The bootstrapper run again while AutoCAD ran said the loader is in use and registered again.
@@ -58,7 +58,7 @@ Not tested yet:
   through its `CommandHandler`, posted with `SynchronizationContext.Current.Post` so that it runs after the run. The panel's view is `Panel.content` (internal) `.Value.View`.
 - Screenshots: `PrintWindow` with `PW_RENDERFULLCONTENT` of AutoCAD's main window, or of the palette set's own window when it floats; close a dialog with `WM_CLOSE`.
 - Switching `COLORTHEME` changes the profile in the registry, which the person's AutoCAD shares: set it back to what it was, 0 here.
-- To test the installer: publish as the [packaging action](../.github/actions/package-autocad/action.yml) does, then `vpk pack` with the arguments of release-revit.yml but without `--azureTrustedSignFile`, into a folder outside the repository.
+- To test the installer: publish as the [packaging action](../.github/actions/package-autocad/action.yml) does, then `vpk pack` with the arguments of release-revit-autocad.yml but without `--azureTrustedSignFile`, into a folder outside the repository.
   Install `vpk` 1.2.161 with `dotnet tool install vpk --tool-path <folder>`. Run the setup only while no AutoCAD of the person runs (`APPAUTOLOAD` 14 loads new bundles into running AutoCADs), and uninstall afterwards.
   `SECURELOAD` is the string value `SECURELOAD` in `HKCU\Software\Autodesk\AutoCAD\R25.0\ACAD-8101:409\Profiles\<<Unnamed Profile>>\Variables`; change it only while no AutoCAD runs, and set it back.
 - The buttons of AutoCAD's security dialog, a task dialog, don't support UI Automation's Invoke. `WM_CLOSE` closes it, as 'Do Not Load'.
@@ -97,7 +97,7 @@ What was found out:
 What was decided:
 - A bundle names its modules relative to its folder, so the bootstrapper copies the loader into `Caddis.bundle\Contents` with `install-folder.txt`. An absolute `ModuleName` would avoid the copy, but couldn't be tested.
 - The loader uses `Assembly.LoadFrom`: AutoCAD registers commands and calls `Initialize` for every loaded assembly, `ExtensionLoader.Load` isn't needed.
-- A separate Velopack package `Caddis.AutoCAD`, in the channel `autocad` of the same GitHub release as Revit's, packed and uploaded with `--merge` after Revit's in release-revit.yml,
+- A separate Velopack package `Caddis.AutoCAD`, in the channel `autocad` of the same GitHub release as Revit's, packed and uploaded with `--merge` after Revit's in release-revit-autocad.yml,
   so that it runs in the environment `releaseRevit` whose federated credential signs with Azure Trusted Signing.
 - The bootstrapper's Dialog, Updates and Main are copies of Revit's with AutoCAD in their texts. Share them later.
 

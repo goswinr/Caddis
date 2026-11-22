@@ -77,7 +77,7 @@ Some code depends on internals or on what the apps do at runtime:
 - Public types of Caddis.Revit must not expose Avalonia or WPF types. FSI reads its public signature when a script uses `Caddis.Revit.Script`, and FSI on .NET can't resolve WPF types: the SDK's stub of WindowsBase wins. For the same reason, don't add WPF assemblies to the host's `References`.
 - Don't rename `Caddis.Revit.Loader.CaddisLoader`: installed `.addin` files contain its full name. The loader and the bootstrapper find Caddis.Revit by its path, not by a project reference. The same holds for AutoCAD's loader, whose path is in the bundle.
 - In AutoCAD, keys typed in the panel go to AutoCAD's command line unless `KeyboardFilter` in `Caddis.AutoCAD/AvaloniaHost.fs` gives them to Avalonia first, in AutoCAD's `PreTranslateMessage`.
-- The AutoCAD installer is a second Velopack package in the same GitHub release as Revit's, in the channel `autocad`, uploaded with `--merge` by release-revit.yml. In the default channel its list of releases would replace Revit's, and Revit's updates would break.
+- The AutoCAD installer is a second Velopack package in the same GitHub release as Revit's, in the channel `autocad`, uploaded with `--merge` by release-revit-autocad.yml. In the default channel its list of releases would replace Revit's, and Revit's updates would break.
 - The HTTP accept loop is a `backgroundTask`, not a `task`. `Start` runs on the app's UI thread, and a `task` would continue there, so it couldn't accept requests while a run blocks that thread.
 - During a run, output capture redirects `Console.Out` for the whole process. That is why both test projects set `DisableTestParallelization`.
 

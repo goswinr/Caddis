@@ -1,7 +1,7 @@
 name: Package for Claude Desktop
 description: Build the Claude Desktop extensions caddis-rhino.mcpb, caddis-revit.mcpb and caddis-autocad.mcpb.
 
-# Used by build.yml and release-revit.yml. Requires a Release build of Caddis.Core for net10.0, and Node, which the runners have.
+# Used by build.yml and release-revit-autocad.yml. Requires a Release build of Caddis.Core for net10.0, and Node, which the runners have.
 # bundles.fsx writes the files of each extension with Caddis.Core, as the panel does, into bin/publish/claude-desktop/<name>,
 # then the MCPB CLI validates the manifest and packs them into bin/publish/claude-desktop/<name>.mcpb.
 # https://github.com/modelcontextprotocol/mcpb/blob/main/CLI.md

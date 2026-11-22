@@ -32,7 +32,7 @@ updates:
       # net48 stays on Avalonia 11 and AvaloniaEdit 11, the other builds on 12. A new major version is a port by hand.
       - dependency-name: Avalonia*
         update-types: ["version-update:semver-major"]
-      # The same version as vpk in release-revit.yml, which Dependabot doesn't update.
+      # The same version as vpk in release-revit-autocad.yml, which Dependabot doesn't update.
       - dependency-name: Velopack
 
   - package-ecosystem: github-actions

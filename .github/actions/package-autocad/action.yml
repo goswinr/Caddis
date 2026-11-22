@@ -1,7 +1,7 @@
 name: Package for AutoCAD
 description: Publish Caddis for every AutoCAD runtime, with the loader and the bootstrapper, into the folder that Velopack packs.
 
-# Used by build.yml and release-revit.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for the net48 bootstrapper.
+# Used by build.yml and release-revit-autocad.yml. Requires a checkout and the .NET 8 and 10 SDKs, on Windows for the net48 bootstrapper.
 # bin/publish/autocad becomes the folder %LocalAppData%\Caddis.AutoCAD\current of the installation:
 #   Caddis.AutoCAD.Bootstrapper.exe  the Velopack app, net48: writes the bundle Caddis.bundle that registers Caddis with AutoCAD
 #   net8.0/   for AutoCAD 2025 and 2026 as released, on .NET 8
