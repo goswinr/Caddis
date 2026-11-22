@@ -816,7 +816,7 @@ PanelView (Avalonia UserControl, PanelView.axaml + PanelStyles.axaml)
   Claude Desktop from its MSIX package `Claude_pzs8sxrjxfjjc` (Microsoft Store) is started with `IApplicationActivationManager`, by its app id from the registry's list of the user's packages: its program in `C:\Program Files\WindowsApps` would run outside of its package.
   That one keeps its settings in `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude`, where Windows redirects its `%APPDATA%`.
   Claude Desktop runs [relay.js](Caddis.Core/ClaudeDesktop/relay.js) with its own Node: it POSTs each line from stdin to `http://127.0.0.1:<port>/mcp` and writes the reply to stdout, keeps the `Mcp-Session-Id`, and retries for a moment on 503 or no answer, as during a handover.
-  While Caddis doesn't answer, it answers `initialize` itself with the instructions of `caddis.json`, lists its tools, or `caddis_status` without them, and returns tool calls as errors that say to start the app. It polls every 5 s and sends `notifications/tools/list_changed` once Caddis answers.
+  While Caddis doesn't answer, it answers `initialize` itself with the instructions of `caddis.json`, lists its tools, or `caddis_status` without them, and returns tool calls as errors that say to start the app. It checks again 5 s after each check that got no answer, never two at once, and sends `notifications/tools/list_changed` once Caddis answers. With an interval, checks that take longer than 5 s on a busy computer would overlap, and each would start a session and send the notification.
 - **Failure**: if Avalonia can't start, the panel shows the error as plain text and the command or ribbon still works.
 
 ---

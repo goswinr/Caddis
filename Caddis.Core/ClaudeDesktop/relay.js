@@ -30,7 +30,7 @@ const notRunning =
 let session = null
 /** The initialize request of Claude Desktop, to start a session with Caddis when it wasn't running at first. */
 let initialize = null
-/** While the tools were listed without Caddis: polls it, and tells Claude Desktop once it answers. */
+/** While the tools were listed without Caddis: the timer of the next check whether it answers, see startWatching. */
 let watch = null
 
 function log(text) {
@@ -93,21 +93,24 @@ function offline(message) {
   }
 }
 
-/** Polls Caddis while it doesn't answer. Once it does, starts a session if there is none and asks Claude Desktop to list the tools again. */
+/** Polls Caddis while it doesn't answer. Once it does, starts a session if there is none and asks Claude Desktop to list the tools again.
+ *  Each check starts 5 s after the one before has finished, not on an interval: on a busy computer a check can take longer than 5 s,
+ *  and two checks at once would both start a session and both tell Claude Desktop. */
 function startWatching() {
   if (watch) return
-  watch = setInterval(async () => {
+  const check = async () => {
     try {
       if (!session && initialize) await post(initialize)
       else await post({ jsonrpc: '2.0', id: 'caddis-relay-ping', method: 'ping' })
-      clearInterval(watch)
-      watch = null
-      log(`Caddis answers at ${url}`)
-      send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' })
     } catch {
-      // still not running
+      watch = setTimeout(check, 5000) // still not running
+      return
     }
-  }, 5000)
+    watch = null
+    log(`Caddis answers at ${url}`)
+    send({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' })
+  }
+  watch = setTimeout(check, 5000)
 }
 
 async function handle(message) {

@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The panel names the agents' states for what they are, where the agent's config points, not whether it is connected: MCP over HTTP has no lasting connection. `active` is now `set up`, `inactive` is `set up elsewhere`, and its button `Activate` is `Switch here`.
 
+### Fixed
+- When Caddis starts after Claude Desktop, the extension tells Claude Desktop only once to list the tools again. On a busy computer two of its checks whether Caddis answers could overlap, and each started an MCP session and told Claude Desktop.
+
 ## [0.3.8] - 2026-11-19
 
 ### Added

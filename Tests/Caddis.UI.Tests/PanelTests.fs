@@ -427,7 +427,7 @@ let ``a running run shows its start time and running .. on yellow in its row, wh
         Assert.NotNull((timeBox 0).Background)
         // The finished run: its start time and duration, not on yellow.
         Assert.Contains(RunDetails.startMinute first, shown 1)
-        Assert.Contains(shown 1, fun t -> t.EndsWith " ms")
+        Assert.Contains(RunDetails.duration first.Duration, shown 1)
         Assert.False((timeBox 1).Classes.Contains "running")
         Assert.Null((timeBox 1).Background)
         let summary = view.FindControl<TextBlock> "RunSummary"
@@ -443,7 +443,8 @@ let ``a running run shows its start time and running .. on yellow in its row, wh
         let done' = runs.SelectedItem :?> RunRow
         Assert.Equal("r2", done'.Id)
         Assert.False done'.IsRunning
-        Assert.EndsWith(" ms", done'.Time)
+        // its duration, which is seconds rather than milliseconds when the computer is busy, e.g. with other tests
+        Assert.Equal(RunDetails.duration running.Duration, done'.Time)
     finally window.Close()
 }
 
