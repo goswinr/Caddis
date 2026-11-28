@@ -24,7 +24,7 @@
     <!-- Like Fesh 0.34.0-net472. System.Text.Json is in-box only on .NET Core. At least 10.0.2, the version that FCS depends on; Dependabot proposes only patch updates. -->
     <PackageReference Include="FSharp.Compiler.Service" Version="43.12.401" />
     <PackageReference Include="FSharp.Core" Version="10.1.401" />
-    <PackageReference Include="System.Text.Json" Version="10.0.2" />
+    <PackageReference Include="System.Text.Json" Version="10.0.15" />
     <!-- HttpClient, to ask another Caddis to hand over its port -->
     <Reference Include="System.Net.Http" />
     <!-- ZipArchive, for the extension of Claude Desktop -->
